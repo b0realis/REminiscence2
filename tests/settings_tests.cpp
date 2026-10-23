@@ -1,0 +1,509 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+#include "settings.h"
+#include "settings_overlay.h"
+#include "config.h"
+#include "fs.h"
+#include "game.h"
+#include "headless_system.h"
+#include "imgui.h"
+#include "imgui_internal.h"
+#include "save_catalog.h"
+#include <SDL.h>
+#include <algorithm>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <memory>
+#include <vector>
+
+Options g_options;
+const char *g_caption = "settings tests";
+static int failures = 0;
+static void check(bool good, const char *message) {
+	if (!good) {
+		std::cerr << "FAIL: " << message << '\n';
+		++failures;
+	}
+}
+static void write(const std::filesystem::path &path, const std::string &text) {
+	std::ofstream file(path);
+	file << text;
+}
+static bool testMusic(void *, int16_t *samples, int frames) {
+	std::fill_n(samples, frames * 2, 10000);
+	return true;
+}
+struct PausedSystem : HeadlessSystem {
+	bool applied = false, persisted = false, redOnReopen = false;
+	int openings = 0;
+	bool applyPreferences(const settings::Preferences &p, std::string &) override {
+		mode = static_cast<WidescreenMode>(p.widescreen);
+		return true;
+	}
+	void showSettings(settings::Session &s) override {
+		if (openings++)
+			redOnReopen = s.values.conradShirt == appearance::Shirt::RedPink;
+		s.values.masterVolume = 41;
+		s.values.rewind = true;
+		s.values.widescreen = kWidescreenAdjacentRooms;
+		s.values.inventoryOriginal = true;
+		s.values.conradShirt = appearance::Shirt::RedPink;
+		std::string message;
+		applied = s.apply(s.values, message);
+		persisted = s.persist(s.values, message);
+		s.saveSlot = 7;
+		s.cheats = kCheatOneHitKill | kCheatNoHit | kCheatLifeCounter;
+		s.debugFlags = PlayerInput::DF_FASTMODE | PlayerInput::DF_SETLIFE;
+		s.applyCheats(s.cheats, s.debugFlags);
+		_pi.shift = _pi.space = _pi.enter = true;
+		_pi.dirMask = PlayerInput::DIR_RIGHT;
+		clock += 5000;
+		s.action = settings::Action::Resume;
+	}
+};
+
+static void renderPages(const std::filesystem::path &root, const char *assets) {
+	const std::string saveRoot = root.string();
+	check(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER) == 0,
+	      "initialize software UI renderer");
+	SDL_Window *window = SDL_CreateWindow("Settings rendering", 0, 0, 1280, 800, SDL_WINDOW_HIDDEN);
+	SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
+	check(window && renderer, "software UI window and renderer");
+	if (!renderer) {
+		if (window)
+			SDL_DestroyWindow(window);
+		SDL_Quit();
+		return;
+	}
+	SDL_Texture *background = nullptr;
+	settings::Session session;
+	session.edition = "Amiga";
+	session.language = "English";
+	session.audioBackend = "AdLib / OPL3";
+	session.level = 0;
+	session.room = 0;
+	session.score = 1250;
+	session.outputRate = 22050;
+	session.values.fullscreen = false;
+	session.values.rewind = true;
+	session.canRewind = true;
+	session.canLoad = true;
+	session.preferencePath = (root / "preferences.cfg").string();
+	if (assets) {
+		FileSystem files(assets);
+		HeadlessSystem platform;
+		auto game = std::make_unique<Game>(&platform, &files, &files, saveRoot.c_str(), 0,
+		                                   kResourceTypeAmiga, LANG_EN, kWidescreenNone, false, 0);
+		game->initCutsceneResources();
+		game->_res.load("ICONE", Resource::OT_ICN, "SPR");
+		game->_res.load("ICON", Resource::OT_ICN, "SPR");
+		game->_res.load("PERSO", Resource::OT_SPM);
+		game->_mix.init();
+		game->_score = 0;
+		game->_randSeed = 1;
+		game->loadLevelData();
+		game->resetGameState();
+		game->_cut._id = 0xFFFF;
+		game->_frameTimestamp = game->_saveTimestamp = platform.clock;
+		for (int frame = 0; frame < 12; ++frame)
+			game->mainLoop();
+		session.room = game->_currentRoom;
+		session.score = game->_score;
+		session.health = game->_pgeLive[0].life;
+		uint8_t palette[768];
+		platform.getPalette(palette, 256);
+		std::vector<uint32_t> pixels(game->_vid._layerSize);
+		for (size_t i = 0; i < pixels.size(); ++i) {
+			const uint8_t color = game->_vid._frontLayer[i];
+			pixels[i] = 0xFF000000U | (uint32_t(palette[color * 3]) << 16) |
+			            (uint32_t(palette[color * 3 + 1]) << 8) | palette[color * 3 + 2];
+		}
+		background = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC,
+		                               game->_vid._w, game->_vid._h);
+		SDL_UpdateTexture(background, nullptr, pixels.data(), game->_vid._w * 4);
+		SDL_SetTextureScaleMode(background, SDL_ScaleModeNearest);
+		game->_mix.free();
+	}
+	{
+		SettingsOverlay overlay;
+		check(overlay.attach(window, renderer), "attach ImGui SDL renderer");
+		overlay.open(session.values);
+		static const char *const pages[] = {"session",      "saves",    "graphics", "audio",
+		                                    "enhancements", "controls", "cheats",   "levels"};
+		for (int capture = 0; capture < 20; ++capture) {
+			const bool native = capture >= 10;
+			SDL_SetWindowSize(window,
+			                  native         ? 256
+			                  : capture >= 8 ? 640
+			                                 : 1280,
+			                  native         ? 224
+			                  : capture >= 8 ? 480
+			                                 : 800);
+			session.values.uiScale = capture == 9 || capture == 18 ? 175 : 100;
+			session.values.menuLayout = capture == 19 ? 1 : 0;
+			const int page = capture < 8 ? capture : native && capture < 18 ? capture - 10 : 2;
+			const std::string name = capture < 8     ? pages[page]
+			                         : capture == 8  ? "compact"
+			                         : capture == 9  ? "large-text"
+			                         : capture == 18 ? "native-large-text"
+			                         : capture == 19 ? "native-compact"
+			                                         : std::string("native-") + pages[page];
+			overlay.selectPage(page);
+			for (int frame = 0; frame < 3; ++frame) {
+				SDL_SetRenderDrawColor(renderer, 20, 35, 52, 255);
+				SDL_RenderClear(renderer);
+				if (background)
+					SDL_RenderCopy(renderer, background, nullptr, nullptr);
+				overlay.beginFrame(session.values);
+				overlay.draw(session);
+				overlay.render();
+				check(ImGui::GetDrawData()->TotalVtxCount > 100, "menu emits visible geometry");
+				if (frame == 2) {
+					int width, height;
+					SDL_GetRendererOutputSize(renderer, &width, &height);
+					SDL_Surface *surface = SDL_CreateRGBSurfaceWithFormat(0, width, height, 32,
+					                                                      SDL_PIXELFORMAT_ARGB8888);
+					check(SDL_RenderReadPixels(renderer, nullptr, surface->format->format,
+					                           surface->pixels, surface->pitch) == 0,
+					      "read rendered menu pixels");
+					int turquoise = 0;
+					for (int y = height / 2; y < height; ++y)
+						for (int x = width / 2; x < width; ++x) {
+							uint8_t r, g, b, a;
+							SDL_GetRGBA(static_cast<uint32_t *>(surface->pixels)[y * width + x],
+							            surface->format, &r, &g, &b, &a);
+							if (r >= 28 && r <= 33 && g >= 206 && g <= 212 && b >= 190 && b <= 197)
+								++turquoise;
+						}
+					check(turquoise > 100,
+					      "turquoise EXIT GAME stays visible on every page and resolution");
+					const auto path = root / (std::string("settings-") + name + ".bmp");
+					check(SDL_SaveBMP(surface, path.string().c_str()) == 0,
+					      "save rendered menu capture");
+					SDL_FreeSurface(surface);
+				}
+				SDL_RenderPresent(renderer);
+			}
+		}
+		// Click the real native-resolution footer and its confirmation dialog.
+		session.values.uiScale = 100;
+		session.values.menuLayout = 0;
+		session.action = settings::Action::None;
+		overlay.open(session.values);
+		auto frame = [&] {
+			SDL_SetRenderDrawColor(renderer, 20, 35, 52, 255);
+			SDL_RenderClear(renderer);
+			overlay.beginFrame(session.values);
+			overlay.draw(session);
+			overlay.render();
+			SDL_RenderPresent(renderer);
+		};
+		auto click = [&](float x, float y) {
+			auto &io = ImGui::GetIO();
+			io.AddMousePosEvent(x, y);
+			io.AddMouseButtonEvent(0, true);
+			frame();
+			io.AddMousePosEvent(x, y);
+			io.AddMouseButtonEvent(0, false);
+			frame();
+			frame();
+		};
+		frame();
+		frame();
+		click(205, 210);
+		ImGuiWindow *exitPopup = ImGui::FindWindowByName("Exit game?");
+		check(exitPopup && exitPopup->Active && session.action == settings::Action::None,
+		      "native EXIT GAME asks before quitting");
+		if (exitPopup && exitPopup->Active) {
+			ImGui::GetIO().AddKeyEvent(ImGuiKey_Escape, true);
+			frame();
+			ImGui::GetIO().AddKeyEvent(ImGuiKey_Escape, false);
+			frame();
+			check(session.action == settings::Action::None,
+			      "Escape cancels exit confirmation without quitting or resuming");
+			click(205, 210);
+			if (exitPopup->Active) {
+				click(exitPopup->Pos.x + ImGui::GetStyle().WindowPadding.x + 20,
+				      exitPopup->Pos.y + exitPopup->Size.y - ImGui::GetStyle().WindowPadding.y -
+				          ImGui::GetFrameHeight() / 2);
+				check(session.action == settings::Action::Quit,
+				      "confirmed native EXIT GAME queues quit");
+			}
+		}
+		// Real key capture routes through the same SDL event handler as gameplay,
+		// and reserved F10 always leaves the overlay usable.
+		SDL_Event close = {};
+		close.type = SDL_KEYDOWN;
+		close.key.keysym.scancode = SDL_SCANCODE_F10;
+		overlay.processEvent(close, &session);
+		check(session.action == settings::Action::Resume,
+		      "F10 closes the overlay independently of bindings");
+		overlay.detach();
+		check(overlay.attach(window, renderer),
+		      "renderer backend can reattach without losing UI context");
+	}
+	if (background)
+		SDL_DestroyTexture(background);
+	SDL_DestroyRenderer(renderer);
+	SDL_DestroyWindow(window);
+	SDL_Quit();
+}
+
+int main(int argc, char **argv) {
+	if (argc < 2 || argc > 3)
+		return 2;
+	const std::filesystem::path root(argv[1]);
+	const std::string saveRoot = root.string();
+	std::filesystem::create_directories(root);
+	setDefaultOptions(g_options);
+	settings::Preferences p;
+	std::string reason;
+	check(settings::validate(p, reason), "default settings validate");
+	p.fullscreen = false;
+	p.filter = settings::Filter::Point;
+	p.scale = 5;
+	p.masterVolume = 73;
+	p.musicVolume = 24;
+	p.effectsVolume = 61;
+	p.keys[0] = SDL_SCANCODE_A;
+	p.rewind = true;
+	p.showMenuButton = false;
+	p.menuLayout = 1;
+	p.conradShirt = appearance::Shirt::White;
+	p.extraMetro = true;
+	const auto path = (root / "preferences with spaces.cfg").string();
+	check(settings::save(path, p, reason), "save settings atomically");
+	settings::Preferences loaded;
+	check(settings::load(path, loaded, reason) && loaded == p, "all preferences round-trip");
+	const auto previous = loaded;
+	write(root / "future.cfg", "version=9\nmaster_volume=1\n");
+	check(!settings::load((root / "future.cfg").string(), loaded, reason) && loaded == previous,
+	      "unknown profile version preserves current settings");
+	write(root / "invalid.cfg", "version=1\nmaster_volume=999\nwindow_scale=-1\nkey_left=41\nmusic_"
+	                            "volume=35\nconrad_shirt=99\n");
+	check(settings::load((root / "invalid.cfg").string(), loaded, reason) &&
+	          loaded.masterVolume == p.masterVolume && loaded.scale == p.scale &&
+	          loaded.keys == p.keys && loaded.musicVolume == 35 &&
+	          loaded.conradShirt == p.conradShirt,
+	      "invalid values and colliding bindings are rejected without dropping valid fields");
+	check(!settings::validBinding(SDL_SCANCODE_F10, p, 0, reason),
+	      "recovery shortcut cannot be rebound");
+	check(!settings::validBinding(SDL_SCANCODE_RETURN, p, 0, reason),
+	      "duplicate bindings rejected");
+	std::filesystem::create_directories(root / "not-a-file");
+	check(!settings::save((root / "not-a-file").string(), p, reason) &&
+	          std::filesystem::is_directory(root / "not-a-file"),
+	      "failed replacement preserves the original destination");
+	for (const auto &file : std::filesystem::directory_iterator(root)) {
+		check(file.path().filename().string().find(".tmp-") == std::string::npos,
+		      "temporary preferences cleaned up");
+	}
+	{
+		using appearance::Shirt;
+		for (auto choice : {Shirt::Original, Shirt::RedPink, Shirt::White}) {
+			auto saved = p;
+			saved.conradShirt = choice;
+			settings::Preferences restored;
+			const auto profile = (root / "shirt-profile.cfg").string();
+			check(settings::save(profile, saved, reason) &&
+			          settings::load(profile, restored, reason) && restored == saved,
+			      "each shirt style persists and restores with the complete profile");
+		}
+		check(appearance::shirtPixel(kResourceTypeAmiga, 0x47, true) == 0x47 &&
+		          appearance::shirtPixel(kResourceTypeAmiga, 0x42, true) == 0x42,
+		      "Amiga jacket and shared hair/outline colours remain intact");
+		for (auto edition : {kResourceTypeAmiga, kResourceTypeDOS, kResourceTypePC98,
+		                     kResourceTypeSega, kResourceTypeMac}) {
+			for (int color = 0; color < 256; ++color)
+				check(appearance::shirtPixel(edition, color, false) == color,
+				      "other sprites keep every palette index");
+			std::array<Color, 2> native{{{153, 17, 68}, {187, 34, 85}}};
+			const auto original = appearance::shirtColors(edition, Shirt::Original, native);
+			check(memcmp(native.data(), original.data(), sizeof(native)) == 0,
+			      "Original keeps exact asset RGB");
+			FileSystem files(saveRoot.c_str());
+			HeadlessSystem platform;
+			Resource resource(&files, edition, LANG_EN);
+			Video video(&resource, &platform, kWidescreenNone);
+			const int source = edition == kResourceTypeAmiga ? 1 : 13;
+			const Color fill = edition == kResourceTypeAmiga ? Color{204, 204, 204} : native[1];
+			platform.palette[0x40 + source] = fill;
+			platform.palette[0x4C] = native[0];
+			platform.palette[0x45] = {136, 136, 136};
+			platform.palette[0x47] = {102, 68, 34};
+			for (auto choice : {Shirt::White, Shirt::RedPink, Shirt::Original}) {
+				video._conradShirt = choice;
+				video.refreshConradShirtPalette();
+				const auto color = platform.palette[appearance::ShirtLight];
+				check(memcmp(&platform.palette[0x40 + source], &fill, sizeof(Color)) == 0,
+				      "shirt styles never replace shared source RGB");
+				if (choice == Shirt::White)
+					check(color.r == color.g && color.g == color.b, "white shirt is neutral");
+				if (choice == Shirt::RedPink)
+					check(color.r > color.b && color.b > color.g,
+					      "red/pink shirt uses the red ramp");
+				if (choice == Shirt::Original)
+					check(memcmp(&color, &fill, sizeof(Color)) == 0,
+					      "Original restores the native shirt fill");
+			}
+			if (edition == kResourceTypeMac)
+				continue;
+			const uint8_t pixel = edition == kResourceTypeAmiga ? appearance::ShirtLight : source;
+			const uint8_t npcPixel = source;
+			using Draw = void (Video::*)(const uint8_t *, uint8_t *, int, int, int, uint8_t, bool);
+			for (Draw draw : {&Video::drawSpriteSub3, &Video::drawSpriteSub4,
+			                  &Video::drawSpriteSub5, &Video::drawSpriteSub6}) {
+				uint8_t target = 0;
+				(video.*draw)(&pixel, &target, 1, 1, 1, 0x40, true);
+				check(target == appearance::ShirtLight,
+				      "every character orientation maps player clothing");
+				target = 0;
+				(video.*draw)(&npcPixel, &target, 1, 1, 1, 0x40, false);
+				check(target == (source | 0x40), "NPC drawing uses original clothing index");
+				target = 0x80;
+				(video.*draw)(&pixel, &target, 1, 1, 1, 0x40, true);
+				check(target == 0x80, "shirt recolouring respects foreground occlusion");
+			}
+		}
+		// Synthetic open jacket, light undershirt, boots and a held metal item.
+		// Rotate it to exercise pose-independent segmentation before sprite flips.
+		std::vector<uint8_t> pose = {0, 0, 4, 4, 0, 0, 0, 0, 7, 5, 1, 7, 0, 0, 7, 7, 5,
+		                             1, 7, 7, 0, 0, 7, 5, 1, 7, 0, 0, 0, 0, 6, 6, 0, 4,
+		                             1, 0, 0, 6, 6, 0, 0, 5, 0, 0, 5, 1, 0, 0, 0};
+		std::vector<uint8_t> mask(49, 0);
+		for (int y = 1; y <= 3; ++y)
+			mask[y * 7 + 2] = mask[y * 7 + 3] = 1;
+		for (int turn = 0; turn < 4; ++turn) {
+			auto tagged = pose;
+			check(appearance::markAmigaTshirt(tagged.data(), 7, 7, tagged.size()) == 6,
+			      "only undershirt fabric is tagged in each rotated pose");
+			for (size_t i = 0; i < tagged.size(); ++i) {
+				const uint8_t expected =
+				    mask[i] ? pose[i] == 1 ? appearance::ShirtLight : appearance::ShirtShadow
+					        : pose[i];
+				check(tagged[i] == expected,
+				      "jacket, shoes, skin, trousers and equipment remain unchanged");
+			}
+			auto nextPose = pose, nextMask = mask;
+			for (int y = 0; y < 7; ++y)
+				for (int x = 0; x < 7; ++x) {
+					nextPose[x * 7 + 6 - y] = pose[y * 7 + x];
+					nextMask[x * 7 + 6 - y] = mask[y * 7 + x];
+				}
+			pose = nextPose;
+			mask = nextMask;
+		}
+		check(appearance::markAmigaTshirt(pose.data(), 7, 7, 48) == 0,
+		      "short decoded frames are rejected without accessing beyond capacity");
+		const std::array<Color, 2> dark{{{77, 9, 34}, {94, 17, 43}}};
+		const std::array<Color, 2> bright{{{153, 17, 68}, {187, 34, 85}}};
+		check(appearance::shirtColors(kResourceTypeDOS, Shirt::White, dark)[1].r <
+		          appearance::shirtColors(kResourceTypeDOS, Shirt::White, bright)[1].r,
+		      "white shirt retains dark-room shading");
+		settings::Preferences oldConfig;
+		Options legacy;
+		setDefaultOptions(legacy);
+		legacy.use_white_tshirt = true;
+		oldConfig.readCompatibility(legacy);
+		check(oldConfig.conradShirt == Shirt::White,
+		      "legacy white-shirt configuration imports into new selector");
+		loaded.conradShirt = Shirt(99);
+		check(!settings::validate(loaded, reason), "invalid shirt enum rejected");
+		loaded.conradShirt = Shirt::Original;
+	}
+	{
+		// A minimal valid state exercises the same preflight reader without game assets.
+		std::vector<uint8_t> state(13 + 30 + 0x1C00 + 2, 0);
+		state[0] = 1;
+		std::fill_n(state.data() + 9, 4, 255);
+		std::fill_n(state.data() + 13 + 22, 4, 255);
+		auto fixture = [&](int version) {
+			File file;
+			check(file.open("fb-level1-03.state", "wb", saveRoot.c_str()),
+			      "create save preflight fixture");
+			file.writeUint32BE(0x46425356);
+			file.writeUint16BE(version);
+			char description[32] = "level=1 room=12";
+			file.write(description, sizeof(description));
+			file.write(state.data(), state.size());
+		};
+		fixture(3);
+		File valid;
+		check(valid.open("fb-level1-03.state", "zrb", saveRoot.c_str()), "open preflight fixture");
+		int version = 0;
+		check(saves::validate(valid, 1, version, reason) && version == 3 && valid.tell() == 38,
+		      "valid save preflight leaves decoder at payload");
+		const auto catalog = saves::scan(saveRoot.c_str(), 0);
+		check(catalog.size() == 100 && catalog[3].supported && catalog[3].room == 12 &&
+		          !catalog[4].exists,
+		      "catalog distinguishes stored and empty slots");
+		state[5] = 127;
+		fixture(3);
+		File corrupt;
+		corrupt.open("fb-level1-03.state", "zrb", saveRoot.c_str());
+		check(!saves::validate(corrupt, 1, version, reason),
+		      "invalid collision count rejected before pointer construction");
+		state[5] = 0;
+		state.pop_back();
+		fixture(3);
+		File truncated;
+		truncated.open("fb-level1-03.state", "zrb", saveRoot.c_str());
+		check(!saves::validate(truncated, 1, version, reason), "truncated final state rejected");
+	}
+	{
+		HeadlessSystem platform;
+		Mixer mixer(nullptr, &platform);
+		mixer.init();
+		mixer.setPremixHook(testMusic, nullptr);
+		int16_t buffer[8] = {};
+		mixer.setVolumes(50, 50, 100, false);
+		mixer.mix(buffer, 4);
+		check(buffer[0] == 2500 && buffer[7] == 2500, "independent music/master gains");
+		mixer.setPremixHook(nullptr, nullptr);
+		const uint8_t sample[16] = {127, 127, 127, 127, 127, 127, 127, 127,
+		                            127, 127, 127, 127, 127, 127, 127, 127};
+		mixer.play(sample, sizeof(sample), 22050, Mixer::MAX_VOLUME);
+		mixer.setVolumes(50, 0, 50, false);
+		mixer.mix(buffer, 4);
+		check(buffer[0] == 8159, "effects level does not follow music gain");
+		const auto position = mixer._channels[0].chunkPos;
+		mixer.setVolumes(100, 100, 100, true);
+		mixer.mix(buffer, 4);
+		check(buffer[0] == 0 && mixer._channels[0].chunkPos > position,
+		      "mute advances playback while producing silence");
+		mixer.free();
+	}
+	{
+		FileSystem files(root.string().c_str());
+		PausedSystem platform;
+		platform.clock = 1000;
+		auto game = std::make_unique<Game>(&platform, &files, &files, saveRoot.c_str(), 0,
+		                                   kResourceTypeAmiga, LANG_EN, kWidescreenNone, false, 0);
+		game->_currentRoom = 3;
+		game->_score = 50;
+		game->_pgeLive[0] = {};
+		game->_pgeLive[0].pos_x = 123;
+		game->_deathCutsceneCounter = 0;
+		check(!game->handleConfigPanel() && platform.applied && platform.persisted,
+		      "paused menu applies and persists through the game bridge");
+		check(game->_pgeLive[0].pos_x == 123 && game->_currentRoom == 3 && game->_score == 50,
+		      "opening and changing settings does not advance the simulation");
+		check(!platform._pi.shift && !platform._pi.space && !platform._pi.enter &&
+		          !platform._pi.dirMask && game->_frameTimestamp == platform.clock &&
+		          game->_saveTimestamp == platform.clock,
+		      "resume clears menu inputs and resets pause timing");
+		check(game->_autoSave && game->_stateSlot == 7 && g_options.order_inventory_original &&
+		          game->_widescreenMode == kWidescreenAdjacentRooms &&
+		          game->_mix._masterVolume == 41 && game->_cheats == 7 &&
+		          game->_preferences.conradShirt == appearance::Shirt::RedPink &&
+		          game->_vid._conradShirt == appearance::Shirt::RedPink &&
+		          platform._pi.dbgMask == (PlayerInput::DF_FASTMODE | PlayerInput::DF_SETLIFE),
+		      "live changes reach their actual engine subsystems");
+		game->handleConfigPanel();
+		check(platform.redOnReopen,
+		      "explicit Red/Pink survives reopening despite legacy false boolean");
+	}
+	renderPages(root, argc == 3 ? argv[2] : nullptr);
+	std::cout << (failures ? "Settings checks failed\n" : "Settings checks passed\n");
+	return failures ? 1 : 0;
+}

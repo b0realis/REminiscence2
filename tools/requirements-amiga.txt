@@ -1,0 +1,3 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# LHA archive reader; RNC decompression also requires the Ancient executable.
+lhafile==0.3.1

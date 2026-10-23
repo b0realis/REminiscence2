@@ -1,0 +1,73 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+name: Build and test
+
+on: [push, pull_request, workflow_dispatch]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            modplug: "ON"
+            sanitizers: "ON"
+            build_type: Debug
+            midi: "ON"
+          - os: ubuntu-latest
+            modplug: "OFF"
+            sanitizers: "OFF"
+            build_type: Release
+            midi: "OFF"
+          - os: macos-latest
+            modplug: "ON"
+            sanitizers: "OFF"
+            build_type: Release
+            midi: "OFF"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check public documentation boundaries
+        run: python3 tools/check_release_docs.py
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libsdl2-dev zlib1g-dev libmodplug-dev libfluidsynth-dev
+      # The Ubuntu runner has no libmt32emu package; build a pinned Munt release.
+      - name: Install optional MT-32 library
+        if: runner.os == 'Linux' && matrix.midi == 'ON'
+        env:
+          MT32EMU_REVISION: 3b05ec276f9e605af86b0eaef7f5eda43477a31f # munt_2_8_2
+        run: |
+          git init "$RUNNER_TEMP/munt"
+          git -C "$RUNNER_TEMP/munt" fetch --depth 1 https://github.com/munt/munt.git "$MT32EMU_REVISION"
+          git -C "$RUNNER_TEMP/munt" checkout --detach FETCH_HEAD
+          cmake -S "$RUNNER_TEMP/munt/mt32emu" -B "$RUNNER_TEMP/mt32emu-build" \
+            -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -Dlibmt32emu_SHARED=OFF \
+            -DCMAKE_INSTALL_PREFIX="$RUNNER_TEMP/mt32emu-install"
+          cmake --build "$RUNNER_TEMP/mt32emu-build" --parallel 3
+          cmake --install "$RUNNER_TEMP/mt32emu-build"
+          echo "CMAKE_PREFIX_PATH=$RUNNER_TEMP/mt32emu-install" >> "$GITHUB_ENV"
+      - name: Install macOS dependencies
+        if: runner.os == 'macOS'
+        run: brew install cmake pkgconf sdl2 libmodplug
+      - name: Configure
+        run: >-
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          -DREMINISCENCE2_USE_MODPLUG=${{ matrix.modplug }}
+          -DREMINISCENCE2_SANITIZERS=${{ matrix.sanitizers }}
+          -DREMINISCENCE2_FLUIDSYNTH=${{ matrix.midi }} -DREMINISCENCE2_MT32EMU=${{ matrix.midi }}
+      - name: Build
+        run: cmake --build build --parallel 3
+      - name: Test without game assets
+        run: ctest --test-dir build --output-on-failure
+        env:
+          ASAN_OPTIONS: detect_leaks=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+      - name: Test the Amiga preparation tool without game assets
+        run: |
+          python3 -m venv build/tool-venv
+          build/tool-venv/bin/python -m pip install -r tools/requirements-amiga.txt
+          build/tool-venv/bin/python -m unittest discover -s tests -p 'test_extract_amiga.py' -v

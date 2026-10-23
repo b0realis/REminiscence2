@@ -1,0 +1,147 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+cmake_minimum_required(VERSION 3.20)
+project(REminiscence2 VERSION 0.1.0 LANGUAGES C CXX)
+
+option(REMINISCENCE2_FLUIDSYNTH "Enable optional FluidSynth PRF backend" OFF)
+option(REMINISCENCE2_MT32EMU "Enable optional MT-32 PRF backend" OFF)
+option(REMINISCENCE2_USE_MODPLUG "Use libmodplug instead of the internal MOD player" ON)
+option(REMINISCENCE2_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
+set(REMINISCENCE2_SANITIZER_SET "address,undefined" CACHE STRING "Sanitizers to enable when requested")
+set(REMINISCENCE2_TEST_SOUNDFONT "" CACHE FILEPATH "Optional local soundfont for synthesis tests")
+set(REMINISCENCE2_AMIGA_DATA "" CACHE PATH "Optional private Amiga data for integration tests")
+
+find_package(SDL2 2.0.18 CONFIG QUIET)
+if(NOT TARGET SDL2::SDL2)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(SDL2 REQUIRED IMPORTED_TARGET sdl2>=2.0.18)
+    add_library(SDL2::SDL2 ALIAS PkgConfig::SDL2)
+endif()
+find_package(ZLIB REQUIRED)
+
+add_library(reminiscence2_build_options INTERFACE)
+target_compile_features(reminiscence2_build_options INTERFACE cxx_std_17)
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+    target_compile_options(reminiscence2_build_options INTERFACE
+        -Wall -Wextra -Wpedantic -Wno-unused-parameter)
+    if(REMINISCENCE2_SANITIZERS)
+        target_compile_options(reminiscence2_build_options INTERFACE
+            "-fsanitize=${REMINISCENCE2_SANITIZER_SET}" -fno-omit-frame-pointer)
+        target_link_options(reminiscence2_build_options INTERFACE "-fsanitize=${REMINISCENCE2_SANITIZER_SET}")
+    endif()
+elseif(REMINISCENCE2_SANITIZERS)
+    message(FATAL_ERROR "REMINISCENCE2_SANITIZERS requires Clang or GCC")
+endif()
+
+add_library(dear_imgui STATIC
+    third_party/imgui/imgui.cpp third_party/imgui/imgui_draw.cpp
+    third_party/imgui/imgui_tables.cpp third_party/imgui/imgui_widgets.cpp
+    third_party/imgui/backends/imgui_impl_sdl2.cpp
+    third_party/imgui/backends/imgui_impl_sdlrenderer2.cpp)
+target_include_directories(dear_imgui PUBLIC third_party/imgui third_party/imgui/backends)
+target_link_libraries(dear_imgui PUBLIC SDL2::SDL2 PRIVATE reminiscence2_build_options)
+
+add_library(reminiscence2_engine STATIC
+    collision.cpp config.cpp cpc_player.cpp cutscene.cpp cutscene_assets.cpp cutscene_tool.cpp decode_mac.cpp decode_sega.cpp file.cpp
+    fs.cpp game.cpp game_settings.cpp graphics.cpp menu.cpp mixer.cpp mod_player.cpp ogg_player.cpp
+    settings.cpp settings_store.cpp settings_overlay.cpp save_catalog.cpp appearance.cpp
+    music_midi.cpp music_prf.cpp music_synth.cpp
+    piege.cpp protection.cpp resource.cpp resource_aba.cpp resource_mac.cpp
+    resource_paq.cpp scaler.cpp screenshot.cpp seq_player.cpp sfx_player.cpp
+    staticres.cpp staticres_controllers.cpp systemstub_sdl.cpp unpack.cpp util.cpp video.cpp)
+target_include_directories(reminiscence2_engine PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+target_compile_definitions(reminiscence2_engine PRIVATE USE_STB_VORBIS USE_ZLIB)
+target_link_libraries(reminiscence2_engine PUBLIC reminiscence2_build_options SDL2::SDL2 ZLIB::ZLIB PRIVATE dear_imgui)
+set_target_properties(reminiscence2_engine PROPERTIES CXX_EXTENSIONS OFF)
+add_library(nuked_opl3 STATIC third_party/nuked-opl3/opl3.c)
+target_link_libraries(reminiscence2_engine PRIVATE nuked_opl3)
+if(REMINISCENCE2_FLUIDSYNTH)
+    find_path(FLUIDSYNTH_INCLUDE_DIR fluidsynth.h REQUIRED)
+    find_library(FLUIDSYNTH_LIBRARY fluidsynth REQUIRED)
+    target_include_directories(reminiscence2_engine PRIVATE "${FLUIDSYNTH_INCLUDE_DIR}")
+    target_link_libraries(reminiscence2_engine PRIVATE "${FLUIDSYNTH_LIBRARY}")
+    target_compile_definitions(reminiscence2_engine PRIVATE REMINISCENCE2_FLUIDSYNTH)
+endif()
+if(REMINISCENCE2_MT32EMU)
+    find_path(MT32EMU_INCLUDE_DIR mt32emu/mt32emu.h REQUIRED)
+    find_library(MT32EMU_LIBRARY mt32emu REQUIRED)
+    target_include_directories(reminiscence2_engine PRIVATE "${MT32EMU_INCLUDE_DIR}")
+    target_link_libraries(reminiscence2_engine PRIVATE "${MT32EMU_LIBRARY}")
+    target_compile_definitions(reminiscence2_engine PRIVATE REMINISCENCE2_MT32EMU)
+endif()
+
+if(REMINISCENCE2_USE_MODPLUG)
+    find_path(MODPLUG_INCLUDE_DIR NAMES libmodplug/modplug.h REQUIRED)
+    find_library(MODPLUG_LIBRARY NAMES modplug REQUIRED)
+    target_include_directories(reminiscence2_engine PRIVATE "${MODPLUG_INCLUDE_DIR}")
+    target_link_libraries(reminiscence2_engine PRIVATE "${MODPLUG_LIBRARY}")
+    target_compile_definitions(reminiscence2_engine PRIVATE USE_MODPLUG)
+endif()
+
+add_executable(reminiscence2 main.cpp cli_text.cpp)
+if(TARGET SDL2::SDL2main)
+    target_link_libraries(reminiscence2 PRIVATE SDL2::SDL2main)
+endif()
+target_link_libraries(reminiscence2 PRIVATE reminiscence2_engine)
+set_target_properties(reminiscence2 PROPERTIES CXX_EXTENSIONS OFF)
+
+# Keep the inherited config beside the executable for running from the build folder.
+configure_file(fb.cfg fb.cfg COPYONLY)
+
+include(CTest)
+if(BUILD_TESTING)
+    add_executable(core_tests tests/core_tests.cpp)
+    target_link_libraries(core_tests PRIVATE reminiscence2_engine)
+    add_test(NAME core COMMAND core_tests "${CMAKE_CURRENT_BINARY_DIR}/test-fixtures")
+    add_executable(mac_menu_tests tests/mac_menu_tests.cpp)
+    target_link_libraries(mac_menu_tests PRIVATE reminiscence2_engine)
+    add_test(NAME mac_menus COMMAND mac_menu_tests "${CMAKE_CURRENT_BINARY_DIR}/mac-menu-fixtures")
+    set_tests_properties(mac_menus PROPERTIES TIMEOUT 20)
+    add_executable(music_tests tests/music_tests.cpp)
+    target_link_libraries(music_tests PRIVATE reminiscence2_engine)
+    add_test(NAME music COMMAND music_tests "${REMINISCENCE2_TEST_SOUNDFONT}")
+    set_tests_properties(music PROPERTIES TIMEOUT 30)
+    add_executable(platform_tests tests/platform_tests.cpp)
+    target_link_libraries(platform_tests PRIVATE reminiscence2_engine)
+    add_test(NAME platform COMMAND platform_tests)
+    set_tests_properties(platform PROPERTIES TIMEOUT 20 ENVIRONMENT "SDL_VIDEODRIVER=dummy;SDL_AUDIODRIVER=dummy;SDL_RENDER_DRIVER=software")
+    add_executable(settings_tests tests/settings_tests.cpp)
+    target_link_libraries(settings_tests PRIVATE reminiscence2_engine dear_imgui)
+    add_test(NAME settings COMMAND settings_tests "${CMAKE_CURRENT_BINARY_DIR}/settings-fixtures")
+    set_tests_properties(settings PROPERTIES TIMEOUT 30 ENVIRONMENT "SDL_VIDEODRIVER=dummy;SDL_AUDIODRIVER=dummy;SDL_RENDER_DRIVER=software")
+    add_executable(format_tests tests/format_tests.cpp)
+    target_link_libraries(format_tests PRIVATE reminiscence2_engine)
+    add_test(NAME formats COMMAND format_tests "${CMAKE_CURRENT_BINARY_DIR}/format-fixtures")
+    set_tests_properties(formats PROPERTIES TIMEOUT 20)
+    add_executable(cutscene_tests tests/cutscene_tests.cpp)
+    target_link_libraries(cutscene_tests PRIVATE reminiscence2_engine)
+    add_test(NAME cutscenes COMMAND cutscene_tests "${CMAKE_CURRENT_BINARY_DIR}/cutscene-fixtures")
+    set_tests_properties(cutscenes PROPERTIES TIMEOUT 20)
+    find_package(Python3 3.9 COMPONENTS Interpreter QUIET)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME cutscene_frontend COMMAND "${Python3_EXECUTABLE}" -m unittest
+            discover -s tests -p test_play_cutscenes.py -v)
+        set_tests_properties(cutscene_frontend PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" TIMEOUT 60
+            ENVIRONMENT "REMINISCENCE2_ENGINE=$<TARGET_FILE:reminiscence2>")
+    endif()
+    add_test(NAME cli COMMAND "${CMAKE_COMMAND}"
+        "-DENGINE=$<TARGET_FILE:reminiscence2>"
+        "-DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/cli-fixtures"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/cli.cmake")
+    set_tests_properties(core cli PROPERTIES TIMEOUT 20)
+    if(REMINISCENCE2_AMIGA_DATA)
+        add_test(NAME cutscene_assets COMMAND cutscene_tests
+            "${CMAKE_CURRENT_BINARY_DIR}/cutscene-test-output" "${REMINISCENCE2_AMIGA_DATA}")
+        set_tests_properties(cutscene_assets PROPERTIES TIMEOUT 60)
+        add_executable(amiga_assets tests/amiga_assets.cpp)
+        target_link_libraries(amiga_assets PRIVATE reminiscence2_engine)
+        add_test(NAME amiga_assets COMMAND amiga_assets "${REMINISCENCE2_AMIGA_DATA}"
+            "${CMAKE_CURRENT_BINARY_DIR}/amiga-test-output")
+        set_tests_properties(amiga_assets PROPERTIES TIMEOUT 60)
+    endif()
+    if(REMINISCENCE2_SANITIZERS)
+        get_property(engine_tests DIRECTORY PROPERTY TESTS)
+        set_property(TEST ${engine_tests} APPEND PROPERTY ENVIRONMENT "UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1")
+    endif()
+
+endif()

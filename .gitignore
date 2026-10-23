@@ -1,0 +1,59 @@
+# IDE
+.vscode/
+
+# Build
+build/
+build-*/
+CMakeUserPresets.json
+
+# Folders
+/.local/
+# Private third-party documentation assets were moved to .local/reference/.
+/docs/manual/images/
+/docs/manual/images.json
+/docs/reference/artwork/*.jpg
+/docs/reference/artwork/*.jpeg
+/docs/reference/copy-protection/*.png
+/docs/reference/technical/*.pdf
+__pycache__/
+.DS_Store
+DATA/
+SAVE/
+ORIG/
+TUNES/
+deps/
+
+# Prerequisites
+*.d
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+fb
+reminiscence2

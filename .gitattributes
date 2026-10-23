@@ -1,0 +1,22 @@
+# Keep private references and generated review material out of source archives.
+# Preserve the exact whitespace of imported third-party snapshots and notes.
+third_party/imgui/** -whitespace
+docs/upstream/README.md -whitespace
+
+/.local export-ignore
+/.local/** export-ignore
+/build export-ignore
+/build/** export-ignore
+/build-* export-ignore
+/build-*/** export-ignore
+**/__pycache__/** export-ignore
+**/.DS_Store export-ignore
+
+# Removed third-party manual and reference assets must not ship if re-added.
+/docs/manual/images export-ignore
+/docs/manual/images/** export-ignore
+/docs/manual/images.json export-ignore
+/docs/reference/artwork/*.jpg export-ignore
+/docs/reference/artwork/*.jpeg export-ignore
+/docs/reference/copy-protection/*.png export-ignore
+/docs/reference/technical/*.pdf export-ignore
