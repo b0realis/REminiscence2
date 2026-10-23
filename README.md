@@ -45,6 +45,24 @@ Read [manual.md](manual.md) for the original REminiscence2 player field guide:
 setup, controls, movement practice, saves, display, music and command options.
 It contains no reproduced publisher-manual text, comic or game artwork.
 
+## Screenshots
+
+The in-game QoL menu at **1920×1080**, rendered over paused Amiga gameplay.
+Press **Esc**, **F10**, or controller **Start** to open it. Its eight pages include
+save/load, graphics, audio, controls, cheats and level selection.
+
+![High-resolution QoL menu with Conrad's T-shirt choices and the turquoise EXIT GAME button](docs/screenshots/qol-highres.png)
+
+| Amiga gameplay: level 1 | Amiga gameplay: level 6 |
+| --- | --- |
+| ![Conrad in the jungle](docs/screenshots/amiga-level1.png) | ![Conrad exploring the alien complex](docs/screenshots/amiga-level6.png) |
+
+The [screenshot gallery](docs/screenshots/README.md) includes all seven levels,
+the save browser, graphics settings and the compact **256×224** menu.
+Captures show the development build using player-supplied Amiga data.
+Game artwork remains the property of its respective rights holders; the
+engine's GPL does not relicense it. See the [image credits](docs/screenshots/README.md#image-credits).
+
 ## Build
 
 Requirements: C and C++17 compilers, CMake 3.20 or later, SDL2 2.0.18+ development files,

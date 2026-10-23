@@ -12,6 +12,9 @@ Gameplay stops while the overlay is open. Music can continue so you can hear
 volume adjustments. On resume, held menu inputs are cleared and simulation /
 rewind timers restart from the current time. There is no catch-up simulation.
 
+See the [screenshot gallery](screenshots/README.md) for the 1920×1080 desktop
+menu, save browser, graphics settings and original-resolution 256×224 layout.
+
 ## Pages
 
 | Page | Available controls |

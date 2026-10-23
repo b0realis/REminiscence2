@@ -81,6 +81,13 @@ tree and retained only as private references. The
 implementation references. The new guide's license grants no rights in the
 original manual or game assets.
 
+The separate [screenshot gallery](screenshots/README.md) contains engine captures
+of gameplay and the QoL overlay. Game artwork shown in those captures retains
+its original rights holders' copyright; it is not relicensed under the engine's
+GPL or the gallery text's SPDX notice. Image credits are recorded in the gallery.
+The player field guide remains text-only and the supplied reference scans remain
+excluded.
+
 Changing format or adding a new license notice does not grant permission to
 reuse someone else's protected material. The U.S. Copyright Office's
 [derivative-work guidance](https://www.copyright.gov/circs/circ14.pdf) explains
