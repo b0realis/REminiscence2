@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "settings_overlay.h"
+#include "keyboard_diagram.h"
 #include "version.h"
 #include "game.h"
 #include "systemstub.h"
@@ -533,6 +534,20 @@ void SettingsOverlay::draw(settings::Session &s) {
 		                    REMINISCENCE2_VERSION);
 	ImGui::Separator();
 	auto controls = [&] {
+		if (match(_search, "Keyboard diagram action keys bindings controls remap")) {
+			ImGui::SeparatorText("Your keyboard / action guide");
+			if (_compact)
+				hint(_captureBinding >= 0 ? "Press a key. Esc cancels; F10 resumes."
+				                           : "Select a colored key or action to rebind.");
+			else
+				hint("Colored keys are your primary bindings. Click a colored key or its action "
+				     "to rebind. Arrows connect keys to their actions; other keys stay dark.");
+			const int selected = keyboard::draw(s.values, _captureBinding, _compact);
+			if (selected >= 0)
+				_captureBinding = selected;
+			hint("Physical key positions / SDL key names. F10 always opens settings. "
+			     "Fixed engine shortcuts and legacy aliases are listed below.");
+		}
 		ImGui::SeparatorText("Keyboard bindings");
 		hint("Choose a binding, then press a key. Escape cancels capture. F10 always opens "
 		     "settings, even after rebinding Pause.");

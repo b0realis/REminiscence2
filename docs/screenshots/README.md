@@ -39,6 +39,32 @@ resolution.
 
 ![Compact QoL menu at the original 256×224 resolution](qol-native.png)
 
+## Keyboard / action guide
+
+Controls shows a full keyboard with colored primary action keys, darker unused
+keys and arrows pointing to the corresponding actions. Select a colored key or
+callout to rebind it. Highlights follow the actual preferences, including custom
+profiles, resets and changes made during play.
+
+![Live keyboard diagram with the default controls at 1920×1080](qol-keyboard.png)
+
+<details>
+<summary>Compare a custom WASD layout</summary>
+
+This capture applies WASD movement, K for actions, E to use, R for the weapon,
+I for inventory and P for Pause. The old arrow, Shift, Space, Tab and Escape
+primary keys become dark; the colored keys and arrows move to the new bindings.
+The fixed F10 recovery shortcut remains available.
+
+![The same keyboard diagram after changing to WASD and custom action keys](qol-keyboard-wasd.png)
+
+</details>
+
+At the original resolution, the guide keeps each key and its action readable
+in scrollable rows instead of shrinking the entire keyboard.
+
+![Colored key caps and action callouts at 256×224](qol-keyboard-native.png)
+
 ## Amiga gameplay
 
 The earlier seven-level captures are preserved below at **512×448**, a 2×

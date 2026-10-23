@@ -242,7 +242,14 @@ settings. Explicit display/rewind command-line options override the saved
 profile. Use `--no-preferences` to ignore that profile for one launch. Paths,
 language, output rate and synthesizer selection remain startup options.
 
-To rebind a key, open Controls, select its button and press the new key. Escape
+The Controls page includes an illustrated keyboard: action keys are colored,
+other keys stay dark, and matching arrows point to each action's description.
+The highlights follow your current bindings, including saved profiles and
+changes made with Reset, Undo or Restore defaults. At small resolutions, colored
+key caps and arrows form a scrollable action guide.
+
+To rebind a key, open Controls, select a colored key, its callout or its binding
+button and press the new key. Escape
 cancels capture; duplicate and reserved keys are rejected. F10 remains a fixed
 recovery shortcut. Menu inputs are cleared before resuming so confirming a
 setting does not fire or move Conrad. Gamepad shoulders switch pages, A

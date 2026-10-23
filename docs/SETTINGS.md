@@ -24,7 +24,7 @@ menu, save browser, graphics settings and original-resolution 256×224 layout.
 | Graphics | Fullscreen, VSync, point/linear/ScaleNx sampling, window scale, widescreen side content, compact layout and menu text scale. |
 | Audio | Master, music and effects volume, mute, save-confirmation sound, current output rate and PRF fallback information. |
 | Enhancements | Conrad’s Original/Red-Pink/White T-shirt, rewind, inventory insertion order, transition style, save sound, additional MEMO content, text/SEQ choices and optional cutscene switches. |
-| Controls | Rebind the nine primary keyboard actions; view fixed shortcuts, menu navigation and controller bindings. |
+| Controls | Live keyboard diagram with colored action keys and arrow callouts; rebind the nine primary actions; view fixed shortcuts, menu navigation and controller bindings. |
 | Cheats | All three gameplay cheat flags, unlimited life, fast mode, diagnostic rectangles, DOS combat zoom, one-shot health restoration and clear-all. |
 | Levels | Select any of the seven available levels and Easy/Normal/Expert difficulty; confirm before starting. |
 
@@ -63,6 +63,27 @@ capture. Duplicate keys and reserved engine shortcuts are rejected with an
 explanation. Bindings use SDL physical scancodes: changing keyboard layout can
 alter the character printed on a key without moving the binding.
 Changed bindings have a Reset button, including restoring Pause to Escape.
+
+### Illustrated keyboard guide
+
+The Controls page shows a keyboard with a different color for each primary
+action. Unassigned keys stay dark. Matching arrows lead from the colored keys
+to their action labels. Click a colored key or its callout, then press the new
+key; the existing duplicate/reserved-key checks still apply. Escape cancels.
+The highlights and arrows follow changes immediately, including loaded profiles,
+Reset, Undo and restored defaults. On the full keyboard, held keys receive a
+bright outline.
+
+The diagram uses physical key positions and the same SDL scancode names as the
+binding list. The extra ISO key is marked **ISO**; bound keys outside the main
+layout, including additional function, international and media keys, appear in
+an extra row. The diagram highlights primary bindings; fixed shortcuts and
+legacy aliases are described below it.
+
+Compact windows and large menu text use colored key caps with arrows to one
+action per row, so keys remain readable instead of shrinking an entire keyboard.
+Scroll to reach the remaining actions. The native-resolution footer stays in
+place. See the [keyboard screenshots](screenshots/README.md#keyboard--action-guide).
 
 F10 remains fixed as a recovery key. Outside the overlay, Ctrl+S/L/R and Alt
 shortcuts remain engine shortcuts; inside it, use the Save / Load page's actions.
@@ -190,7 +211,9 @@ Settings remain reachable with F10 after the Pause action has been rebound.
 The model and validation are in `settings.h` / `settings.cpp`; atomic storage
 is in `settings_store.cpp`; save browsing and preflight validation are in
 `save_catalog.cpp`; Dear ImGui presentation is in
-`settings_overlay.cpp`. `game_settings.cpp` connects the model to the engine.
+`settings_overlay.cpp`. `keyboard_diagram.cpp` owns the physical key layout,
+live action lookup, colored caps and callouts; it delegates rebinding to the
+existing overlay validation and capture path. `game_settings.cpp` connects the model to the engine.
 The SDL boundary handles input capture, presentation and texture replacement.
 The UI does not advance the game simulation. `appearance.cpp` contains the
 T-shirt colour rules and Amiga fabric segmentation; sprite drawing routes

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "settings.h"
 #include "settings_overlay.h"
+#include "keyboard_diagram.h"
 #include "config.h"
 #include "fs.h"
 #include "game.h"
@@ -32,6 +33,50 @@ static void write(const std::filesystem::path &path, const std::string &text) {
 static bool testMusic(void *, int16_t *samples, int frames) {
 	std::fill_n(samples, frames * 2, 10000);
 	return true;
+}
+static settings::Preferences remappedKeyboard() {
+	settings::Preferences p;
+	p.keys = {{SDL_SCANCODE_A, SDL_SCANCODE_D, SDL_SCANCODE_W, SDL_SCANCODE_S, SDL_SCANCODE_K,
+	           SDL_SCANCODE_E, SDL_SCANCODE_R, SDL_SCANCODE_I, SDL_SCANCODE_P}};
+	return p;
+}
+static void keyboardModel() {
+	const settings::Preferences defaults;
+	for (size_t i = 0; i < settings::BindingCount; ++i)
+		check(keyboard::bindingForKey(defaults, defaults.keys[i]) == static_cast<int>(i),
+		      "default action has its own highlighted physical key");
+	const auto remapped = remappedKeyboard();
+	check(keyboard::bindingForKey(remapped, SDL_SCANCODE_A) == 0 &&
+	          keyboard::bindingForKey(remapped, SDL_SCANCODE_W) == 2 &&
+	          keyboard::bindingForKey(remapped, SDL_SCANCODE_K) == 4 &&
+	          keyboard::bindingForKey(remapped, SDL_SCANCODE_P) == 8,
+	      "WASD and alternate action keys move the live highlights");
+	for (int old : defaults.keys)
+		check(keyboard::bindingForKey(remapped, old) == -1,
+		      "previously bound keys become dark after remapping");
+	auto unusual = remapped;
+	unusual.keys[0] = SDL_SCANCODE_F24;
+	unusual.keys[4] = SDL_SCANCODE_INTERNATIONAL3;
+	unusual.keys[8] = SDL_SCANCODE_AUDIOMUTE;
+	for (const auto &preferences : {defaults, remapped, unusual}) {
+		const auto keys = keyboard::layout(preferences);
+		for (int code : preferences.keys)
+			check(std::count_if(keys.begin(), keys.end(),
+			                    [&](const keyboard::Key &key) { return key.scancode == code; }) ==
+			          1,
+			      "every binding, including extra and media keys, has exactly one key cap");
+		for (size_t a = 0; a < keys.size(); ++a) {
+			check(keys[a].width > 0 && keys[a].height > 0 && !keys[a].legend.empty(),
+			      "physical key has a usable size and legend");
+			for (size_t b = a + 1; b < keys.size(); ++b) {
+				const auto &x = keys[a], &y = keys[b];
+				check(x.scancode != y.scancode, "physical key scancodes are unique");
+				check(!(x.x + .001f < y.x + y.width && y.x + .001f < x.x + x.width &&
+				        x.y + .001f < y.y + y.height && y.y + .001f < x.y + x.height),
+				      "keyboard and extra-key rows do not overlap");
+			}
+		}
+	}
 }
 struct PausedSystem : HeadlessSystem {
 	bool applied = false, persisted = false, redOnReopen = false;
@@ -130,23 +175,33 @@ static void renderPages(const std::filesystem::path &root, const char *assets) {
 		overlay.open(session.values);
 		static const char *const pages[] = {"session",      "saves",    "graphics", "audio",
 		                                    "enhancements", "controls", "cheats",   "levels"};
-		for (int capture = 0; capture < 20; ++capture) {
-			const bool native = capture >= 10;
+		for (int capture = 0; capture < 24; ++capture) {
+			const bool native = (capture >= 10 && capture < 20) || capture == 21;
+			const bool small = capture == 8 || capture == 9 || capture == 23;
 			SDL_SetWindowSize(window,
-			                  native         ? 256
-			                  : capture >= 8 ? 640
-			                                 : 1280,
-			                  native         ? 224
-			                  : capture >= 8 ? 480
-			                                 : 800);
-			session.values.uiScale = capture == 9 || capture == 18 ? 175 : 100;
-			session.values.menuLayout = capture == 19 ? 1 : 0;
-			const int page = capture < 8 ? capture : native && capture < 18 ? capture - 10 : 2;
+			                  native  ? 256
+			                  : small ? 640
+			                          : 1280,
+			                  native  ? 224
+			                  : small ? 480
+			                          : 800);
+			session.values.keys = (capture == 20 || capture == 21) ? remappedKeyboard().keys
+			                                                       : settings::Preferences{}.keys;
+			session.values.uiScale = capture == 9 || capture == 18 || capture == 22 ? 175 : 100;
+			session.values.menuLayout = capture == 19 || capture == 23 ? 1 : 0;
+			const int page = capture >= 20            ? 5
+			                 : capture < 8            ? capture
+			                 : native && capture < 18 ? capture - 10
+			                                          : 2;
 			const std::string name = capture < 8     ? pages[page]
 			                         : capture == 8  ? "compact"
 			                         : capture == 9  ? "large-text"
 			                         : capture == 18 ? "native-large-text"
 			                         : capture == 19 ? "native-compact"
+			                         : capture == 20 ? "controls-remapped"
+			                         : capture == 21 ? "native-controls-remapped"
+			                         : capture == 22 ? "controls-large-text"
+			                         : capture == 23 ? "controls-compact"
 			                                         : std::string("native-") + pages[page];
 			overlay.selectPage(page);
 			for (int frame = 0; frame < 3; ++frame) {
@@ -186,16 +241,27 @@ static void renderPages(const std::filesystem::path &root, const char *assets) {
 			}
 		}
 		// Click the real native-resolution footer and its confirmation dialog.
+		SDL_SetWindowSize(window, 256, 224);
+		session.values.keys = settings::Preferences{}.keys;
 		session.values.uiScale = 100;
 		session.values.menuLayout = 0;
 		session.action = settings::Action::None;
 		overlay.open(session.values);
-		auto frame = [&] {
+		std::vector<uint32_t> captured;
+		int capturedWidth = 0, capturedHeight = 0;
+		auto frame = [&](bool capturePixels = false) {
 			SDL_SetRenderDrawColor(renderer, 20, 35, 52, 255);
 			SDL_RenderClear(renderer);
 			overlay.beginFrame(session.values);
 			overlay.draw(session);
 			overlay.render();
+			if (capturePixels) {
+				SDL_GetRendererOutputSize(renderer, &capturedWidth, &capturedHeight);
+				captured.resize(capturedWidth * capturedHeight);
+				check(SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_ARGB8888,
+				                           captured.data(), capturedWidth * 4) == 0,
+				      "capture keyboard for input and live-highlight checks");
+			}
 			SDL_RenderPresent(renderer);
 		};
 		auto click = [&](float x, float y) {
@@ -208,6 +274,93 @@ static void renderPages(const std::filesystem::path &root, const char *assets) {
 			frame();
 			frame();
 		};
+		// Find an actual filled key cap in the rendered image. A 5x5 patch
+		// excludes thin callout borders and leader arrows of the same color.
+		auto coloredCap = [&](uint32_t rgb) {
+			for (int y = 2; y < capturedHeight - 2; y += 2)
+				for (int x = 2; x < capturedWidth - 2; x += 2) {
+					bool filled = true;
+					for (int dy = -2; dy <= 2 && filled; ++dy)
+						for (int dx = -2; dx <= 2; ++dx)
+							if ((captured[(y + dy) * capturedWidth + x + dx] & 0xFFFFFF) != rgb)
+								filled = false;
+					if (filled)
+						return ImVec2(static_cast<float>(x), static_cast<float>(y));
+				}
+			return ImVec2(-1, -1);
+		};
+		auto keyEvent = [&](SDL_Scancode code) {
+			SDL_Event event = {};
+			event.type = SDL_KEYDOWN;
+			event.key.keysym.scancode = code;
+			overlay.processEvent(event, &session);
+		};
+		SDL_SetWindowSize(window, 1280, 800);
+		overlay.selectPage(5);
+		frame();
+		frame(true);
+		const auto originalAction = coloredCap(0xFFBE4B);
+		check(originalAction.x >= 0, "default action key is visibly highlighted");
+		click(originalAction.x, originalAction.y);
+		keyEvent(SDL_SCANCODE_RETURN);
+		check(session.statusError && session.values.keys[4] == SDL_SCANCODE_LSHIFT,
+		      "clicking a diagram key enters capture and rejects duplicate bindings");
+		keyEvent(SDL_SCANCODE_K);
+		check(!session.statusError && session.applyRequested &&
+		          session.values.keys[4] == SDL_SCANCODE_K,
+		      "valid key after a rejected duplicate rebinds the clicked diagram action");
+		frame(true);
+		const auto newAction = coloredCap(0xFFBE4B);
+		check(newAction.x >= 0 && newAction.y < originalAction.y &&
+		          (captured[static_cast<int>(originalAction.y) * capturedWidth +
+		                    static_cast<int>(originalAction.x)] &
+		           0xFFFFFF) != 0xFFBE4B,
+		      "highlight moves to K and the old Shift key becomes dark");
+
+		session.values.keys = settings::Preferences{}.keys;
+		session.status.clear();
+		overlay.open(session.values);
+		frame();
+		frame();
+		click(345, 643); // The Space / Draw-holster callout, below the desktop keyboard.
+		keyEvent(SDL_SCANCODE_Q);
+		check(session.values.keys[6] == SDL_SCANCODE_Q,
+		      "action callout buttons also enter the shared rebind capture");
+
+		SDL_SetWindowSize(window, 256, 224);
+		session.values.keys = settings::Preferences{}.keys;
+		session.status.clear();
+		overlay.open(session.values);
+		frame();
+		frame(true);
+		const auto compactLeft = coloredCap(0x46A0FF);
+		check(compactLeft.x >= 0, "compact guide has a readable colored movement key");
+		click(compactLeft.x, compactLeft.y);
+		keyEvent(SDL_SCANCODE_A);
+		check(session.values.keys[0] == SDL_SCANCODE_A,
+		      "native-resolution colored key caps can rebind their action");
+		std::string keyReason;
+		settings::Preferences restored;
+		const auto keyProfile = (root / "keyboard-remapped.cfg").string();
+		check(settings::save(keyProfile, session.values, keyReason) &&
+		          settings::load(keyProfile, restored, keyReason) &&
+		          keyboard::bindingForKey(restored, SDL_SCANCODE_A) == 0 &&
+		          keyboard::bindingForKey(restored, SDL_SCANCODE_LEFT) == -1,
+		      "diagram reflects a saved and restored keybinding profile");
+		session.status.clear();
+		frame(true);
+		const auto reboundCompactLeft = coloredCap(0x46A0FF);
+		click(reboundCompactLeft.x, reboundCompactLeft.y);
+		keyEvent(SDL_SCANCODE_ESCAPE);
+		check(session.values.keys[0] == SDL_SCANCODE_A &&
+		          session.action == settings::Action::None &&
+		          session.status == "Key capture canceled.",
+		      "Escape cancels diagram rebinding without resuming or changing a key");
+
+		session.values.keys = settings::Preferences{}.keys;
+		session.status.clear();
+		overlay.open(session.values);
+		overlay.selectPage(0);
 		frame();
 		frame();
 		click(205, 210);
@@ -256,6 +409,7 @@ int main(int argc, char **argv) {
 	const std::string saveRoot = root.string();
 	std::filesystem::create_directories(root);
 	setDefaultOptions(g_options);
+	keyboardModel();
 	settings::Preferences p;
 	std::string reason;
 	check(settings::validate(p, reason), "default settings validate");

@@ -103,7 +103,7 @@ pause time do not leak into gameplay.
 SDL dummy-device tests apply new textures, scale and side content, rebind and
 release a movement key, reject the old primary key, and open/close the complete
 overlay through F10. SDL tests also click the on-screen shortcut, dispatch cheat
-and healing actions, and confirm the menu retains a 256×224 window. Twenty
+and healing actions, and confirm the menu retains a 256×224 window. Twenty-four
 software-rendered captures cover all eight pages at desktop and native
 resolution, compact layout and enlarged text. Pixel checks verify the turquoise
 EXIT GAME button stays visible; actual mouse/key input exercises exit
@@ -115,6 +115,14 @@ also changes side content while retaining the composed frame, player
 position/life and random state. Captures over actual
 Amiga gameplay were inspected. GPU/high-DPI, physical controller navigation and
 Windows behavior remain to be checked on their respective devices.
+
+Keyboard-diagram checks cover default and WASD bindings, extra function/media
+keys, unique non-overlapping physical caps, and desktop, compact and enlarged
+text captures. Actual mouse clicks on a colored cap and an arrow callout enter
+the shared SDL rebind path. A duplicate is rejected, a subsequent valid key is
+accepted, and pixel checks verify the highlight moves while the old key becomes
+dark. Native-size caps also rebind, saved profiles restore the correct highlights,
+and Escape cancels capture without resuming the game.
 
 Shirt appearance checks cover Original/Red-Pink/White profile round trips,
 invalid enum rejection, legacy boolean import and reopening with Red/Pink.

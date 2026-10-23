@@ -43,7 +43,7 @@ target_link_libraries(dear_imgui PUBLIC SDL2::SDL2 PRIVATE reminiscence2_build_o
 add_library(reminiscence2_engine STATIC
     collision.cpp config.cpp cpc_player.cpp cutscene.cpp cutscene_assets.cpp cutscene_tool.cpp decode_mac.cpp decode_sega.cpp file.cpp
     fs.cpp game.cpp game_settings.cpp graphics.cpp menu.cpp mixer.cpp mod_player.cpp ogg_player.cpp
-    settings.cpp settings_store.cpp settings_overlay.cpp save_catalog.cpp appearance.cpp
+    settings.cpp settings_store.cpp settings_overlay.cpp keyboard_diagram.cpp save_catalog.cpp appearance.cpp
     music_midi.cpp music_prf.cpp music_synth.cpp
     piege.cpp protection.cpp resource.cpp resource_aba.cpp resource_mac.cpp
     resource_paq.cpp scaler.cpp screenshot.cpp seq_player.cpp sfx_player.cpp

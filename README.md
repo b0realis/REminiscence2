@@ -59,6 +59,8 @@ save/load, graphics, audio, controls, cheats and level selection.
 
 The [screenshot gallery](docs/screenshots/README.md) includes all seven levels,
 the save browser, graphics settings and the compact **256×224** menu.
+Controls includes an [interactive keyboard diagram](docs/screenshots/README.md#keyboard--action-guide):
+colored action keys and arrow callouts follow your bindings as you change them.
 Captures show the development build using player-supplied Amiga data.
 Game artwork remains the property of its respective rights holders; the
 engine's GPL does not relicense it. See the [image credits](docs/screenshots/README.md#image-credits).
