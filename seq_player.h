@@ -8,6 +8,7 @@
 #define SEQ_PLAYER_H__
 
 #include "intern.h"
+#include <array>
 
 struct File;
 struct SystemStub;
@@ -25,15 +26,16 @@ struct SeqDemuxer {
 
 	bool readHeader();
 	bool readFrameData();
-	void fillBuffer(int num, int offset, int size);
+	bool fillBuffer(int num, int offset, int size);
 	void clearBuffer(int num);
-	void readPalette(uint8_t *dst);
-	void readAudio(int16_t *dst);
+	bool readPalette(uint8_t *dst);
+	bool readAudio(int16_t *dst);
 
 	int _frameOffset;
 	int _audioDataOffset;
 	int _paletteDataOffset;
 	int _videoData;
+	bool _failed = false;
 	struct {
 		int size;
 		int avail;
@@ -52,18 +54,11 @@ struct SeqPlayer {
 
 	static const char *_namesTable[];
 
-	struct SoundBufferQueue {
-		int16_t *data;
-		int size;
-		int read;
-		SoundBufferQueue *next;
-	};
-
 	SeqPlayer(SystemStub *stub, Mixer *mixer);
 	~SeqPlayer();
 
 	void setBackBuffer(uint8_t *buf) { _buf = buf; }
-	void play(File *f);
+	bool play(File *f);
 	bool mix(int16_t *buf, int len);
 	static bool mixCallback(void *param, int16_t *buf, int len);
 
@@ -71,9 +66,12 @@ struct SeqPlayer {
 	uint8_t *_buf;
 	Mixer *_mix;
 	SeqDemuxer _demux;
-	int _soundQueuePreloadSize;
-	SoundBufferQueue *_soundQueue, *_soundQueueTail;
+	bool _completed = false;
+	// A bounded queue avoids allocating/freeing memory on the audio thread.
+	std::array<std::array<int16_t, SeqDemuxer::kAudioBufferSize>, 16> _audioBuffers{};
+	unsigned _audioRead = 0, _audioWrite = 0, _audioCount = 0, _audioOffset = 0;
+	uint32_t _audioPhase = 0;
+	bool _audioReady = false;
 };
 
 #endif // SEQ_PLAYER_H__
-

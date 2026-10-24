@@ -16,7 +16,9 @@ Mixer::Mixer(FileSystem *fs, SystemStub *stub)
 	_backgroundMusicType = MT_NONE;
 }
 
-Mixer::~Mixer() = default;
+Mixer::~Mixer() {
+	free();
+}
 void Mixer::configureMusic(const music::Options &options, FileSystem *gameFiles) {
 	_prf = std::make_unique<music::PrfPlayer>(this, gameFiles, _fs, options);
 }
@@ -39,6 +41,14 @@ void Mixer::init() {
 
 void Mixer::free() {
 	setPremixHook(0, 0);
+	_mod.stop();
+	_sfx.stop();
+	_ogg.stopTrack();
+	_cpc.stopTrack();
+	if (_prf)
+		_prf->stop();
+	_musicType = _backgroundMusicType = MT_NONE;
+	_musicTrack = -1;
 	stopAll();
 	_stub->stopAudio();
 }
@@ -81,6 +91,11 @@ void Mixer::play(const uint8_t *data, uint32_t len, uint16_t freq, uint8_t volum
 		ch->chunkPos = 0;
 		ch->chunkInc = (freq << FRAC_BITS) / _stub->getOutputSampleRate();
 	}
+}
+
+bool Mixer::hasPremixHook(void *owner) const {
+	LockAudioStack lock(_stub);
+	return _premixHook && _premixHookData == owner;
 }
 
 void Mixer::clearPremixHook(void *owner) {

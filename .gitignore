@@ -23,6 +23,10 @@ ORIG/
 TUNES/
 deps/
 
+# Player progress can include previews from proprietary assets.
+*.state
+*.r2s
+
 # Prerequisites
 *.d
 
@@ -65,3 +69,5 @@ fb
 /packaging/android/local.properties
 
 /packaging/android/app/src/main/assets/
+
+*.r2m

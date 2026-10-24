@@ -77,14 +77,20 @@ static Language detectLanguage(FileSystem *fs) {
 Options g_options;
 const char *g_caption = "REminiscence2";
 
-static void parseScaler(char *name, ScalerParameters *scalerParameters) {
-	char *sep = strchr(name, '@');
-	if (sep) {
-		*sep = 0;
-		scalerParameters->factor = atoi(sep + 1);
+static bool parseScaler(const char *text, ScalerParameters *parameters) {
+	const std::string input(text);
+	const auto separator = input.find('@');
+	const auto name = input.substr(0, separator);
+	if (name.empty() || name.size() >= sizeof(parameters->name))
+		return false;
+	if (separator != std::string::npos) {
+		uint32_t factor;
+		if (!parseUnsignedOption(input.c_str() + separator + 1, 1, 64, factor))
+			return false;
+		parameters->factor = factor;
 	}
-	strncpy(scalerParameters->name, name, sizeof(scalerParameters->name) - 1);
-	scalerParameters->name[sizeof(scalerParameters->name) - 1] = 0;
+	memcpy(parameters->name, name.c_str(), name.size() + 1);
+	return true;
 }
 
 static bool parseWidescreen(const char *mode, WidescreenMode &result) {
@@ -139,7 +145,8 @@ int main(int argc, char *argv[]) {
 	bool positionalDataPath = false;
 	int levelNum = 0;
 	bool fullscreen = true;
-	bool autoSave = false;
+	bool autoSave = false, continueRequested = false;
+	int diskInterval = -1;
 	bool explicitWindow = false, explicitScaler = false, explicitWidescreen = false;
 	bool explicitRewind = false, ignorePreferences = false;
 	RuntimeOptions runtime;
@@ -182,6 +189,9 @@ int main(int argc, char *argv[]) {
 		                                  {"play-cutscene", required_argument, 0, 21},
 		                                  {"no-preferences", no_argument, 0, 22},
 		                                  {"portable", no_argument, 0, 23},
+		                                  {"continue", no_argument, 0, 24},
+		                                  {"disk-autosave", required_argument, 0, 25},
+		                                  {"no-disk-autosave", no_argument, 0, 26},
 		                                  {0, 0, 0, 0}};
 		int index;
 		const int c = getopt_long(argc, argv, "h", options, &index);
@@ -189,6 +199,21 @@ int main(int argc, char *argv[]) {
 			break;
 		}
 		switch (c) {
+		case 24:
+			continueRequested = true;
+			break;
+		case 25: {
+			uint32_t seconds;
+			if (!parseUnsignedOption(optarg, 15, 600, seconds)) {
+				fprintf(stderr, "Invalid disk autosave interval: expected 15 to 600 seconds.\n");
+				return EXIT_FAILURE;
+			}
+			diskInterval = seconds;
+			break;
+		}
+		case 26:
+			diskInterval = 0;
+			break;
 		case 1:
 			dataPath = optarg; explicitData = true;
 			break;
@@ -213,7 +238,10 @@ int main(int argc, char *argv[]) {
 			explicitWindow = true;
 			break;
 		case 6:
-			parseScaler(optarg, &scalerParameters);
+			if (!parseScaler(optarg, &scalerParameters)) {
+				fprintf(stderr, "Invalid scaler: use NAME or NAME@FACTOR (1-64).\n");
+				return EXIT_FAILURE;
+			}
 			explicitScaler = true;
 			break;
 		case 7: {
@@ -327,6 +355,10 @@ int main(int argc, char *argv[]) {
 		fputs("--list-cutscenes and --play-cutscene cannot be combined.\n", stderr);
 		return EXIT_FAILURE;
 	}
+	if (continueRequested && (listCutscenes || playCutscene)) {
+		fprintf(stderr, "--continue cannot be combined with cutscene-only commands.\n");
+		return EXIT_FAILURE;
+	}
 	if (optind < argc && !positionalDataPath) {
 		fprintf(stderr, "Unexpected argument '%s'. Use --datapath=PATH to select game files.\n",
 		        argv[optind]);
@@ -367,6 +399,11 @@ int main(int argc, char *argv[]) {
 		else preferences.filter = settings::Filter::Scale;
 		preferences.scale = CLIP(scalerParameters.factor, preferences.filter == settings::Filter::Scale ? 2 : 1,
 		                        preferences.filter == settings::Filter::Scale ? 4 : 6);
+	}
+	if (diskInterval >= 0) {
+		preferences.diskAutosave = diskInterval != 0;
+		if (diskInterval)
+			preferences.diskAutosaveSeconds = diskInterval;
 	}
 	preferences.applyCompatibility(g_options);
 	if (!music::backendAvailable(musicOptions.backend)) {
@@ -411,11 +448,16 @@ int main(int argc, char *argv[]) {
 			return EXIT_FAILURE;
 		}
 	}
+	if (continueRequested && progress::scan(savePath, version).empty()) {
+		fprintf(stderr, "No valid autosave is available for this asset edition.\n");
+		return EXIT_FAILURE;
+	}
 	SystemStub *stub = SystemStub_SDL_create();
 	stub->configure(runtime);
 	Game *g = new Game(stub, &fs, &tuneFs, savePath, levelNum, (ResourceType)version, language,
 	                   widescreen, autoSave, cheats);
 	g->configurePreferences(preferences);
+	g->_continueRequested = continueRequested;
 	switch (musicOptions.backend) {
 	case music::Backend::None: g->_settingsAudioBackend = "Disabled"; break;
 	case music::Backend::Adlib: g->_settingsAudioBackend = "AdLib / OPL3"; break;
@@ -430,6 +472,7 @@ int main(int argc, char *argv[]) {
 		success = cinematics::play(*g, selectedCutscene);
 	} else {
 		g->run();
+		success = !g->_continueFailed;
 	}
 	delete g;
 	stub->destroy();

@@ -34,10 +34,17 @@ void ResourceAba::readEntries(const char *aba) {
 		pending.push_back(e);
 	}
 	if (!valid) { warning("Invalid or truncated ABA archive '%s'", aba); f.close(); return; }
-	void *grown = realloc(_entries, (_entriesCount + pending.size()) * sizeof(ResourceAbaEntry));
-	if (!grown && !pending.empty()) { warning("Cannot allocate ABA index"); f.close(); return; }
-	_entries = static_cast<ResourceAbaEntry *>(grown);
-	if (!pending.empty()) memcpy(_entries + _entriesCount, pending.data(), pending.size() * sizeof(ResourceAbaEntry));
+	if (!pending.empty()) {
+		void *grown =
+		    realloc(_entries, (_entriesCount + pending.size()) * sizeof(ResourceAbaEntry));
+		if (!grown) {
+			warning("Cannot allocate ABA index");
+			f.close();
+			return;
+		}
+		_entries = static_cast<ResourceAbaEntry *>(grown);
+		memcpy(_entries + _entriesCount, pending.data(), pending.size() * sizeof(ResourceAbaEntry));
+	}
 	_entriesCount += pending.size();
 	if (_entriesCount > 1) std::stable_sort(_entries, _entries + _entriesCount,
 	    [](const ResourceAbaEntry &a, const ResourceAbaEntry &b) { return strcasecmp(a.name, b.name) < 0; });

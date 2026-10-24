@@ -3,6 +3,7 @@
 #include "runtime_options.h"
 #include <SDL_scancode.h>
 #include <SDL_keyboard.h>
+#include <SDL_gamecontroller.h>
 #include <algorithm>
 #include <tuple>
 
@@ -41,13 +42,66 @@ bool Preferences::operator==(const Preferences &o) const {
 	                filter, scale, widescreen, uiScale, masterVolume, musicVolume, effectsVolume,
 	                muted, rewind, fadeTransitions, inventoryOriginal, saveChime, restoreMemo,
 	                textCutscenes, seqCutscenes, extraAsc, extraCaillou, extraCarte, extraMetro,
-	                extraSerrure, conradShirt, keys) ==
+	                extraSerrure, conradShirt, keys, padButtons, joystickButtons, stickDeadzone,
+	                rightStickMovement, storyJournal, journalNotifications, diskAutosave,
+	                contextualHints, diskAutosaveSeconds, stickyAction, reduceShake, gameSpeed,
+	                objectivesNotebook, reduceBlink, inputBuffer) ==
 	       std::tie(o.fullscreen, o.vsync, o.pauseOnFocusLoss, o.showFps, o.showMenuButton,
 	                o.menuLayout, o.filter, o.scale, o.widescreen, o.uiScale, o.masterVolume,
 	                o.musicVolume, o.effectsVolume, o.muted, o.rewind, o.fadeTransitions,
 	                o.inventoryOriginal, o.saveChime, o.restoreMemo, o.textCutscenes,
 	                o.seqCutscenes, o.extraAsc, o.extraCaillou, o.extraCarte, o.extraMetro,
-	                o.extraSerrure, o.conradShirt, o.keys);
+	                o.extraSerrure, o.conradShirt, o.keys, o.padButtons, o.joystickButtons,
+	                o.stickDeadzone, o.rightStickMovement, o.storyJournal, o.journalNotifications,
+	                o.diskAutosave, o.contextualHints, o.diskAutosaveSeconds, o.stickyAction,
+	                o.reduceShake, o.gameSpeed, o.objectivesNotebook, o.reduceBlink, o.inputBuffer);
+}
+
+const char *padBindingName(size_t i) {
+	static const char *const names[] = {
+	    "Action / run / fire", "Use / confirm", "Draw / holster", "Inventory",
+	    "Pause / settings",    "Quick save",    "Quick load",     "Rewind"};
+	return i < PadBindingCount ? names[i] : "Unknown";
+}
+const char *padButtonName(int button, int style) {
+	if (button == 32)
+		return "LT / L2";
+	if (button == 33)
+		return "RT / R2";
+	if (style == 1) {
+		static const char *const playstation[] = {
+		    "Cross", "Circle", "Square", "Triangle", "Share / Create", "PS", "Options",
+		    "L3",    "R3",     "L1",     "R1"};
+		if (button >= 0 && button < 11)
+			return playstation[button];
+	}
+	static const char *const names[] = {
+	    "A",       "B",       "X",        "Y",        "Back",     "Guide",    "Start",
+	    "L-stick", "R-stick", "LB",       "RB",       "D-up",     "D-down",   "D-left",
+	    "D-right", "Misc",    "Paddle 1", "Paddle 2", "Paddle 3", "Paddle 4", "Touchpad"};
+	return button >= 0 && button < int(sizeof(names) / sizeof(names[0])) ? names[button]
+	                                                                     : "Unassigned";
+}
+bool validPadBinding(int button, const Preferences &p, size_t index, bool raw,
+                     std::string &reason) {
+	if (index >= PadBindingCount || (raw && button == 9 && index != 4) || button < -1 ||
+	    (raw ? button >= 32
+	         : (button >= SDL_CONTROLLER_BUTTON_MAX && button != 32 && button != 33)) ||
+	    (!raw && button >= SDL_CONTROLLER_BUTTON_DPAD_UP &&
+	     button <= SDL_CONTROLLER_BUTTON_DPAD_RIGHT) ||
+	    (!raw && (button == SDL_CONTROLLER_BUTTON_GUIDE ||
+	              (button == SDL_CONTROLLER_BUTTON_START && index != 4)))) {
+		reason = "That button is reserved for movement or the system/menu. Choose another button.";
+		return false;
+	}
+	const auto &buttons = raw ? p.joystickButtons : p.padButtons;
+	for (size_t i = 0; i < buttons.size(); ++i)
+		if (i != index && button >= 0 && buttons[i] == button) {
+			reason = std::string("Already assigned to ") + padBindingName(i) + '.';
+			return false;
+		}
+	reason.clear();
+	return true;
 }
 
 const char *bindingName(size_t index) {
@@ -82,9 +136,15 @@ bool validate(const Preferences &p, std::string &reason) {
 	    p.widescreen > 5 || p.uiScale < 75 || p.uiScale > 175 || p.masterVolume < 0 ||
 	    p.masterVolume > 100 || p.musicVolume < 0 || p.musicVolume > 100 || p.effectsVolume < 0 ||
 	    p.effectsVolume > 100 || p.menuLayout < 0 || p.menuLayout > 1 || int(p.conradShirt) < 0 ||
-	    int(p.conradShirt) > 2) {
+	    p.diskAutosaveSeconds < 15 || p.diskAutosaveSeconds > 600 || int(p.conradShirt) > 2 ||
+	    p.gameSpeed < 50 || p.gameSpeed > 100 || p.stickDeadzone < 5 || p.stickDeadzone > 50) {
 		reason = "A display, appearance or volume setting is outside its supported range.";
 		return false;
+	}
+	for (size_t i = 0; i < PadBindingCount; ++i) {
+		if (!validPadBinding(p.padButtons[i], p, i, false, reason) ||
+		    !validPadBinding(p.joystickButtons[i], p, i, true, reason))
+			return false;
 	}
 	for (size_t i = 0; i < BindingCount; ++i) {
 		if (!validBinding(p.keys[i], p, i, reason)) {

@@ -5,6 +5,8 @@
  */
 
 #include "decode_mac.h"
+#include "decode_sgd.h"
+#include "byte_reader.h"
 #include "resource.h"
 #include "systemstub.h"
 #include "unpack.h"
@@ -442,33 +444,6 @@ static void AMIGA_planar24(uint8_t *dst, int w, int h, const uint8_t *src) {
 	}
 }
 
-static void AMIGA_planar_mask(uint8_t *dst, int x0, int y0, int w, int h, uint8_t *src, uint8_t *mask, int size) {
-	dst += y0 * 256 + x0;
-	for (int y = 0; y < h; ++y) {
-		for (int x = 0; x < w * 2; ++x) {
-			for (int i = 0; i < 8; ++i) {
-				const int c_mask = 1 << (7 - i);
-				int color = 0;
-				for (int j = 0; j < 4; ++j) {
-					if (mask[j * size] & c_mask) {
-						color |= 1 << j;
-					}
-				}
-				if (*src & c_mask) {
-					const int px = x0 + 8 * x + i;
-					const int py = y0 + y;
-					if (px >= 0 && px < 256 && py >= 0 && py < 224) {
-						dst[8 * x + i] = color;
-					}
-				}
-			}
-			++src;
-			++mask;
-		}
-		dst += 256;
-	}
-}
-
 static void AMIGA_decodeRle(uint8_t *dst, const uint8_t *src) {
 	const int size = READ_BE_UINT16(src) & 0x7FFF; src += 2;
 	for (int i = 0; i < size; ) {
@@ -487,71 +462,6 @@ static void AMIGA_decodeRle(uint8_t *dst, const uint8_t *src) {
 		}
 		dst += code;
 	}
-}
-
-static void DOS_drawTileMask(uint8_t *dst, int x0, int y0, int w, int h, uint8_t *m, uint8_t *p, int size) {
-	assert(size == (w * 2 * h));
-	for (int y = 0; y < h; ++y) {
-		for (int x = 0; x < w; ++x) {
-			const int bits = READ_BE_UINT16(m); m += 2;
-			for (int bit = 0; bit < 8; ++bit) {
-				const int j = y0 + y;
-				const int i = x0 + 2 * (x * 8 + bit);
-				if (i >= 0 && i < Video::GAMESCREEN_W && j >= 0 && j < Video::GAMESCREEN_H) {
-					const uint8_t color = *p;
-					if (bits & (1 << (15 - (bit * 2)))) {
-						dst[j * Video::GAMESCREEN_W + i] = color >> 4;
-					}
-					if (bits & (1 << (15 - (bit * 2 + 1)))) {
-						dst[j * Video::GAMESCREEN_W + i + 1] = color & 15;
-					}
-				}
-				++p;
-			}
-		}
-	}
-}
-
-static void decodeSgd(uint8_t *dst, const uint8_t *src, const uint8_t *data, const bool isAmiga, int level, int room) {
-	int num = -1;
-	uint8_t buf[256 * 32];
-	int count = READ_BE_UINT16(src) - 1; src += 2;
-	do {
-		int d2 = READ_BE_UINT16(src); src += 2;
-		int x_pos = (int16_t)READ_BE_UINT16(src); src += 2;
-		int y_pos = (int16_t)READ_BE_UINT16(src); src += 2;
-		if (d2 != 0xFFFF) {
-			d2 &= ~(1 << 15);
-			const int32_t offset = READ_BE_UINT32(data + d2 * 4);
-			if (offset < 0) {
-				const uint8_t *ptr = data - offset;
-				const int size = READ_BE_UINT16(ptr); ptr += 2;
-				if (num != d2) {
-					num = d2;
-					assert(size <= (int)sizeof(buf));
-					memcpy(buf, ptr, size);
-				}
-                        } else {
-				if (num != d2) {
-					num = d2;
-					const int size = READ_BE_UINT16(data + offset) & 0x7FFF;
-					assert(size <= (int)sizeof(buf));
-					AMIGA_decodeRle(buf, data + offset);
-				}
-			}
-		}
-		if (level == 0 && room == 26 && d2 == 38 && y_pos == 176) {
-			y_pos += 8;
-		}
-		const int w = (buf[0] + 1) >> 1;
-		const int h = buf[1] + 1;
-		const int planarSize = READ_BE_UINT16(buf + 2);
-		if (isAmiga) {
-			AMIGA_planar_mask(dst, x_pos, y_pos, w, h, buf + 4, buf + 4 + planarSize, planarSize);
-		} else {
-			DOS_drawTileMask(dst, x_pos, y_pos, w, h, buf + 4, buf + 4 + planarSize, planarSize);
-		}
-	} while (--count >= 0);
 }
 
 static const uint8_t *AMIGA_mirrorTileY(const uint8_t *a2) {
@@ -635,7 +545,7 @@ static void DOS_drawTile(uint8_t *dst, const uint8_t *src, int mask, const bool 
 }
 
 static void decodeLevHelper(uint8_t *dst, const uint8_t *src, int offset10, int offset12,
-                            const uint8_t *a5, bool sgdBuf, bool packedPixels,
+                            const uint8_t *a5, size_t bankSize, bool sgdBuf, bool packedPixels,
                             uint16_t (*read16)(const void *)) {
 	if (offset10 != 0) {
 		const uint8_t *a0 = src + offset10;
@@ -645,6 +555,8 @@ static void decodeLevHelper(uint8_t *dst, const uint8_t *src, int offset10, int 
 				a0 += 2;
 				const int d0 = d3 & 0x7FF;
 				if (d0 != 0) {
+					if (d0 < 0 || size_t(d0) >= bankSize / 32)
+						continue;
 					const uint8_t *a2 = a5 + d0 * 32;
 					const bool yflip = (d3 & (1 << 12)) != 0;
 					const bool xflip = (d3 & (1 << 11)) != 0;
@@ -672,6 +584,8 @@ static void decodeLevHelper(uint8_t *dst, const uint8_t *src, int offset10, int 
 					d0 -= 0x380;
 				}
 				if (d0 != 0) {
+					if (d0 < 0 || size_t(d0) >= bankSize / 32)
+						continue;
 					const uint8_t *a2 = a5 + d0 * 32;
 					const bool yflip = (d3 & (1 << 12)) != 0;
 					const bool xflip = (d3 & (1 << 11)) != 0;
@@ -721,7 +635,14 @@ void Video::PC98_decodeMap(int level, int room) {
 
 void Video::AMIGA_decodeLev(int level, int room) {
 	uint8_t *tmp = _res->_scratchBuffer;
+	if (!_res->_lev || room < 0 || room >= 64 || unsigned(room * 4 + 4) > _res->_levSize)
+		return;
 	const int offset = READ_BE_UINT32(_res->_lev + room * 4);
+	if (offset < 12 || unsigned(offset) > _res->_levSize)
+		return;
+	const unsigned decodedSize = READ_BE_UINT32(_res->_lev + offset - 4);
+	if (decodedSize < 16 || decodedSize > Resource::kScratchBufferSize)
+		return;
 	if (!bytekiller_unpack(tmp, Resource::kScratchBufferSize, _res->_lev, offset)) {
 		warning("Bad CRC for level %d room %d", level, room);
 		return;
@@ -730,48 +651,55 @@ void Video::AMIGA_decodeLev(int level, int room) {
 	const uint16_t offset12 = READ_BE_UINT16(tmp + 12);
 	const uint16_t offset14 = READ_BE_UINT16(tmp + 14);
 	static const int kTempMbkSize = 1024;
-	uint8_t *buf = (uint8_t *)malloc(kTempMbkSize * 32);
-	if (!buf) {
-		error("Unable to allocate mbk temporary buffer");
-	}
-	int sz = 0;
-	memset(buf, 0, 32);
-	sz += 32;
-	const uint8_t *a1 = tmp + offset14;
-	for (bool loop = true; loop;) {
-		int d0 = READ_BE_UINT16(a1); a1 += 2;
-		if (d0 & 0x8000) {
-			d0 &= ~0x8000;
-			loop = false;
-		}
-		const int d1 = _res->getBankDataSize(d0);
-		const uint8_t *a6 = _res->findBankData(d0);
-		if (!a6) {
-			a6 = _res->loadBankData(d0);
-		}
-		const int d3 = *a1++;
-		if (d3 == 255) {
-			assert(sz + d1 <= kTempMbkSize * 32);
-			memcpy(buf + sz, a6, d1);
-			sz += d1;
-		} else {
-			for (int i = 0; i < d3 + 1; ++i) {
-				const int d4 = *a1++;
-				assert(sz + 32 <= kTempMbkSize * 32);
-				memcpy(buf + sz, a6 + d4 * 32, 32);
+	std::array<uint8_t, kTempMbkSize * 32> bank{};
+	uint8_t *buf = bank.data();
+	int sz = 32;
+	if (offset14 >= decodedSize)
+		return;
+	ByteReader commands(tmp + offset14, decodedSize - offset14);
+	for (bool last = false; !last;) {
+		const unsigned code = commands.be16();
+		const int index = code & 0x7fff;
+		last = code & 0x8000;
+		const int length = _res->getBankDataSize(index);
+		const auto *data = _res->findBankData(index);
+		if (!data)
+			data = _res->loadBankData(index);
+		const unsigned count = commands.u8();
+		if (!commands.good() || !data || length <= 0)
+			return;
+		if (count == 255) {
+			if (unsigned(length) > bank.size() - sz)
+				return;
+			memcpy(buf + sz, data, length);
+			sz += length;
+		} else
+			for (unsigned i = 0; i <= count; ++i) {
+				const unsigned tile = commands.u8();
+				if (!commands.good() || tile >= unsigned(length) / 32 || bank.size() - sz < 32)
+					return;
+				memcpy(buf + sz, data + tile * 32, 32);
 				sz += 32;
 			}
-		}
 	}
+	const auto validTilemap = [&](unsigned at) {
+		return !at || (at <= decodedSize && decodedSize - at >= 32 * 28 * 2);
+	};
+	if ((!tmp[1] && !validTilemap(offset10)) || !validTilemap(offset12))
+		return;
 	memset(_frontLayer, 0, _layerSize);
 	if (tmp[1] != 0) {
 		assert(_res->_sgd);
-		decodeSgd(_frontLayer, tmp + offset10, _res->_sgd, _res->isAmiga(), level, room);
+		if (offset10 > decodedSize ||
+		    !decodeSgdForeground(_frontLayer, tmp + offset10, decodedSize - offset10, _res->_sgd,
+		                         _res->_sgdSize, _res->isAmiga(), level, room)) {
+			warning("Invalid foreground in level %d room %d", level, room);
+			return;
+		}
 		offset10 = 0;
 	}
-	decodeLevHelper(_frontLayer, tmp, offset10, offset12, buf, tmp[1] != 0, !_res->isAmiga(),
+	decodeLevHelper(_frontLayer, tmp, offset10, offset12, buf, sz, tmp[1] != 0, !_res->isAmiga(),
 	                _res->_readUint16);
-	free(buf);
 	memcpy(_backLayer, _frontLayer, _layerSize);
 	_mapPalSlot1 = READ_BE_UINT16(tmp + 2);
 	_mapPalSlot2 = READ_BE_UINT16(tmp + 4);

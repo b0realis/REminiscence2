@@ -19,13 +19,16 @@ menu, save browser, graphics settings and original-resolution 256×224 layout.
 
 | Page | Available controls |
 | --- | --- |
-| Session | Health, score, room and rewind count; rewind; clean screenshot capture; restart level; return to title; preference save/undo/defaults; focus pause, FPS and shortcut visibility. |
+| Session | Continue latest autosave, disk autosave settings and optional contextual hints; health, score, room and rewind count; rewind; clean screenshot capture; restart level; return to title; preference save/undo/defaults; focus pause, FPS and shortcut visibility. |
+| Rewind | Captured-frame timeline with active age, room and health; restores the selected moment after confirmation. |
 | Save / Load | Manual slots 1–99, occupied-slot browser with room and modification time, checkpoint loading, refresh, overwrite and load confirmation. |
 | Graphics | Fullscreen, VSync, point/linear/ScaleNx sampling, window scale, widescreen side content, compact layout and menu text scale. |
 | Audio | Master, music and effects volume, mute, save-confirmation sound, current output rate and PRF fallback information. |
 | Enhancements | Conrad’s Original/Red-Pink/White T-shirt, rewind, inventory insertion order, transition style, save sound, additional MEMO content, text/SEQ choices and optional cutscene switches. |
 | Controls | Live keyboard diagram with colored action keys and arrow callouts; rebind the nine primary actions; view fixed shortcuts, menu navigation and controller bindings. |
 | Cheats | All three gameplay cheat flags, unlimited life, fast mode, diagnostic rectangles, DOS combat zoom, one-shot health restoration and clear-all. |
+| Joypad | Persistent controller/raw-button remapping, optional save/load/rewind shortcuts, 5–50% stick dead zone and right-stick movement. Start always opens settings. |
+| Journal | Optional original companion prose; only reached chapters/completed memory scenes appear. Notifications and reading state follow saved progress. |
 | Levels | Select any of the seven available levels and Easy/Normal/Expert difficulty; confirm before starting. |
 
 
@@ -89,7 +92,7 @@ F10 remains fixed as a recovery key. Outside the overlay, Ctrl+S/L/R and Alt
 shortcuts remain engine shortcuts; inside it, use the Save / Load page's actions.
 Default keypad movement, right-Shift and Backspace aliases remain
 available where their corresponding primary binding has not been replaced.
-Controller gameplay remapping is not part of this pass.
+Controller gameplay remapping is on the Joypad page.
 
 Gamepad navigation is enabled through Dear ImGui's SDL backend. Automated input
 checks cover keyboard paths; physical-controller testing remains outstanding.
@@ -108,16 +111,15 @@ example `fb.cfg` intentionally differs from some built-in defaults.
 
 **Save game** writes the current level and selected manual slot and leaves the
 overlay open. Existing saves ask before replacement. **Load game**, **Load
-checkpoint** or **Rewind** resumes after success. The browser is scoped to the
-current level; use Levels first when loading a save from another level. Slot 00
+checkpoint** or **Rewind** resumes after success. The browser spans all seven levels and switches levels after save/asset preflight. Slot 00
 is the game's checkpoint and can be loaded but not overwritten by the manual
 save button. Keep different asset editions in separate save directories.
 
-The browser reads the existing save header and shows its room, version support
-and filesystem modification time. Refresh picks up external changes. Loading
-preflights supported versions (2 and 3), serialized counts, links and truncation
-before changing the running state. This does not certify that a save belongs to
-the correct asset edition: the inherited format has no edition identifier.
+The browser shows room/time, version support and new-format previews, names and protection. Refresh picks up external changes. Loading
+preflights supported versions (2, 3 and 4), serialized counts, links and truncation
+before changing the running state. Version 4 additionally checks edition, level,
+entity count and gameplay fingerprint. Legacy saves cannot verify asset identity.
+
 
 Return to title, level restart/selection and **EXIT GAME** ask before discarding
 unsaved progress. Escape/B cancels a confirmation; Escape/F10/Start otherwise
@@ -188,7 +190,7 @@ Startup chooses values in this order:
 1. Built-in defaults, then compatibility switches in `fb.cfg` / `--config`.
 2. Saved `preferences.cfg` values for settings exposed by the overlay.
 3. Explicit display/rewind switches such as `--window`, `--maximized`,
-   `--scaler`, `--widescreen` or `--autosave`.
+   `--scaler`, `--widescreen`, `--autosave`, `--disk-autosave` or `--no-disk-autosave`.
 
 Paths, output sample rate, game language, MIDI driver, ROMs and soundfonts remain
 startup options. The overlay offers working engine controls; it does not expose
@@ -228,7 +230,7 @@ No reference screenshot or other game's menu assets are bundled.
 Tests cover profile round trips, invalid values and duplicate bindings, atomic
 write failure, independent audio gains, silent playback advancement, paused
 preference application, SDL input remapping and complete overlay open/close.
-Software-rendered captures exercise all eight pages at desktop and 256×224
+Software-rendered captures exercise all eleven pages at desktop and 256×224
 resolutions, compact / large-text layouts, the turquoise exit footer and exit
 confirmation/cancellation. Private asset tests cover saves, level jumps and
 cheat actions against the running engine.
@@ -240,3 +242,88 @@ All seven private Amiga levels verify isolated palette changes without moving
 the player or changing simulation state; room artwork never uses the two
 reserved clothing entries. Actual DOS/GOG and Macintosh data still need their
 own visual validation.
+
+## Joypad and journal additions
+
+Gameplay mappings are independent of menu navigation. D-pad and left stick always
+move; right-stick movement is opt-in. Mapped pads use SDL button names, while
+unmapped joysticks have a separate numbered profile. The keyboard and every pad
+source retain their own held state, so neutral stick events cannot cancel held
+keys or D-pad input. Stick release hysteresis limits jitter around the dead zone.
+Quick save, quick load and rewind have no default button: assign them explicitly.
+
+The Journal page contains project-written companion passages. It reveals seven
+chapter entries during active play and a memory entry after that scene completes.
+Future entries stay hidden. Opening an entry marks it read; a small unread notice
+can be disabled. Save version 4 preserves the random seed and journal bits, with
+edition/level/gameplay-fingerprint preflight. Old version 2/3 saves load without
+those fields and cannot verify their edition.
+
+The joypad capture accepts physical button presses, rejects conflicting bindings
+and uses Start to cancel capture (except when assigning Pause). F10 resumes from
+capture, while Escape cancels it. Save settings retains the binding profiles.
+
+New rendered examples: [desktop joypad](screenshots/qol-joypad-1.07.png),
+[desktop journal](screenshots/qol-journal-1.07.png),
+[native joypad](screenshots/qol-native-joypad-1.07.png) and
+[native journal](screenshots/qol-native-journal-1.07.png). These captures use
+synthetic session data and the production overlay, without commercial artwork.
+
+## Persistent recovery, previews and reminders
+
+See the [player guide](../manual.md#autosaves-and-continue) for the complete flow.
+The welcome-back screen offers Continue/New game/EXIT GAME. Session offers
+Continue and preferences; Save / Load can select an older generation across
+levels. Rewind has its own timeline page. Contextual hints are opt-in on Session.
+
+`progress_store.cpp` owns the bounded, CRC32-protected autosave envelope, preview
+bytes, three-generation catalog and atomic replacement. `game_progress.cpp`
+serializes the existing version 4 state, probes immutable PGE/object/collision
+resources in a separate Resource instance, then commits the load only after asset
+identity matches. Save format 4 remains unchanged. A preview uses 128×112 RGBA;
+the overlay owns a renderer-reset-aware texture cache. Rewind retains immutable
+preview owners and metadata alongside its existing memory ring. Its maximum
+preview memory is about 6.6 MiB for 120 snapshots.
+
+Disk autosaves default on at 60 active seconds. The profile fields are
+`disk_autosave=1`, `disk_autosave_seconds=60` (15–600), and
+`contextual_hints=0`. Clean exit can save only a living, coherent frame; forced
+termination recovers the last completed write. Rotation never uses manual or
+checkpoint filenames. Errors are logged and disk retries back off for 30 active
+seconds. Disabling writes retains all files. Continue tries candidates newest
+first; explicitly selecting one older generation does not silently choose another.
+
+`context_hints.cpp` owns the small reminder policy and current-binding text.
+Timers use simulation ticks, expire after eight active seconds, wait ten seconds
+between reminders, and suppress already seen reminders through rewind. Hints do
+not change collision, movement or puzzle state. The profile stores the enable
+choice; hint suppression lasts for the running game, separately from save data.
+
+## Campaign fixes
+
+The [1.09 campaign](CAMPAIGN_1.09.md) checks actor/script references and inventory
+cycles before loading, removes the fixed inventory capacity, and preserves
+checkpoint validity when making a manual save. Inventory can hand control to the
+QoL menu with Escape/F10/Start. Rewind scheduling follows active simulation time,
+so pauses no longer consume its interval. Existing manual and autosave schemas
+remain unchanged.
+
+## Recovery, profiles and assists (1.10)
+
+See the [complete recovery/accessibility guide](QOL_1.10.md) for death recovery,
+new `.r2m` files, named/protected milestones, HUD notices and Diagnostics.
+
+**Joypad** captures buttons or LT/L2/RT/R2. Save settings persists the connected
+SDL GUID's pad/stick profile; reconnecting loads it without changing keyboard,
+display or volume settings. Disconnect during play opens a pause; reconnection
+requires Resume. PlayStation face-button labels follow the detected controller.
+
+**Enhancements** includes Sticky Action, 100 ms Up/Use/Weapon tap buffering,
+reduced shake, a steady shield-hit sprite and 50–100% gameplay speed. All assists
+are off by default; speed starts at 100%. **Objectives** shows reached chapter
+goals and folded hints. Its knowledge follows the current save and rewind.
+
+New preference keys: `sticky_action`, `input_buffer`, `reduce_shake`, `reduce_blink`
+(default 0), `game_speed` (50–100, default 100) and `objectives_notebook` (default 1).
+Mapped trigger bindings use codes 32/33; raw joystick bindings still use 0–31.
+A disconnected audio device uses a silent mixer clock until output reconnects.

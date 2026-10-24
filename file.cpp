@@ -27,6 +27,7 @@ struct File_impl {
 	virtual ~File_impl() {}
 	virtual bool open(const char *path, const char *mode) = 0;
 	virtual void close() = 0;
+	virtual bool atEnd() = 0;
 	virtual uint32_t size() = 0;
 	virtual void seek(int32_t off) = 0;
 	virtual uint32_t tell() = 0;
@@ -54,6 +55,20 @@ struct StdioFile : File_impl {
 			if (fclose(_fp) != 0) _ioErr = true;
 			_fp = 0;
 		}
+	}
+	bool atEnd() override {
+		if (!_fp || _ioErr)
+			return false;
+		const int c = fgetc(_fp);
+		if (c != EOF) {
+			ungetc(c, _fp);
+			return false;
+		}
+		if (ferror(_fp)) {
+			_ioErr = true;
+			return false;
+		}
+		return true;
 	}
 	uint32_t size() {
 		uint32_t sz = 0;
@@ -136,16 +151,43 @@ struct GzipFile : File_impl {
 			_fp = 0;
 		}
 	}
-	uint32_t size() {
-		uint32_t sz = 0;
-		if (_fp) {
-			int pos = gztell(_fp);
-			gzseek(_fp, 0, SEEK_END);
-			sz = gztell(_fp);
-			gzseek(_fp, pos, SEEK_SET);
-		}
-		return sz;
+	bool atEnd() override {
+		if (!_fp || _ioErr)
+			return false;
+		if (gzgetc(_fp) != -1)
+			return false;
+		int error;
+		gzerror(_fp, &error);
+		const bool good = gzeof(_fp) && (error == Z_OK || error == Z_STREAM_END);
+		if (!good)
+			_ioErr = true;
+		return good;
 	}
+	uint32_t size() {
+		if (!_fp || _ioErr)
+			return 0;
+		const z_off_t pos = gztell(_fp);
+		if (pos < 0 || gzrewind(_fp) != 0) {
+			_ioErr = true;
+			return 0;
+		}
+		uint32_t length = 0;
+		char buffer[16384];
+		int count;
+		// Save streams are tiny. Cap decompression to avoid spending unbounded time
+		// measuring an unrelated compressed file, without allocating its full size.
+		while ((count = gzread(_fp, buffer, sizeof(buffer))) > 0) {
+			if (length > 64u * 1024 * 1024 - unsigned(count)) {
+				_ioErr = true;
+				break;
+			}
+			length += count;
+		}
+		if (count < 0 || gzseek(_fp, pos, SEEK_SET) < 0)
+			_ioErr = true;
+		return _ioErr ? 0 : length;
+	}
+
 	void seek(int32_t off) {
 		if (_fp) {
 			if (off < 0 || gzseek(_fp, off, SEEK_SET) < 0) _ioErr = true;
@@ -219,6 +261,8 @@ struct AssetFile: File_impl {
 			_rw = 0;
 		}
 	}
+	bool atEnd() override { return _rw && !_ioErr && SDL_RWtell(_rw) == SDL_RWsize(_rw); }
+	uint32_t tell() override { return _rw ? SDL_RWtell(_rw) : 0; }
 	uint32_t size() {
 		if (_rw) {
 			return SDL_RWsize(_rw);
@@ -227,7 +271,8 @@ struct AssetFile: File_impl {
 	}
 	void seek(int32_t off) {
 		if (_rw) {
-			SDL_RWseek(_rw, off, RW_SEEK_SET);
+			if (off < 0 || SDL_RWseek(_rw, off, RW_SEEK_SET) < 0)
+				_ioErr = true;
 		}
 	}
 	uint32_t read(void *ptr, uint32_t len) {
@@ -236,6 +281,7 @@ struct AssetFile: File_impl {
 			if (count != len) {
 				_ioErr = true;
 			}
+			return count;
 		}
 		return 0;
 	}
@@ -266,6 +312,7 @@ struct MemoryBufferFile: File_impl {
 	}
 	void close() {
 	}
+	bool atEnd() override { return !_ioErr && _offset == _len; }
 	uint32_t size() {
 		return _len;
 	}
@@ -416,6 +463,10 @@ bool File::ioErr() const {
 	return !_impl || _impl->_ioErr;
 }
 
+bool File::atEnd() {
+	return _impl && _impl->atEnd();
+}
+
 uint32_t File::size() {
 	return _impl ? _impl->size() : 0;
 }
@@ -449,7 +500,7 @@ uint16_t File::readUint16LE() {
 uint32_t File::readUint32LE() {
 	uint16_t lo = readUint16LE();
 	uint16_t hi = readUint16LE();
-	return (hi << 16) | lo;
+	return (uint32_t(hi) << 16) | lo;
 }
 
 uint16_t File::readUint16BE() {
@@ -461,7 +512,7 @@ uint16_t File::readUint16BE() {
 uint32_t File::readUint32BE() {
 	uint16_t hi = readUint16BE();
 	uint16_t lo = readUint16BE();
-	return (hi << 16) | lo;
+	return (uint32_t(hi) << 16) | lo;
 }
 
 uint32_t File::write(const void *ptr, uint32_t len) {

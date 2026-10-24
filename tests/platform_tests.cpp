@@ -42,29 +42,104 @@ int main() {
 		if (platform->_pi.dirMask || platform->_pi.shift) {
 			return 2;
 		}
+		// Background and focus are independent reasons to pause. A focus gain
+		// must not resume a backgrounded app before the foreground event.
+		event.type = SDL_APP_WILLENTERBACKGROUND;
+		SDL_PushEvent(&event);
+		event.type = SDL_WINDOWEVENT;
+		event.window.event = SDL_WINDOWEVENT_FOCUS_GAINED;
+		SDL_PushEvent(&event);
+		const auto pauseStart = SDL_GetTicks();
+		std::thread foreground([] {
+			SDL_Delay(80);
+			SDL_Event e{};
+			e.type = SDL_APP_DIDENTERFOREGROUND;
+			SDL_PushEvent(&e);
+		});
+		platform->processEvents();
+		foreground.join();
+		if (SDL_GetTicks() - pauseStart < 60)
+			return 38;
 		// Virtual devices exercise hotplug/instance filtering without hardware.
 		const int virtualIndex = SDL_JoystickAttachVirtual(SDL_JOYSTICK_TYPE_UNKNOWN, 2, 10, 1);
 		if (virtualIndex >= 0) {
 			platform->processEvents();
 			auto *device = SDL_JoystickOpen(virtualIndex);
 			SDL_Event button = {};
-			button.type = SDL_JOYBUTTONDOWN; button.jbutton.button = 1; button.jbutton.state = SDL_PRESSED;
+			button.type = SDL_JOYBUTTONDOWN;
+			button.jbutton.button = 1;
+			button.jbutton.state = SDL_PRESSED;
 			button.jbutton.which = SDL_JoystickInstanceID(device);
-			SDL_PushEvent(&button); platform->processEvents();
-			if (!platform->_pi.shift) return 20;
-			button.type = SDL_JOYBUTTONUP; button.jbutton.state = SDL_RELEASED;
+			SDL_PushEvent(&button);
+			platform->processEvents();
+			if (!platform->_pi.shift)
+				return 20;
+			button.type = SDL_JOYBUTTONUP;
+			button.jbutton.state = SDL_RELEASED;
 			button.jbutton.which += 10000;
-			SDL_PushEvent(&button); platform->processEvents();
-			if (!platform->_pi.shift) return 21;
+			SDL_PushEvent(&button);
+			platform->processEvents();
+			if (!platform->_pi.shift)
+				return 21;
 			SDL_JoystickClose(device);
-			SDL_JoystickDetachVirtual(virtualIndex); platform->processEvents();
-			if (platform->_pi.shift || platform->_pi.dirMask) return 22;
+			SDL_JoystickDetachVirtual(virtualIndex);
+			platform->processEvents();
+			if (platform->_pi.shift || platform->_pi.dirMask)
+				return 22;
 			const int reconnect = SDL_JoystickAttachVirtual(SDL_JOYSTICK_TYPE_UNKNOWN, 2, 10, 1);
-			if (reconnect < 0) return 23;
-			platform->processEvents(); SDL_JoystickDetachVirtual(reconnect); platform->processEvents();
+			if (reconnect < 0)
+				return 23;
+			platform->processEvents();
+			SDL_JoystickDetachVirtual(reconnect);
+			platform->processEvents();
 		}
-		SDL_Event reset = {}; reset.type = SDL_RENDER_DEVICE_RESET;
-		SDL_PushEvent(&reset); platform->processEvents(); platform->updateScreen(0);
+		// Mapped pads take a different SDL path from the fallback raw joystick.
+		const int mappedIndex =
+		    SDL_JoystickAttachVirtual(SDL_JOYSTICK_TYPE_GAMECONTROLLER, SDL_CONTROLLER_AXIS_MAX,
+			                          SDL_CONTROLLER_BUTTON_MAX, 1);
+		if (mappedIndex >= 0) {
+			platform->processEvents();
+			auto *pad = SDL_JoystickOpen(mappedIndex);
+			if (!SDL_IsGameController(mappedIndex))
+				return 24;
+			settings::Preferences mapping;
+			platform->readPreferences(mapping);
+			mapping.padButtons[0] = SDL_CONTROLLER_BUTTON_RIGHTSHOULDER;
+			std::string reason;
+			if (!platform->applyPreferences(mapping, reason))
+				return 25;
+			SDL_JoystickSetVirtualButton(pad, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER, SDL_PRESSED);
+			platform->processEvents();
+			if (!platform->_pi.shift)
+				return 26;
+			SDL_Event held = {};
+			held.type = SDL_KEYDOWN;
+			held.key.keysym.scancode = SDL_SCANCODE_RIGHT;
+			held.key.keysym.sym = SDLK_RIGHT;
+			SDL_PushEvent(&held);
+			platform->processEvents();
+			SDL_Event neutral = {};
+			neutral.type = SDL_CONTROLLERAXISMOTION;
+			neutral.caxis.which = SDL_JoystickInstanceID(pad);
+			neutral.caxis.axis = SDL_CONTROLLER_AXIS_LEFTX;
+			SDL_PushEvent(&neutral);
+			platform->processEvents();
+			if (!(platform->_pi.dirMask & PlayerInput::DIR_RIGHT))
+				return 27;
+			SDL_JoystickClose(pad);
+			SDL_JoystickDetachVirtual(mappedIndex);
+			platform->processEvents();
+			if (platform->_pi.shift || !(platform->_pi.dirMask & PlayerInput::DIR_RIGHT))
+				return 28;
+			held.type = SDL_KEYUP;
+			SDL_PushEvent(&held);
+			platform->processEvents();
+		}
+		SDL_Event reset = {};
+		reset.type = SDL_RENDER_DEVICE_RESET;
+		SDL_PushEvent(&reset);
+		platform->processEvents();
+		platform->updateScreen(0);
 		settings::Preferences preferences;
 		platform->readPreferences(preferences);
 		preferences.fullscreen = false;
@@ -111,7 +186,8 @@ int main() {
 		platform->setGameplayActive(true);
 		platform->updateScreen(0);
 		reset.type = SDL_RENDER_DEVICE_RESET;
-		SDL_PushEvent(&reset); platform->processEvents();
+		SDL_PushEvent(&reset);
+		platform->processEvents();
 		platform->updateScreen(0);
 		SDL_Event click = {};
 		click.type = SDL_MOUSEBUTTONUP;
@@ -170,6 +246,91 @@ int main() {
 		if (!checkpointLoaded || session.saveSlot != 7 || session.commandSlot != -1 ||
 		    session.action != settings::Action::Resume)
 			return 13;
+		for (auto action : {settings::Action::ContinueLatest, settings::Action::LoadAutosave,
+		                    settings::Action::Rewind}) {
+			session.action = action;
+			bool called = false;
+			session.command = [&](settings::Action received, int, std::string &) {
+				called = received == action;
+				return true;
+			};
+			platform->showSettings(session);
+			if (!called || session.action != settings::Action::Resume)
+				return 37;
+		}
+		// A newly seen pad inherits the last globally saved controls, including
+		// settings saved after SDL was initialized.
+		session.values.padButtons[0] = SDL_CONTROLLER_BUTTON_RIGHTSHOULDER;
+		session.saveRequested = true;
+		session.persist = [](const settings::Preferences &, std::string &) { return true; };
+		session.action = settings::Action::LoadGame;
+		session.command = [](settings::Action, int, std::string &) { return true; };
+		platform->showSettings(session);
+		const int unseen = SDL_JoystickAttachVirtual(SDL_JOYSTICK_TYPE_UNKNOWN, 2, 10, 1);
+		if (unseen >= 0) {
+			platform->processEvents();
+			settings::Preferences inherited;
+			platform->readPreferences(inherited);
+			if (inherited.padButtons[0] != SDL_CONTROLLER_BUTTON_RIGHTSHOULDER) {
+				std::cerr << "Saved global controller defaults were lost on hotplug\n";
+				return 45;
+			}
+			SDL_JoystickDetachVirtual(unseen);
+			platform->processEvents();
+		}
+		// Disconnect during gameplay must request a pause without another player
+		// event, and reconnect must not resume the simulation implicitly.
+		platform->setGameplayActive(true);
+		const int unplug = SDL_JoystickAttachVirtual(SDL_JOYSTICK_TYPE_UNKNOWN, 2, 10, 1);
+		if (unplug >= 0) {
+			platform->processEvents();
+			SDL_JoystickDetachVirtual(unplug);
+			platform->processEvents();
+			if (!platform->consumePauseRequest() || platform->consumePauseRequest() ||
+			    platform->_pi.dirMask)
+				return 40;
+		}
+		platform->setGameplayActive(false);
+		// Device removal keeps the voice clock alive on the main thread. Reopen
+		// at the existing mixer rate, rather than changing pitch mid-track.
+		SDL_AudioDeviceID playing = 0;
+		for (SDL_AudioDeviceID id = 1; id < 64; ++id)
+			if (SDL_GetAudioDeviceStatus(id) == SDL_AUDIO_PLAYING) {
+				playing = id;
+				break;
+			}
+		if (!playing)
+			return 41;
+		SDL_Event lost{};
+		lost.type = SDL_AUDIODEVICEREMOVED;
+		lost.adevice.which = playing;
+		SDL_PushEvent(&lost);
+		platform->processEvents();
+		const auto beforeSilent = frames.load();
+		platform->sleep(80);
+		if (platform->audioOutputAvailable() || frames <= beforeSilent)
+			return 42;
+		const auto beforePause = frames.load();
+		SDL_Event background{};
+		background.type = SDL_APP_WILLENTERBACKGROUND;
+		SDL_PushEvent(&background);
+		std::thread silentResume([] {
+			SDL_Delay(90);
+			SDL_Event e{};
+			e.type = SDL_APP_DIDENTERFOREGROUND;
+			SDL_PushEvent(&e);
+		});
+		platform->processEvents();
+		silentResume.join();
+		platform->sleep(20);
+		if (frames - beforePause > rate / 20)
+			return 44;
+		lost.type = SDL_AUDIODEVICEADDED;
+		lost.adevice.which = 0;
+		SDL_PushEvent(&lost);
+		platform->processEvents();
+		if (!platform->audioOutputAvailable() || platform->getOutputSampleRate() != unsigned(rate))
+			return 43;
 		platform->stopAudio();
 		platform->stopAudio();
 		platform->destroy();

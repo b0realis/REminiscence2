@@ -15,6 +15,7 @@
 #include "seq_player.h"
 #include "video.h"
 #include "settings.h"
+#include "context_hints.h"
 
 struct File;
 struct FileSystem;
@@ -36,7 +37,8 @@ struct Game {
 		kIngameSaveSlot = 0,
 		kRewindSize = 120, // 10mins (~2MB)
 		kAutoSaveSlot = 255,
-		kAutoSaveIntervalMs = 5 * 1000
+		kAutoSaveIntervalMs = 5 * 1000,
+		kSaveVersion = 4
 	};
 
 	enum {
@@ -78,6 +80,20 @@ struct Game {
 	const char *_savePath;
 	File _rewindBuffer[kRewindSize];
 	int _rewindPtr, _rewindLen;
+	struct RewindRecord {
+		std::shared_ptr<const progress::Preview> preview;
+		uint64_t tick = 0;
+		int room = 0, health = 0;
+	};
+	RewindRecord _rewindRecords[kRewindSize];
+	uint64_t _playTicks = 0, _lastPersistentTick = 0, _nextPersistentAttempt = 0,
+	         _lastRewindTick = 0;
+	double _lastDiskSaveMs = 0, _worstDiskSaveMs = 0;
+	bool _persistentDue = true, _activeProgress = false;
+	bool _continueRequested = false, _continueFailed = false, _startupMenu = false,
+	     _continued = false;
+	hints::State _hints;
+	bool _nearInteraction = false;
 	uint32_t _cheats;
 
 	const uint8_t *_stringsTable;
@@ -92,6 +108,10 @@ struct Game {
 	bool _loadMap;
 	uint8_t _printLevelCodeCounter;
 	uint32_t _randSeed;
+	uint32_t _assetFingerprint = 0;
+	journal::State _journal;
+	unsigned _timingRemainder = 0;
+	uint32_t _timingExpected = UINT32_MAX;
 	uint16_t _currentInventoryIconNum;
 	uint16_t _curMonsterFrame;
 	uint16_t _curMonsterNum;
@@ -137,7 +157,7 @@ struct Game {
 	void drawCurrentInventoryItem();
 	void printLevelCode();
 	void showFinalScore();
-	bool handleConfigPanel();
+	bool handleConfigPanel(bool recovery = false);
 	bool handleContinueAbort();
 	void printSaveStateCompleted();
 	void drawLevelTexts();
@@ -411,7 +431,17 @@ struct Game {
 	void loadState(File *f, int version);
 	void clearStateRewind();
 	bool saveStateRewind();
-	bool loadStateRewind();
+	bool loadStateRewind(unsigned age = 0);
+	void writeGameState(File &file);
+	std::shared_ptr<const progress::Preview> capturePreview();
+	progress::Snapshot captureSnapshot();
+	bool saveManualState(int slot, const std::string &label, bool protect, std::string &reason);
+	bool loadManualState(int level, int slot, std::string &reason);
+	bool savePersistent(std::string &reason);
+	bool loadPersistent(const progress::Snapshot &snapshot, std::string &reason);
+	bool continueLatest(std::string &reason);
+	void updateProgress();
+	void refreshRestoredFrame();
 };
 
 #endif // GAME_H__

@@ -64,6 +64,14 @@ struct SystemStub {
 	virtual bool applyPreferences(const settings::Preferences &, std::string &) { return true; }
 	virtual void showSettings(settings::Session &session) { session.action = settings::Action::Resume; }
 	virtual void setGameplayActive(bool) {}
+	virtual void setJournalNotice(bool) {}
+	virtual void setContextHint(const std::string &) {}
+	virtual void notify(const std::string &, bool error = false) {}
+	virtual void setInputProfileDirectory(const std::string &) {}
+	virtual int controllerLabelStyle() const { return 0; }
+	virtual bool audioOutputAvailable() const { return true; }
+	virtual bool consumePauseRequest() { return false; }
+	virtual bool rawJoystickActive() const { return false; }
 
 	virtual void init(const char *title, int w, int h, bool fullscreen, int widescreenMode, const ScalerParameters *scalerParameters) = 0;
 	virtual void destroy() = 0;

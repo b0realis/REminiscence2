@@ -12,14 +12,25 @@
 #include "save_catalog.h"
 
 struct BoundedSystem final : HeadlessSystem {
-	int events = 0;
+	int events = 0, maxEvents = 100000;
+	std::function<void()> eventHook;
 	std::function<void(settings::Session &)> menu;
+	std::string notice;
+	bool pauseRequest = false;
+	void notify(const std::string &message, bool = false) override { notice = message; }
+	bool consumePauseRequest() override {
+		const bool result = pauseRequest;
+		pauseRequest = false;
+		return result;
+	}
 	void showSettings(settings::Session &session) override {
 		if (menu)
 			menu(session);
 	}
 	void processEvents() override {
-		if (++events > 100000) {
+		if (eventHook)
+			eventHook();
+		if (++events > maxEvents) {
 			_pi.quit = true;
 		}
 	}
@@ -56,6 +67,16 @@ int main(int argc, char **argv) {
 			return 8;
 		}
 	}
+	// Journal unlocks require a completed scene, not a skipped playback.
+	game->_journal = {};
+	platform._pi.backspace = true;
+	game->playCutscene(Cutscene::kCineMemo);
+	if (game->_cut._completed || game->_journal.unlocked)
+		return 32;
+	game->playCutscene(Cutscene::kCineMemo);
+	if (!game->_cut._completed || !(game->_journal.unlocked & (1u << 7)))
+		return 33;
+	game->_journal = {};
 	// Test the actual Amiga sprite masks, rather than only checking palette RGB.
 	// Jacket, skin, hair and trousers must never enter the recolour mask.
 	int appearanceFrames = 0, shirtPixels = 0;
@@ -98,6 +119,7 @@ int main(int argc, char **argv) {
 	if (appearanceFrames < 500 || shirtPixels < 1000)
 		return 30;
 
+	std::vector<progress::Snapshot> chapterSaves;
 	int rooms = 0;
 	for (int level = 0; level < 7; ++level) {
 		std::cout << "Loading Amiga level " << level + 1 << std::endl;
@@ -151,6 +173,22 @@ int main(int argc, char **argv) {
 			return 5;
 		}
 		const uint32_t score = game->_score;
+		progress::Snapshot chapter;
+		chapter.edition = 0;
+		chapter.level = level;
+		chapter.room = game->_pgeLive[0].room_location;
+		chapter.skill = game->_skillLevel;
+		chapter.health = game->_pgeLive[0].life;
+		chapter.entities = game->_res._pgeNum;
+		chapter.fingerprint = game->_assetFingerprint;
+		File state;
+		state.openMemoryBuffer(32768);
+		game->writeGameState(state);
+		chapter.state.resize(state.size());
+		state.seek(0);
+		state.read(chapter.state.data(), chapter.state.size());
+		chapterSaves.push_back(std::move(chapter));
+
 		{
 			const auto player = game->_pgeLive[0];
 			const auto seed = game->_randSeed;
@@ -218,6 +256,10 @@ int main(int argc, char **argv) {
 			return 2;
 		}
 		game->_score = 123456;
+		game->_assetFingerprint ^= 1;
+		if (game->loadGameState(1) || game->_score != 123456)
+			return 31;
+		game->_assetFingerprint ^= 1;
 		if (!game->loadGameState(1) || game->_score != score) {
 			return 3;
 		}
@@ -228,6 +270,23 @@ int main(int argc, char **argv) {
 			std::vector<uint8_t> original(snapshot.size());
 			snapshot.seek(0);
 			snapshot.read(original.data(), original.size());
+			for (int legacyVersion : {2, 3}) {
+				const int slot = 95 + legacyVersion;
+				File legacy;
+				if (!legacy.open(saves::name(-1, 0, slot).c_str(), "wb", argv[2]))
+					return 34;
+				legacy.writeUint32BE(0x46425356);
+				legacy.writeUint16BE(legacyVersion);
+				char description[32] = "level=1 room=0";
+				legacy.write(description, 32);
+				legacy.write(original.data(), original.size() - 20 - (legacyVersion == 2 ? 2 : 0));
+				legacy.close();
+				game->_score = 123456;
+				if (!game->loadGameState(slot) || game->_score != score || game->_journal.unlocked)
+					return 35;
+			}
+			if (!game->loadGameState(1))
+				return 36;
 			auto malformed = [&](std::vector<uint8_t> bytes, int version) {
 				File file;
 				if (!file.open("fb-level1-02.state", "wb", argv[2]))
@@ -250,14 +309,26 @@ int main(int argc, char **argv) {
 			};
 			auto truncated = original;
 			truncated.pop_back();
-			if (!malformed(truncated, 3))
+			if (!malformed(truncated, 4))
 				return 11;
+			auto badAnimation = original;
+			badAnimation[13 + 16] = badAnimation[13 + 17] = 255;
+			if (!malformed(badAnimation, 4))
+				return 61;
+			auto badScript = original;
+			badScript[13 + 20] = badScript[13 + 21] = 255;
+			if (!malformed(badScript, 4))
+				return 62;
+			auto badType = original;
+			badType[13] = badType[14] = 255;
+			if (!malformed(badType, 4))
+				return 63;
 			auto badLink = original;
 			// First PGE's serialized next-in-room link must stay inside the entity table.
 			badLink[13 + 22] = 0x7F;
-			if (!malformed(badLink, 3) || !malformed(original, 4))
+			if (!malformed(badLink, 3) || !malformed(original, UINT16_MAX))
 				return 12;
-			const auto catalog = saves::scan(argv[2], 0);
+			const auto catalog = saves::scan(argv[2], 0, kResourceTypeAmiga);
 			if (catalog.size() != 100 || !catalog[1].supported || !catalog[2].exists ||
 			    catalog[2].supported)
 				return 13;
@@ -271,9 +342,12 @@ int main(int argc, char **argv) {
 					throw std::runtime_error("menu healing failed");
 				if (!s.command(settings::Action::Screenshot, 1, message))
 					throw std::runtime_error("clean screenshot failed");
+				const bool checkpointBefore = game->_validSaveState;
 				s.saveSlot = 5;
 				if (!s.command(settings::Action::SaveGame, 5, message) || !s.saves[5].supported)
 					throw std::runtime_error("menu save/catalog refresh failed");
+				if (game->_validSaveState != checkpointBefore)
+					throw std::runtime_error("manual save changed checkpoint validity");
 				game->_score = 9876;
 				if (!s.command(settings::Action::LoadGame, 5, message) || game->_score != score)
 					throw std::runtime_error("menu load failed");
@@ -285,9 +359,17 @@ int main(int argc, char **argv) {
 			if (game->_cheats || platform._pi.dbgMask)
 				return 14;
 		}
-		if (!game->saveStateRewind() || !game->loadStateRewind()) {
+		game->_randSeed = 12345;
+		game->_journal.chapter(level);
+		const auto unlocked = game->_journal.unlocked;
+		if (!game->saveStateRewind())
 			return 4;
-		}
+		for (int i = 0; i < 10; ++i)
+			game->getRandomNumber();
+		game->_journal.memory();
+		if (!game->loadStateRewind() || game->_randSeed != 12345 ||
+		    game->_journal.unlocked != unlocked)
+			return 4;
 		game->clearStateRewind();
 	}
 	const int previousLevel = game->_currentLevel;
@@ -353,7 +435,286 @@ int main(int argc, char **argv) {
 			return 35;
 	}
 
+	// Inventory must support more than the inherited 24 stack entries and let
+	// the player reach settings without waiting to close it with the old key.
+	for (unsigned i = 1; i <= 26; ++i) {
+		game->_res._pgeInit[i].icon_num = 0;
+		game->_res._pgeInit[i].text_num = 0;
+		game->_pgeLive[i].next_inventory_PGE = i == 26 ? 255 : i + 1;
+	}
+	game->_pgeLive[0].current_inventory_PGE = 1;
+	platform._pi = {};
+	platform.eventHook = [&] { platform._pi.backspace = true; };
+	game->handleInventory();
+	bool inventoryMenuSeen = false;
+	platform._pi = {};
+	platform.eventHook = [&] { platform._pi.escape = true; };
+	platform.menu = [&](settings::Session &s) {
+		inventoryMenuSeen = true;
+		s.action = settings::Action::Resume;
+	};
+	game->handleInventory();
+	platform.eventHook = {};
+	platform.menu = {};
+	if (!inventoryMenuSeen)
+		return 64;
+	// Deterministic traversal stress across every chapter. These are route probes,
+	// not a full playthrough: queued story/death scenes restart the local route.
+	auto replay = [&] {
+		uint32_t hash = 2166136261u;
+		game->_preferences.diskAutosave = false;
+		for (int level = 0; level < 7; ++level) {
+			if (!game->startSettingsLevel(level, kSkillNormal, reason))
+				throw std::runtime_error(reason);
+			game->_randSeed = 0x5a17u + level;
+			game->_cut._id = 0xffff;
+			for (int tick = 0; tick < 1500; ++tick) {
+				if (game->_currentLevel != level || game->_deathCutsceneCounter ||
+				    game->_cut._id != 0xffff || game->_pgeLive[0].life <= 0) {
+					if (!game->startSettingsLevel(level, kSkillNormal, reason))
+						throw std::runtime_error(reason);
+					game->_cut._id = 0xffff;
+				}
+				platform._pi = {};
+				const int phase = tick % 240;
+				platform._pi.dirMask = phase < 80    ? PlayerInput::DIR_RIGHT
+				                       : phase < 160 ? PlayerInput::DIR_LEFT
+				                       : phase < 200 ? PlayerInput::DIR_UP
+				                                     : PlayerInput::DIR_DOWN;
+				platform._pi.shift = tick % 100 < 30;
+				platform._pi.enter = tick % 97 == 0;
+				game->mainLoop();
+				if (game->_currentLevel != level || game->_cut._id != 0xffff ||
+				    game->_pgeLive[0].life <= 0)
+					continue;
+				if (tick % 300 == 0 && (!game->saveGameState(90) || !game->loadGameState(90)))
+					throw std::runtime_error("route save/load failed");
+				if (tick % 30 == 0) {
+					File state;
+					state.openMemoryBuffer(32768);
+					game->saveState(&state);
+					state.seek(0);
+					for (unsigned i = 0; i < state.size(); ++i)
+						hash = (hash ^ state.readByte()) * 16777619u;
+				}
+			}
+		}
+		return hash;
+	};
+	const auto replayA = replay(), replayB = replay();
+	if (replayA != replayB) {
+		std::cerr << "Non-deterministic route replay " << replayA << ' ' << replayB << '\n';
+		return 60;
+	}
+	std::cout << "21,000 deterministic route ticks; state hash " << replayA << '\n';
+	game->_preferences.diskAutosave = true;
+	// Recovery integration uses its own directory so repeated runs never inherit
+	// candidates created by earlier rendering checks.
+	const auto recovery = output / "recovery";
+	std::filesystem::remove_all(recovery);
+	std::filesystem::create_directories(recovery);
+	const auto recoveryPath = recovery.string();
+	const auto *oldPath = game->_savePath;
+	game->_savePath = recoveryPath.c_str();
+	if (!game->startSettingsLevel(0, kSkillNormal, reason))
+		return 40;
+	game->_cut._id = 0xFFFF;
+	game->mainLoop();
+	auto autosaves = progress::scan(recoveryPath, kResourceTypeAmiga);
+	if (autosaves.size() != 1 || !autosaves[0].preview ||
+	    autosaves[0].preview->rgba.size() != 128 * 112 * 4)
+		return 41;
+	const auto initial = autosaves[0];
+	game->_preferences.diskAutosaveSeconds = 15;
+	for (int n = 0; n < 449; ++n)
+		game->updateProgress();
+	if (progress::scan(recoveryPath, 0).size() != 1)
+		return 50;
+	game->updateProgress();
+	if (progress::scan(recoveryPath, 0).size() != 2)
+		return 51;
+	game->_preferences.diskAutosave = false;
+	for (int n = 0; n < 500; ++n)
+		game->updateProgress();
+	if (progress::scan(recoveryPath, 0).size() != 2)
+		return 52;
+	game->_preferences.diskAutosave = true;
+
+	const auto ticks = game->_playTicks;
+	platform.menu = [&](settings::Session &s) {
+		platform.clock += 600000;
+		s.action = settings::Action::Resume;
+	};
+	game->handleConfigPanel();
+	platform.menu = {};
+	if (game->_playTicks != ticks || progress::scan(recoveryPath, 0).size() != 2)
+		return 42;
+	game->clearStateRewind();
+	// Exact selection drops the chosen point and newer branch, preserving older history.
+	for (int n = 0; n < 4; ++n) {
+		game->_score = n;
+		game->_playTicks = 150 * (n + 1);
+		if (!game->saveStateRewind())
+			return 43;
+	}
+	if (!game->loadStateRewind(2) || game->_score != 1 || game->_playTicks != 300 ||
+	    game->_rewindLen != 1 || game->_rewindRecords[game->_rewindPtr].tick != 150)
+		return 44;
+	if (!game->startSettingsLevel(6, kSkillNormal, reason))
+		return 45;
+	game->_cut._id = 0xFFFF;
+	game->mainLoop();
+	if (!game->loadPersistent(initial, reason) || game->_currentLevel != 0 ||
+	    game->_playTicks != initial.playTicks || game->_pgeLive[0].room_location != initial.room ||
+	    game->_rewindLen || game->_loadMap) {
+		std::cerr << reason << '\n';
+		return 46;
+	}
+	const auto scoreBefore = game->_score;
+	auto mismatch = initial;
+	mismatch.state[mismatch.state.size() - 9] ^= 1;
+	if (game->loadPersistent(mismatch, reason) || game->_score != scoreBefore ||
+	    game->_currentLevel != 0)
+		return 47;
+	// A structurally valid newer generation for a different asset revision is skipped.
+	if (!game->savePersistent(reason))
+		return 48;
+	auto incompatible = initial;
+	incompatible.fingerprint ^= 1;
+	incompatible.state[incompatible.state.size() - 9] ^= 1;
+	if (!progress::save(recoveryPath, incompatible, reason) || !game->continueLatest(reason) ||
+	    game->_currentLevel != 0)
+		return 48;
+	// A new Game/Resource instance reconstructs the saved level with no live resources.
+	auto restarted = std::make_unique<Game>(&platform, &files, &files, recoveryPath.c_str(), 6,
+	                                        kResourceTypeAmiga, LANG_EN, kWidescreenNone, false, 0);
+	restarted->initCutsceneResources();
+	restarted->_res.load("ICONE", Resource::OT_ICN, "SPR");
+	restarted->_res.load("ICON", Resource::OT_ICN, "SPR");
+	restarted->_res.load("PERSO", Resource::OT_SPM);
+	restarted->_mix.init();
+	restarted->_mix._mod._isAmiga = true;
+	if (!restarted->continueLatest(reason) || restarted->_currentLevel != 0 ||
+	    restarted->_randSeed != game->_randSeed)
+		return 49;
+	for (const auto &chapter : chapterSaves) {
+		if (!restarted->loadPersistent(chapter, reason) ||
+		    restarted->_currentLevel != chapter.level ||
+		    restarted->_pgeLive[0].room_location != chapter.room) {
+			std::cerr << "Recovery level " << chapter.level << ": " << reason << '\n';
+			return 53;
+		}
+		restarted->mainLoop();
+	}
+	// Named milestones load across levels through the same transactional
+	// resource preflight, and the production death path offers unified recovery.
+	if (!game->loadPersistent(initial, reason) ||
+	    !game->saveManualState(77, "Before crossing", true, reason) || !game->saveGameState(0))
+		return 65;
+	const auto milestoneScore = game->_score;
+	if (game->saveGameState(77))
+		return 66;
+	game->_stateSlot = 77;
+	game->_stub->_pi.save = true;
+	game->inp_handleSpecialKeys();
+	if (platform.notice.find("Protected milestone") == std::string::npos) {
+		std::cerr << "Quicksave hid the protected milestone explanation\n";
+		return 70;
+	}
+	bool protectedMessage = false;
+	platform.menu = [&](settings::Session &session) {
+		session.browseLevel = 0;
+		protectedMessage = !session.command(settings::Action::SaveGame, 77, reason) &&
+		                   reason.find("Protected milestone") != std::string::npos;
+		session.action = settings::Action::Resume;
+	};
+	game->handleConfigPanel();
+	platform.menu = {};
+	if (!protectedMessage)
+		return 71;
+	// A disconnect pause retains the composed frame for screenshots/previews.
+	const std::vector<uint8_t> pausedFrame(game->_vid._frontLayer,
+	                                       game->_vid._frontLayer + game->_vid._layerSize);
+	bool composedPause = false;
+	platform.menu = [&](settings::Session &session) {
+		composedPause = std::equal(pausedFrame.begin(), pausedFrame.end(), game->_vid._frontLayer);
+		session.action = settings::Action::Resume;
+	};
+	platform.pauseRequest = true;
+	game->mainLoop();
+	platform.menu = {};
+	if (!composedPause)
+		return 72;
+	// protected against quicksave too
+	if (!game->startSettingsLevel(6, kSkillNormal, reason) ||
+	    !game->loadManualState(0, 77, reason) || game->_currentLevel != 0 ||
+	    game->_score != milestoneScore)
+		return 67;
+	bool recoverySeen = false, recoveryLoaded = false;
+	platform.menu = [&](settings::Session &session) {
+		recoverySeen = session.recovery && !session.canSave && !session.saves.empty();
+		session.browseLevel = 0;
+		recoveryLoaded = session.command(settings::Action::LoadGame, 77, reason);
+		session.action = settings::Action::Resume;
+	};
+	game->_pgeLive[0].life = 0;
+	game->_deathCutsceneCounter = 1;
+	game->_cut._id = game->_cut._deathCutsceneId = 0xFFFF;
+	game->mainLoop();
+	platform.menu = {};
+	if (!recoverySeen || !recoveryLoaded || game->_pgeLive[0].life <= 0 ||
+	    game->_deathCutsceneCounter || game->_playTicks != initial.playTicks)
+		return 68;
+	if (!progress::updateManual(recoveryPath, 0, 0, 77, "Unlocked", false, reason) ||
+	    !game->saveGameState(77))
+		return 69;
+	int rewindRoom = 0;
+	while (rewindRoom < 64 &&
+	       (rewindRoom == game->_res._pgeInit[0].init_room || !game->hasLevelMap(0, rewindRoom)))
+		++rewindRoom;
+	if (rewindRoom == 64)
+		return 73;
+	game->_pgeLive[0].room_location = game->_currentRoom = rewindRoom;
+	game->refreshRestoredFrame();
+	if (!game->saveStateRewind())
+		return 73;
+	game->_stub->_pi.rewind = true;
+	game->inp_handleSpecialKeys();
+	if (game->_currentRoom != rewindRoom || game->_loadMap) {
+		std::cerr << "Shortcut rewind left the restored room unprepared\n";
+		return 74;
+	}
+	std::cout << "Local disk write samples (ms): last=" << game->_lastDiskSaveMs
+	          << " worst=" << game->_worstDiskSaveMs << '\n';
+	restarted->_mix.free();
+	restarted.reset();
+	game->_savePath = oldPath;
 	game->_mix.free();
+	// Exercise the production startup path, including the welcome-back command,
+	// rather than only calling the recovery helper on an already loaded game.
+	for (bool direct : {true, false}) {
+		platform._pi = {};
+		platform.events = 0;
+		platform.maxEvents = 3;
+		bool welcomeSeen = false;
+		platform.menu = [&](settings::Session &session) {
+			welcomeSeen = session.startup && !session.autosaves.empty();
+			if (!session.command(settings::Action::ContinueLatest, 1, reason))
+				throw std::runtime_error(reason);
+			session.action = settings::Action::Resume;
+		};
+		auto launch =
+		    std::make_unique<Game>(&platform, &files, &files, recoveryPath.c_str(), 6,
+			                       kResourceTypeAmiga, LANG_EN, kWidescreenNone, false, 0);
+		launch->_continueRequested = direct;
+		launch->run();
+		if (launch->_continueFailed || launch->_currentLevel != 0 || launch->_activeProgress ||
+		    (!direct && !welcomeSeen))
+			return 54;
+	}
+	platform.menu = {};
+	platform.maxEvents = 100000;
+	platform._pi = {};
 	if (platform.leftCopies < rooms || platform.rightCopies < rooms) {
 		return 7;
 	}

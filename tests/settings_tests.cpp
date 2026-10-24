@@ -133,7 +133,52 @@ static void renderPages(const std::filesystem::path &root, const char *assets) {
 	session.values.rewind = true;
 	session.canRewind = true;
 	session.canLoad = true;
+	auto preview = std::make_shared<progress::Preview>();
+	preview->width = 128;
+	preview->height = 112;
+	preview->rgba.resize(128 * 112 * 4);
+	for (unsigned y = 0; y < 112; ++y)
+		for (unsigned x = 0; x < 128; ++x) {
+			auto *pixel = &preview->rgba[(y * 128 + x) * 4];
+			pixel[0] = x;
+			pixel[1] = y * 2;
+			pixel[2] = (x / 16 + y / 16) % 2 ? 180 : 70;
+			pixel[3] = 255;
+		}
+	progress::Snapshot autosave;
+	autosave.preview = preview;
+	autosave.level = 1;
+	autosave.room = 6;
+	autosave.health = 3;
+	autosave.timestamp = 1792843200000ULL;
+	session.autosaves = {autosave, autosave, autosave};
+	session.rewindPoints = {{preview, 5, 6, 3}, {preview, 10, 5, 2}, {preview, 15, 5, 3}};
+	session.rewindCount = 3;
 	session.preferencePath = (root / "preferences.cfg").string();
+	settings::SaveSlot named;
+	named.slot = 1;
+	named.level = 0;
+	named.room = 6;
+	named.exists = named.supported = named.modern = named.protectedSave = true;
+	named.label = "Before the lift";
+	named.modified = "2026-10-24 12:00 UTC";
+	auto manualPreview = std::make_shared<progress::Preview>(*preview);
+	for (size_t i = 0; i < manualPreview->rgba.size(); i += 4)
+		manualPreview->rgba[i] = 200;
+	named.preview = manualPreview;
+	auto checkpoint = named;
+	checkpoint.slot = 0;
+	checkpoint.label = "Checkpoint";
+	checkpoint.protectedSave = false;
+	auto checkpointPreview = std::make_shared<progress::Preview>(*preview);
+	for (size_t i = 0; i < checkpointPreview->rgba.size(); i += 4)
+		checkpointPreview->rgba[i + 1] = 200;
+	checkpoint.preview = checkpointPreview;
+	session.saves = {named, checkpoint};
+	session.protectSave = true;
+	snprintf(session.saveName.data(), session.saveName.size(), "%s", named.label.c_str());
+	session.diagnostics = {"Detected assets: synthetic fixture", "Levels: primary resources found",
+	                       "Saves: writable fixture directory"};
 	if (assets) {
 		FileSystem files(assets);
 		HeadlessSystem platform;
@@ -174,9 +219,11 @@ static void renderPages(const std::filesystem::path &root, const char *assets) {
 		check(overlay.attach(window, renderer), "attach ImGui SDL renderer");
 		overlay.open(session.values);
 		static const char *const pages[] = {"session",      "saves",    "graphics", "audio",
-		                                    "enhancements", "controls", "cheats",   "levels"};
-		for (int capture = 0; capture < 24; ++capture) {
-			const bool native = (capture >= 10 && capture < 20) || capture == 21;
+		                                    "enhancements", "controls", "cheats",   "levels",
+		                                    "journal",      "joypad"};
+		for (int capture = 0; capture < 44; ++capture) {
+			const bool native = (capture >= 28 && capture % 2) || capture == 26 || capture == 27 ||
+			                    (capture >= 10 && capture < 20) || capture == 21;
 			const bool small = capture == 8 || capture == 9 || capture == 23;
 			SDL_SetWindowSize(window,
 			                  native  ? 256
@@ -189,20 +236,48 @@ static void renderPages(const std::filesystem::path &root, const char *assets) {
 			                                                       : settings::Preferences{}.keys;
 			session.values.uiScale = capture == 9 || capture == 18 || capture == 22 ? 175 : 100;
 			session.values.menuLayout = capture == 19 || capture == 23 ? 1 : 0;
-			const int page = capture >= 20            ? 5
+			session.startup = capture >= 32 && capture < 34;
+			session.recovery = capture == 34 || capture == 35;
+			const int page = capture >= 42            ? 4
+			                 : capture >= 40          ? 12
+			                 : capture >= 38          ? 11
+			                 : capture >= 36          ? 1
+			                 : capture >= 34          ? 0
+			                 : capture >= 32          ? 0
+			                 : capture >= 30          ? 1
+			                 : capture >= 28          ? 10
+			                 : capture >= 24          ? (capture % 2 ? 8 : 9)
+			                 : capture >= 20          ? 5
 			                 : capture < 8            ? capture
 			                 : native && capture < 18 ? capture - 10
 			                                          : 2;
-			const std::string name = capture < 8     ? pages[page]
-			                         : capture == 8  ? "compact"
-			                         : capture == 9  ? "large-text"
-			                         : capture == 18 ? "native-large-text"
-			                         : capture == 19 ? "native-compact"
-			                         : capture == 20 ? "controls-remapped"
-			                         : capture == 21 ? "native-controls-remapped"
-			                         : capture == 22 ? "controls-large-text"
-			                         : capture == 23 ? "controls-compact"
-			                                         : std::string("native-") + pages[page];
+			std::string name = capture >= 28   ? std::string(capture % 2 ? "native-" : "") +
+			                                         (capture >= 32   ? "welcome"
+			                                          : capture >= 30 ? "autosaves"
+			                                                          : "rewind")
+			                   : capture >= 24 ? std::string(capture >= 26 ? "native-" : "") +
+			                                         (capture % 2 ? "journal" : "joypad")
+			                   : capture < 8   ? pages[page]
+			                   : capture == 8  ? "compact"
+			                   : capture == 9  ? "large-text"
+			                   : capture == 18 ? "native-large-text"
+			                   : capture == 19 ? "native-compact"
+			                   : capture == 20 ? "controls-remapped"
+			                   : capture == 21 ? "native-controls-remapped"
+			                   : capture == 22 ? "controls-large-text"
+			                   : capture == 23 ? "controls-compact"
+			                                   : std::string("native-") + pages[page];
+			if (capture >= 34)
+				name =
+				    std::string(capture % 2 ? "native-" : "") + (capture >= 42   ? "accessibility"
+					                                             : capture >= 40 ? "diagnostics"
+					                                             : capture >= 38 ? "objectives"
+					                                             : capture >= 36 ? "manual-browser"
+					                                                             : "recovery");
+			journal::State story;
+			story.chapter(0);
+			session.journalEntries = story.entries();
+			session.objectives = journal::objectives(story, 0);
 			overlay.selectPage(page);
 			for (int frame = 0; frame < 3; ++frame) {
 				SDL_SetRenderDrawColor(renderer, 20, 35, 52, 255);
@@ -240,6 +315,7 @@ static void renderPages(const std::filesystem::path &root, const char *assets) {
 				SDL_RenderPresent(renderer);
 			}
 		}
+		session.startup = session.recovery = false;
 		// Click the real native-resolution footer and its confirmation dialog.
 		SDL_SetWindowSize(window, 256, 224);
 		session.values.keys = settings::Preferences{}.keys;
@@ -383,6 +459,29 @@ static void renderPages(const std::filesystem::path &root, const char *assets) {
 				      "confirmed native EXIT GAME queues quit");
 			}
 		}
+		// The preview cache must survive the same renderer resets as the game.
+		session.action = settings::Action::None;
+		overlay.selectPage(10);
+		frame();
+		frame(true);
+		const auto beforeReset = captured;
+		overlay.resetRenderer();
+		frame(true);
+		check(captured == beforeReset, "rewind preview is recreated after a renderer reset");
+		session.startup = true;
+		overlay.open(session.values);
+		frame();
+		frame();
+		click(70, 94);
+		check(session.action == settings::Action::ContinueLatest,
+		      "native welcome screen queues Continue directly");
+		session.action = settings::Action::None;
+		frame();
+		click(60, 207);
+		check(session.action == settings::Action::Resume,
+		      "native welcome New game leaves recovery screen");
+		session.startup = false;
+		session.action = settings::Action::None;
 		// Real key capture routes through the same SDL event handler as gameplay,
 		// and reserved F10 always leaves the overlay usable.
 		SDL_Event close = {};
@@ -391,6 +490,45 @@ static void renderPages(const std::filesystem::path &root, const char *assets) {
 		overlay.processEvent(close, &session);
 		check(session.action == settings::Action::Resume,
 		      "F10 closes the overlay independently of bindings");
+		session.action = settings::Action::None;
+		session.recovery = true;
+		overlay.processEvent(close, &session);
+		check(session.action == settings::Action::None,
+		      "F10 cannot resume a dead recovery session");
+		session.recovery = false;
+		session.values = settings::Preferences{};
+		overlay.beginPadCapture(0, false);
+		SDL_Event pad = {};
+		pad.type = SDL_CONTROLLERBUTTONDOWN;
+		pad.cbutton.button = SDL_CONTROLLER_BUTTON_A;
+		overlay.processEvent(pad, &session);
+		check(session.statusError && session.values.padButtons[0] == SDL_CONTROLLER_BUTTON_X,
+		      "joypad capture rejects duplicate gameplay binding");
+		pad.cbutton.button = SDL_CONTROLLER_BUTTON_RIGHTSHOULDER;
+		overlay.processEvent(pad, &session);
+		check(!session.statusError && session.applyRequested &&
+		          session.values.padButtons[0] == SDL_CONTROLLER_BUTTON_RIGHTSHOULDER &&
+		          session.action == settings::Action::None,
+		      "joypad capture queues binding without resuming");
+		overlay.beginPadCapture(0, false);
+		pad.cbutton.button = SDL_CONTROLLER_BUTTON_START;
+		overlay.processEvent(pad, &session);
+		check(session.action == settings::Action::None &&
+		          session.status == "Button capture canceled.",
+		      "Start safely cancels joypad capture");
+		overlay.beginPadCapture(0, false);
+		pad.type = SDL_CONTROLLERAXISMOTION;
+		pad.caxis.axis = SDL_CONTROLLER_AXIS_TRIGGERLEFT;
+		pad.caxis.value = 20000;
+		overlay.processEvent(pad, &session);
+		check(session.values.padButtons[0] == 32,
+		      "overlay captures a trigger as a bindable action");
+		overlay.beginPadCapture(0, true);
+		pad.type = SDL_JOYBUTTONDOWN;
+		pad.jbutton.button = 8;
+		overlay.processEvent(pad, &session);
+		check(session.values.joystickButtons[0] == 8,
+		      "raw joystick has an independent capture profile");
 		overlay.detach();
 		check(overlay.attach(window, renderer),
 		      "renderer backend can reattach without losing UI context");
@@ -426,6 +564,15 @@ int main(int argc, char **argv) {
 	p.conradShirt = appearance::Shirt::White;
 	p.extraMetro = true;
 	const auto path = (root / "preferences with spaces.cfg").string();
+	p.padButtons[5] = SDL_CONTROLLER_BUTTON_LEFTSHOULDER;
+	p.joystickButtons[6] = 5;
+	p.stickDeadzone = 22;
+	p.rightStickMovement = true;
+	p.stickyAction = p.inputBuffer = p.reduceBlink = p.reduceShake = true;
+	p.gameSpeed = 75;
+	p.objectivesNotebook = false;
+	p.storyJournal = false;
+	p.journalNotifications = false;
 	check(settings::save(path, p, reason), "save settings atomically");
 	settings::Preferences loaded;
 	check(settings::load(path, loaded, reason) && loaded == p, "all preferences round-trip");
@@ -569,6 +716,7 @@ int main(int argc, char **argv) {
 		// A minimal valid state exercises the same preflight reader without game assets.
 		std::vector<uint8_t> state(13 + 30 + 0x1C00 + 2, 0);
 		state[0] = 1;
+		state[13 + 13] = state[13 + 14] = state[13 + 15] = 255;
 		std::fill_n(state.data() + 9, 4, 255);
 		std::fill_n(state.data() + 13 + 22, 4, 255);
 		auto fixture = [&](int version) {

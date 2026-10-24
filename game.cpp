@@ -14,6 +14,7 @@
 #include "fs.h"
 #include "game.h"
 #include "save_catalog.h"
+#include "gameplay_identity.h"
 #include "screenshot.h"
 #include "seq_player.h"
 #include "systemstub.h"
@@ -28,6 +29,10 @@ Game::Game(SystemStub *stub, FileSystem *fs, FileSystem *tuneFs, const char *sav
 	_skillLevel = _menu._skill = kSkillNormal;
 	_currentLevel = _menu._level = level;
 	_demoBin = -1;
+	_currentRoom = 0;
+	_score = 0;
+	_deathCutsceneCounter = 0;
+	_vid._unkPalSlot1 = _vid._unkPalSlot2 = 0;
 	_widescreenMode = widescreenMode;
 	_autoSave = autoSave;
 	_rewindPtr = -1;
@@ -75,6 +80,7 @@ void Game::initCutsceneResources() {
 void Game::run() {
 	_randSeed = time(0);
 	initCutsceneResources();
+	const bool hasRecovery = !progress::scan(_savePath, _res._type).empty();
 
 	if (!g_options.bypass_protection && !g_options.use_words_protection &&
 	    editionTraits(_res._type).shapeProtection) {
@@ -88,14 +94,16 @@ void Game::run() {
 	_mix.init();
 	_mix._mod._isAmiga = _res.isAmiga();
 
-	if (_res.isMac()) {
+	if (!hasRecovery && !_continueRequested && _res.isMac()) {
 		displayTitleScreenMac(Menu::kMacTitleScreen_MacPlay);
 		if (!_stub->_pi.quit) {
 			displayTitleScreenMac(Menu::kMacTitleScreen_Presage);
 		}
 	}
-	playCutscene(0x40);
-	playCutscene(0x0D);
+	if (!hasRecovery && !_continueRequested) {
+		playCutscene(0x40);
+		playCutscene(0x0D);
+	}
 
 	// global resources
 	switch (_res._type) {
@@ -150,13 +158,31 @@ void Game::run() {
 		}
 	}
 
+	bool resumeLoaded = false;
+	if (_continueRequested) {
+		std::string reason;
+		resumeLoaded = continueLatest(reason);
+		if (!resumeLoaded) {
+			warning("Continue: %s", reason.c_str());
+			_continueFailed = true;
+			_stub->_pi.quit = true;
+		}
+	} else if (hasRecovery && !_stub->_pi.quit) {
+		memset(_vid._frontLayer, 0, _vid._layerSize);
+		_stub->copyRect(0, 0, _vid._w, _vid._h, _vid._frontLayer, _vid._w);
+		_startupMenu = true;
+		_continued = false;
+		handleConfigPanel();
+		_startupMenu = false;
+		resumeLoaded = _continued;
+	}
 	bool presentMenu =
 	    !_res.isSega() && ((_res._type != kResourceTypeDOS) || _res.fileExists("MENU1.MAP"));
 	while (!_stub->_pi.quit) {
-		if (_stub->hasWidescreen()) {
+		if (!resumeLoaded && _stub->hasWidescreen()) {
 			_stub->clearWidescreen();
 		}
-		if (presentMenu) {
+		if (presentMenu && !resumeLoaded) {
 			_mix.playMusic(1);
 			switch (_res._type) {
 			case kResourceTypeDOS:
@@ -201,7 +227,7 @@ void Game::run() {
 		if (_stub->_pi.quit) {
 			break;
 		}
-		if (_stub->hasWidescreen()) {
+		if (!resumeLoaded && _stub->hasWidescreen()) {
 			_stub->clearWidescreen();
 		}
 		if (_currentLevel == 7) {
@@ -212,12 +238,18 @@ void Game::run() {
 			_vid.setTextPalette();
 			_vid.setPalette0xF();
 			_stub->setOverscanColor(0xE0);
-			_vid._unkPalSlot1 = 0;
-			_vid._unkPalSlot2 = 0;
-			_score = 0;
-			clearStateRewind();
-			loadLevelData();
-			resetGameState();
+			if (!resumeLoaded) {
+				_vid._unkPalSlot1 = 0;
+				_vid._unkPalSlot2 = 0;
+				_score = 0;
+				_journal = {};
+				_hints = {};
+				_playTicks = _lastPersistentTick = 0;
+				clearStateRewind();
+				loadLevelData();
+				resetGameState();
+			}
+			resumeLoaded = false;
 			_endLoop = false;
 			_frameTimestamp = _stub->getTimeStamp();
 			_saveTimestamp = _frameTimestamp;
@@ -229,6 +261,12 @@ void Game::run() {
 					_endLoop = true;
 				}
 			}
+			if (_preferences.diskAutosave && _activeProgress && _playTicks != _lastPersistentTick) {
+				std::string reason;
+				if (!savePersistent(reason))
+					warning("Exit autosave: %s", reason.c_str());
+			}
+			_activeProgress = false;
 			// flush inputs
 			_stub->_pi.dirMask = 0;
 			_stub->_pi.enter = false;
@@ -363,26 +401,27 @@ void Game::mainLoop() {
 		--_deathCutsceneCounter;
 		if (_deathCutsceneCounter == 0) {
 			playCutscene(_cut._deathCutsceneId);
-			if (!handleContinueAbort()) {
-				playCutscene(0x41);
+			// Recovery is a blocking QoL screen. Loading is validated before any live
+			// state changes; closing it requires a recovery choice or leaving play.
+			if (handleConfigPanel(true))
 				_endLoop = true;
-			} else {
-				if (_autoSave && _rewindLen != 0 && loadGameState(kAutoSaveSlot)) {
-					// autosave
-				} else if (_validSaveState && loadGameState(kIngameSaveSlot)) {
-					// ingame save
-				} else {
-					clearStateRewind();
-					loadLevelData();
-					resetGameState();
-				}
-			}
 			return;
 		}
 	}
 	_stub->setGameplayActive(true);
-	memcpy(_vid._frontLayer, _vid._backLayer, _vid._layerSize);
+	if (_demoBin == -1)
+		_journal.chapter(_currentLevel);
+	_stub->setJournalNotice(_preferences.storyJournal && _preferences.journalNotifications &&
+	                        _journal.unread());
 	pge_getInput();
+	if (_stub->consumePauseRequest()) {
+		_stub->setGameplayActive(false);
+		if (handleConfigPanel())
+			_endLoop = true;
+		return;
+	}
+	// Preserve the composed frame when a device event opens the pause overlay.
+	memcpy(_vid._frontLayer, _vid._backLayer, _vid._layerSize);
 	pge_prepare();
 	col_prepareRoomState();
 	uint8_t oldLevel = _currentLevel;
@@ -439,15 +478,20 @@ void Game::mainLoop() {
 	if (_blinkingConradCounter != 0) {
 		--_blinkingConradCounter;
 	}
+	updateProgress();
 	_vid.updateScreen();
 	updateTiming();
 	_stub->setGameplayActive(false);
+	const bool dialogue = _textToDisplay != 0xFFFF;
 	drawStoryTexts();
+	if (dialogue)
+		_frameTimestamp = _stub->getTimeStamp();
 	_stub->setGameplayActive(true);
 	if (_stub->_pi.backspace) {
 		_stub->_pi.backspace = false;
 		_stub->setGameplayActive(false);
 		handleInventory();
+		_frameTimestamp = _stub->getTimeStamp();
 		return;
 	}
 	if (_stub->_pi.escape) {
@@ -459,24 +503,24 @@ void Game::mainLoop() {
 		}
 	}
 	inp_handleSpecialKeys();
-	if (_autoSave && _stub->getTimeStamp() - _saveTimestamp >= kAutoSaveIntervalMs) {
-		// do not save if we died or about to
-		if (_pgeLive[0].life > 0 && _deathCutsceneCounter == 0) {
-			saveGameState(kAutoSaveSlot);
-			_saveTimestamp = _stub->getTimeStamp();
-		}
-	}
 }
 
 void Game::updateTiming() {
-	static const int frameHz = 30;
-	int32_t delay = _stub->getTimeStamp() - _frameTimestamp;
-	int32_t pause = (_stub->_pi.dbgMask & PlayerInput::DF_FASTMODE) ? 20 : (1000 / frameHz);
-	pause -= delay;
-	if (pause > 0) {
-		_stub->sleep(pause);
-	}
-	_frameTimestamp = _stub->getTimeStamp();
+	// Carry 1/30-second fractions and scheduler overshoot instead of rounding
+	// every frame to 33 ms. Reset at explicit pause/level boundaries or long stalls.
+	if (_frameTimestamp != _timingExpected)
+		_timingRemainder = 0;
+	const bool fast = _stub->_pi.dbgMask & PlayerInput::DF_FASTMODE;
+	const unsigned rate = 30 * _preferences.gameSpeed;
+	const unsigned numerator = 100000 + _timingRemainder;
+	const unsigned period = fast ? 20 : numerator / rate;
+	if (!fast)
+		_timingRemainder = numerator % rate;
+	const uint32_t elapsed = _stub->getTimeStamp() - _frameTimestamp;
+	if (elapsed < period)
+		_stub->sleep(period - elapsed);
+	_frameTimestamp = elapsed > period * 2 ? _stub->getTimeStamp() : _frameTimestamp + period;
+	_timingExpected = _frameTimestamp;
 }
 
 void Game::playCutscene(int id) {
@@ -527,12 +571,14 @@ void Game::playCutscene(int id) {
 					*p += num;
 				}
 			        if (playCutsceneSeq(name)) {
-					if (_cut._id == 0x3D) {
-						playCutsceneSeq("CREDITS.SEQ");
-						_cut._interrupted = false;
-					} else {
-						_cut._id = 0xFFFF;
-					}
+					    if (_demoBin == -1 && _cut._id == Cutscene::kCineMemo && _seq._completed)
+						    _journal.memory();
+					    if (_cut._id == 0x3D) {
+						    playCutsceneSeq("CREDITS.SEQ");
+						    _cut._interrupted = false;
+					    } else {
+						    _cut._id = 0xFFFF;
+					    }
 					_mix.stopMusic();
 					return;
 				}
@@ -550,7 +596,10 @@ void Game::playCutscene(int id) {
 				_mix.playMusic(num);
 			}
 		}
+		const auto playedId = _cut._id;
 		_cut.play();
+		if (_demoBin == -1 && playedId == Cutscene::kCineMemo && _cut._completed)
+			_journal.memory();
 		if (id == 0xD && !_cut._interrupted) {
 			if (editionTraits(_res._type).extendedIntroduction) {
 				_cut._id = 0x4A; // second part of the introduction cutscene
@@ -578,9 +627,9 @@ bool Game::playCutsceneSeq(const char *name) {
 	File f;
 	if (f.open(name, "rb", _fs)) {
 		_seq.setBackBuffer(_res._scratchBuffer);
-		_seq.play(&f);
+		const bool played = _seq.play(&f);
 		_vid.fullRefresh();
-		return true;
+		return played;
 	}
 	return false;
 }
@@ -594,10 +643,14 @@ void Game::inp_handleSpecialKeys() {
 		_stub->_pi.load = false;
 	}
 	if (_stub->_pi.save) {
-	_validSaveState = saveGameState(_stateSlot);
-		if (_validSaveState and g_options.play_gamesaved_sound) {
+		const bool canSave = _pgeLive[0].life > 0 && !_deathCutsceneCounter;
+		// saveGameState reports storage/protection failures with their specific reason.
+		const bool saved = canSave && saveGameState(_stateSlot);
+		if (saved && g_options.play_gamesaved_sound) {
 			_mix.play(Resource::_gameSavedSoundData, Resource::_gameSavedSoundLen, 8000, Mixer::MAX_VOLUME);
 		}
+		if (!canSave)
+			_stub->notify("Save failed: Conrad must be alive.", true);
 		_stub->_pi.save = false;
 	}
 	if (_stub->_pi.stateSlot != 0) {
@@ -610,9 +663,16 @@ void Game::inp_handleSpecialKeys() {
 	}
 	if (_stub->_pi.rewind) {
 		if (_rewindLen != 0) {
-			loadStateRewind();
+			if (loadStateRewind()) {
+				// Restore room/collision caches before the next simulation tick.
+				refreshRestoredFrame();
+				_stub->notify("Rewind restored.");
+			} else {
+				_stub->notify("Could not restore the rewind snapshot.", true);
+			}
 		} else {
 			info("Rewind buffer is empty");
+			_stub->notify("No rewind snapshots yet.", true);
 		}
 		_stub->_pi.rewind = false;
 	}
@@ -742,6 +802,7 @@ void Game::drawLevelTexts() {
 	if (obj == 0) {
 		obj = col_findCurrentCollidingObject(pge, 0xFF, 5, 9, &pge);
 	}
+	_nearInteraction = obj > 0;
 	if (obj > 0) {
 		_printLevelCodeCounter = 0;
 		if (_textToDisplay == 0xFFFF) {
@@ -1059,7 +1120,7 @@ void Game::drawAnimBuffer(uint8_t stateNum, AnimBufferState *state) {
 			LivePGE *pge = state->pge;
 			if (!(pge->flags & 8)) {
 				if (pge == &_pgeLive[0]) _vid.refreshConradShirtPalette();
-				if (stateNum == 1 && (_blinkingConradCounter & 1)) {
+				if (stateNum == 1 && (_blinkingConradCounter & 1) && !_preferences.reduceBlink) {
 					break;
 				}
 				switch (_res._type) {
@@ -1549,6 +1610,10 @@ void Game::loadLevelMap() {
 }
 
 void Game::loadLevelData() {
+	_lastRewindTick = _playTicks;
+	_persistentDue = true;
+	_activeProgress = false;
+	_nextPersistentAttempt = 0;
 	_res.clearLevelRes();
 	const Level *lvl = &_gameLevels[_currentLevel];
 	switch (_res._type) {
@@ -1717,6 +1782,8 @@ void Game::loadLevelData() {
 		}
 	}
 	pge_resetMessages();
+	_assetFingerprint = gameplayFingerprint(_res);
+
 	_validSaveState = false;
 
 	_mix.playMusic(Mixer::MUSIC_TRACK + lvl->track);
@@ -1846,20 +1913,30 @@ void Game::handleInventory() {
 	LivePGE *pge = &_pgeLive[0];
 	if (pge->life > 0 && pge->current_inventory_PGE != 0xFF) {
 		playSound(_res.isMac() ? 52 : 66, 0);
-		InventoryItem items[24];
+		std::vector<InventoryItem> items;
+		std::array<bool, 256> visited{};
 		int num_items = 0;
 		uint8_t inv_pge = pge->current_inventory_PGE;
 		while (inv_pge != 0xFF) {
+			if (inv_pge >= _res._pgeNum || visited[inv_pge]) {
+				warning("Invalid inventory chain");
+				return;
+			}
+			visited[inv_pge] = true;
+			items.emplace_back();
 			items[num_items].icon_num = _res._pgeInit[inv_pge].icon_num;
 			items[num_items].init_pge = &_res._pgeInit[inv_pge];
 			items[num_items].live_pge = &_pgeLive[inv_pge];
 			inv_pge = _pgeLive[inv_pge].next_inventory_PGE;
 			++num_items;
 		}
+		items.emplace_back();
 		items[num_items].icon_num = 0xFF;
 		int current_item = 0;
 		int num_lines = (num_items - 1) / 4 + 1;
 		int current_line = 0;
+		const std::vector<uint8_t> gameplayFrame(_vid._frontLayer,
+		                                         _vid._frontLayer + _vid._layerSize);
 		bool display_score = false;
 		while (!_stub->_pi.backspace && !_stub->_pi.quit) {
 			static const int icon_spr_w = 16;
@@ -1944,6 +2021,14 @@ void Game::handleInventory() {
 			_vid.updateScreen();
 			_stub->sleep(80);
 			inp_update();
+			if (_stub->_pi.escape) {
+				_stub->_pi.escape = false;
+				memcpy(_vid._frontLayer, gameplayFrame.data(), gameplayFrame.size());
+				_stub->copyRect(0, 0, _vid._w, _vid._h, _vid._frontLayer, _vid._w);
+				if (handleConfigPanel())
+					_endLoop = true;
+				return;
+			}
 
 			if (g_options.order_inventory_original) {
 				if (_stub->_pi.dirMask & PlayerInput::DIR_DOWN) {
@@ -2021,60 +2106,50 @@ void Game::inp_update() {
 }
 
 void Game::makeGameStateName(uint8_t slot, char *buf, size_t capacity) {
-	snprintf(buf, capacity, "fb-level%d-%02d.state", _currentLevel + 1, slot);
+	snprintf(buf, capacity, "%s", saves::name(_res._type, _currentLevel, slot).c_str());
 }
 
-// 3: persist _pge_opGunVar
-static const int kSaveVersion = 3;
 
 static const uint32_t TAG_FBSV = 0x46425356;
 
+void Game::writeGameState(File &f) {
+	f.writeUint32BE(TAG_FBSV);
+	f.writeUint16BE(kSaveVersion);
+	char header[32] = {};
+	snprintf(header, sizeof(header), "level=%d room=%d", _currentLevel + 1, _currentRoom);
+	f.write(header, sizeof(header));
+	saveState(&f);
+}
+
 bool Game::saveGameState(uint8_t slot) {
-	if (slot == kAutoSaveSlot) {
+	if (slot == kAutoSaveSlot)
 		return saveStateRewind();
-	}
-	char stateFile[32];
-	makeGameStateName(slot, stateFile, sizeof(stateFile));
+	if (slot > 99)
+		return false;
 	std::string reason;
-	const bool success = writeAtomicFile((std::filesystem::u8path(_savePath) / stateFile).u8string(), true,
-	    [&](File &f) {
-		f.writeUint32BE(TAG_FBSV);
-		f.writeUint16BE(kSaveVersion);
-		char header[32] = {};
-		snprintf(header, sizeof(header), "level=%d room=%d", _currentLevel + 1, _currentRoom);
-		f.write(header, sizeof(header));
-		saveState(&f);
-	    }, reason);
-	if (success) info("Saved state to slot %d", slot);
-	else warning("%s", reason.c_str());
-	return success;
+	progress::Snapshot old;
+	const auto path = (std::filesystem::u8path(_savePath) /
+	                   progress::manualFilename(_res._type, _currentLevel, slot))
+	                      .u8string();
+	progress::read(path, old, reason);
+	const bool saved = saveManualState(slot, old.label, false, reason);
+	if (saved && slot == kIngameSaveSlot)
+		_persistentDue = true;
+	_stub->notify(saved ? (slot ? "Saved slot " + std::to_string(slot) + '.' : "Checkpoint stored.")
+	                    : reason,
+	              !saved);
+	return saved;
 }
 
 bool Game::loadGameState(uint8_t slot) {
 	if (slot == kAutoSaveSlot) {
 		return loadStateRewind();
 	}
-	bool success = false;
-	char stateFile[32];
-	makeGameStateName(slot, stateFile, sizeof(stateFile));
-	File f;
-	if (!f.open(stateFile, "zrb", _savePath)) {
-		warning("Unable to open state file '%s'", stateFile);
-	} else {
-		int version;
-		std::string reason;
-		if (!saves::validate(f, _res._pgeNum, version, reason)) {
-			warning("%s", reason.c_str());
-		} else {
-			loadState(&f, version);
-			if (f.ioErr()) {
-				warning("I/O error when loading game state");
-			} else {
-				info("Loaded state from slot %d", slot);
-				success = true;
-			}
-		}
-	}
+	std::string reason;
+	const bool success = loadManualState(_currentLevel, slot, reason);
+	_stub->notify(reason, !success);
+	if (!success)
+		warning("%s", reason.c_str());
 	return success;
 }
 
@@ -2135,6 +2210,14 @@ void Game::saveState(File *f) {
 		f->write(cs2->data_buf, 0x10);
 	}
 	f->writeUint16BE(_pge_opGunVar);
+	// Version 4 extends the legacy payload. Keep old version 2/3 files readable.
+	f->writeUint32BE(_randSeed);
+	f->writeByte(_res._type);
+	f->writeByte(_currentLevel);
+	f->writeUint16BE(_res._pgeNum);
+	f->writeUint32BE(_assetFingerprint);
+	f->writeUint32BE(_journal.unlocked);
+	f->writeUint32BE(_journal.read);
 }
 
 void Game::loadState(File *f, int version) {
@@ -2216,8 +2299,18 @@ void Game::loadState(File *f, int version) {
 		}
 	}
 	resetGameState();
-	if (version >= 3) {
+	if (version >= 3)
 		_pge_opGunVar = f->readUint16BE();
+	if (version >= 4) {
+		_randSeed = f->readUint32BE();
+		f->readByte();
+		f->readByte();
+		f->readUint16BE(); // Identity already checked by preflight.
+		f->readUint32BE();
+		_journal.unlocked = f->readUint32BE();
+		_journal.read = f->readUint32BE();
+	} else {
+		_journal = {};
 	}
 }
 
@@ -2229,9 +2322,11 @@ void Game::clearStateRewind() {
 			ptr += kRewindSize;
 		}
 		_rewindBuffer[ptr].close();
+		_rewindRecords[ptr] = {};
 	}
 	_rewindPtr = -1;
 	_rewindLen = 0;
+	_lastRewindTick = _playTicks;
 }
 
 bool Game::saveStateRewind() {
@@ -2244,6 +2339,13 @@ bool Game::saveStateRewind() {
 	File &f = _rewindBuffer[_rewindPtr];
 	f.openMemoryBuffer(kGameStateSize);
 	saveState(&f);
+	if (f.ioErr()) {
+		f.close();
+		clearStateRewind();
+		return false;
+	}
+	_rewindRecords[_rewindPtr] = {capturePreview(), _playTicks, _currentRoom, _pgeLive[0].life};
+	_lastRewindTick = _playTicks;
 	if (_rewindLen < kRewindSize) {
 		++_rewindLen;
 	}
@@ -2252,21 +2354,27 @@ bool Game::saveStateRewind() {
 	return !f.ioErr();
 }
 
-bool Game::loadStateRewind() {
-	const int ptr = _rewindPtr;
-	if (_rewindPtr == 0) {
-		_rewindPtr = kRewindSize - 1;
-	} else {
-		--_rewindPtr;
-	}
+bool Game::loadStateRewind(unsigned age) {
+	if (age >= unsigned(_rewindLen))
+		return false;
+	const int ptr = (_rewindPtr - int(age) + kRewindSize) % kRewindSize;
 	File &f = _rewindBuffer[ptr];
 	f.seek(0);
 	loadState(&f, kSaveVersion);
-	if (_rewindLen > 0) {
-		--_rewindLen;
+	if (f.ioErr())
+		return false;
+	_playTicks = _lastRewindTick = _rewindRecords[ptr].tick;
+	_lastPersistentTick = _playTicks;
+	_nextPersistentAttempt = 0;
+	_persistentDue = true;
+	for (unsigned n = 0; n <= age; ++n) {
+		const int discard = (_rewindPtr - int(n) + kRewindSize) % kRewindSize;
+		_rewindBuffer[discard].close();
+		_rewindRecords[discard] = {};
 	}
-	// info("Rewind state (index %d, count %d, size %d)", ptr, _rewindLen, f.size());
-	return !f.ioErr();
+	_rewindPtr = (ptr + kRewindSize - 1) % kRewindSize;
+	_rewindLen -= age + 1;
+	return true;
 }
 
 void AnimBuffers::addState(uint8_t stateNum, int16_t x, int16_t y, const uint8_t *dataPtr, LivePGE *pge, uint8_t w, uint8_t h) {

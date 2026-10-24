@@ -40,6 +40,15 @@ Linux, macOS and Windows CI runs native builds and tests. See the
 [release recipes](docs/RELEASES.md) for desktop packages and the Quest flat-panel
 APK. A native SDL3 backend remains future work.
 
+The [1.09 campaign report](docs/CAMPAIGN_1.09.md) records the source review,
+confirmed fixes, timing/menu changes and robustness tests. Version **1.10** adds
+[unified recovery, named/protected saves, controller profiles, accessibility
+assists, an objectives notebook and audio-loss recovery](docs/QOL_1.10.md).
+Version **1.11** combines these improvements with fixes for save feedback,
+controller defaults, disconnect pause frames and shortcut rewind. Download
+packages from [GitHub Releases](https://github.com/b0realis/REminiscence2/releases)
+and consult the validation record for testing limits.
+
 The [release-readiness audit](docs/RELEASE_READINESS.md) ranks the next fixes
 and covers Win64, Linux x86-64, Steam Deck, macOS Apple Silicon/Intel, and
 a sideloaded Quest flat-panel Android app.
@@ -52,10 +61,15 @@ Read [manual.md](manual.md) for the original REminiscence2 player field guide:
 setup, controls, movement practice, saves, display, music and command options.
 It contains no reproduced publisher-manual text, comic or game artwork.
 
+Joypad settings include persistent button remapping, a configurable dead zone,
+optional save/load/rewind shortcuts, and a raw-joystick profile. Start always
+opens settings. The optional Journal page adds short original passages for
+reached story chapters, with save/rewind-aware reading progress.
+
 ## Screenshots
 
 The in-game QoL menu at **1920×1080**, rendered over paused Amiga gameplay.
-Press **Esc**, **F10**, or controller **Start** to open it. Its eight pages include
+Press **Esc**, **F10**, or controller **Start** to open it. Its thirteen pages include
 save/load, graphics, audio, controls, cheats and level selection.
 
 ![High-resolution QoL menu with Conrad's T-shirt choices and the turquoise EXIT GAME button](docs/screenshots/qol-highres.png)
@@ -233,9 +247,25 @@ passes the seven-level engine integration test. Private references and extracted
 assets belong under the ignored `.local/` directory. The engine consumes these
 prepared files and does not execute a WHDLoad slave or load LHA archives directly.
 
-`--autosave` currently enables an in-memory rewind history, with Ctrl+R stepping
-back through snapshots. That history is lost on exit. Persistent autosave and
-recovery are planned.
+Persistent autosaves keep three generations per edition under `--savepath`,
+separate from manual slots. They run every 60 active seconds by default, at
+checkpoints/level starts and on clean exit when possible. Use
+`--disk-autosave=15` through `600` to set the interval, or `--no-disk-autosave`
+to disable writes. A living frame can still be hazardous; retain manual saves.
+
+On the next launch, choose **Continue latest autosave**, or pass `--continue` to
+restore directly. The loader checks assets before changing levels and tries an
+older generation when a candidate is damaged or incompatible. **Save / Load**
+previews and restores the retained generations.
+
+`--autosave` enables separate, temporary rewind history. Open **Rewind** to
+preview a moment by age, room and health before restoring it; Ctrl+R takes the
+latest snapshot directly. Newer history is discarded after restoring an older
+point. History is lost on exit or level changes.
+
+**Session → Contextual control hints** enables short, optional reminders that
+follow current keyboard/pad bindings. They contain no puzzle solutions and are
+off by default. Each appears once per new game and pauses with gameplay.
 
 ## Development
 

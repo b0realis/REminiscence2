@@ -8,6 +8,7 @@
 #define SFX_PLAYER_H__
 
 #include "intern.h"
+#include <atomic>
 
 struct Mixer;
 
@@ -66,7 +67,8 @@ struct SfxPlayer {
 	static const uint16_t _periodTable[];
 
 	const Module *_mod;
-	bool _playing;
+	std::atomic<bool> _playing;
+	unsigned _tickRemainder = 0;
 	int _samplesLeft;
 	uint16_t _curOrder;
 	uint16_t _numOrders;

@@ -15,11 +15,13 @@
 #include "systemstub.h"
 #include "util.h"
 #include "settings_overlay.h"
+#include "input_state.h"
+#include "controller_profile.h"
+#include "user_notice.h"
 #include <memory>
 
 static const char *kIconBmp = "icon.bmp";
 
-static const int kJoystickCommitValue = 3200;
 
 static const uint32_t kPixelFormat = SDL_PIXELFORMAT_RGB888;
 
@@ -35,6 +37,10 @@ struct SystemStub_SDL : SystemStub {
 	RuntimeOptions _options;
 	SDL_AudioDeviceID _audioDevice = 0;
 	int _outputSampleRate = 22050;
+	uint32_t _silentStamp = 0;
+	uint64_t _silentRemainder = 0;
+	void openAudioOutput(bool initial);
+	void pumpSilentAudio();
 	SDL_Window *_window;
 	SDL_Renderer *_renderer;
 	SDL_Texture *_texture;
@@ -63,11 +69,19 @@ struct SystemStub_SDL : SystemStub {
 	SDL_Texture *_widescreenTexture;
 	int _wideMargin;
 	bool _enableWidescreen;
-	settings::Preferences _preferences;
+	settings::Preferences _preferences, _inputDefaults;
+	UserNotice _notice;
+	std::string _profileDirectory, _controllerProfile, _controllerName;
+	bool _controllerDisconnected = false, _pauseRequested = false;
+	unsigned _inputGeneration = 0;
+	InputState _input;
 	std::unique_ptr<SettingsOverlay> _overlay;
 	settings::Session *_settingsSession = nullptr;
 	int _logicalW = 0, _logicalH = 0;
 	bool _gameplayActive = false, _pointerVisible = false;
+	bool _focusLost = false, _backgrounded = false;
+	bool _journalNotice = false;
+	std::string _contextHint;
 	uint32_t _lastPointer = 0;
 	SDL_JoystickID _inputDevice = -1;
 	bool _frameDirty = true;
@@ -76,11 +90,37 @@ struct SystemStub_SDL : SystemStub {
 
 	virtual ~SystemStub_SDL() {}
 	void configure(const RuntimeOptions &options) override { _options = options; }
-	void configurePreferences(const settings::Preferences &preferences) override { _preferences = preferences; }
+	void configurePreferences(const settings::Preferences &preferences) override {
+		_preferences = _inputDefaults = preferences;
+	}
 	void readPreferences(settings::Preferences &preferences) const override;
 	bool applyPreferences(const settings::Preferences &preferences, std::string &reason) override;
 	void showSettings(settings::Session &session) override;
 	void setGameplayActive(bool active) override { _gameplayActive = active; }
+	void setJournalNotice(bool visible) override { _journalNotice = visible; }
+	void setContextHint(const std::string &text) override { _contextHint = text; }
+	void setInputProfileDirectory(const std::string &directory) override {
+		_profileDirectory = directory;
+	}
+	bool consumePauseRequest() override {
+		const bool request = _pauseRequested;
+		_pauseRequested = false;
+		return request;
+	}
+	void notify(const std::string &message, bool error = false) override {
+		_notice.push(message, error, SDL_GetTicks());
+	}
+	int controllerLabelStyle() const override {
+		if (!_controller)
+			return 0;
+		const auto type = SDL_GameControllerGetType(_controller);
+		return type == SDL_CONTROLLER_TYPE_PS3 || type == SDL_CONTROLLER_TYPE_PS4 ||
+		               type == SDL_CONTROLLER_TYPE_PS5
+		           ? 1
+				   : 0;
+	}
+	bool audioOutputAvailable() const override { return _audioDevice != 0; }
+	bool rawJoystickActive() const override { return _joystick != nullptr; }
 	void init(const char *title, int w, int h, bool fullscreen, int widescreenMode, const ScalerParameters *scalerParameters) override;
 	void destroy() override;
 	virtual bool hasWidescreen() const;
@@ -173,8 +213,10 @@ void SystemStub_SDL::closeInputDevice() {
 	if (_controller) SDL_GameControllerClose(_controller);
 	if (_joystick) SDL_JoystickClose(_joystick);
 	_controller = nullptr; _joystick = nullptr; _inputDevice = -1;
-	_pi.dirMask = 0;
-	_pi.enter = _pi.space = _pi.shift = _pi.backspace = _pi.escape = false;
+	_controllerName.clear();
+	_controllerProfile.clear();
+	++_inputGeneration;
+	_input.clearPad(_pi, _preferences);
 }
 void SystemStub_SDL::openInputDevice() {
 	if (_inputDevice >= 0) return;
@@ -188,7 +230,23 @@ void SystemStub_SDL::openInputDevice() {
 			_joystick = SDL_JoystickOpen(i);
 			if (_joystick) _inputDevice = SDL_JoystickInstanceID(_joystick);
 		}
-		if (_inputDevice >= 0) return;
+		if (_inputDevice >= 0) {
+			auto *joystick = _joystick ? _joystick : SDL_GameControllerGetJoystick(_controller);
+			char guid[33];
+			SDL_JoystickGetGUIDString(SDL_JoystickGetGUID(joystick), guid, sizeof(guid));
+			const char *name = SDL_JoystickName(joystick);
+			_controllerName = name ? name : "Controller";
+			_controllerProfile =
+				controller::profilePath(_profileDirectory, guid, _joystick != nullptr);
+			controller::copyBindings(_preferences, _inputDefaults);
+			std::string reason;
+			if (!controller::load(_controllerProfile, _preferences, reason))
+				notify(reason, true);
+			++_inputGeneration;
+			if (_controllerDisconnected)
+				notify("Controller reconnected. Choose Resume when ready.");
+			return;
+		}
 	}
 }
 
@@ -620,18 +678,18 @@ void SystemStub_SDL::fadeScreen() {
 
 bool SystemStub_SDL::drawGameFrame(int shakeOffset) {
 	if (_frameDirty) {
-	if (_texW != _screenW || _texH != _screenH) {
-		void *dst = 0;
-		int pitch = 0;
-		if (SDL_LockTexture(_texture, 0, &dst, &pitch) == 0) {
-			assert((pitch & 3) == 0);
-			_scaler->scale(_scaleFactor, (uint32_t *)dst, pitch / sizeof(uint32_t), _screenBuffer, _screenW, _screenW, _screenH);
+		if (_texW != _screenW || _texH != _screenH) {
+			void *dst = nullptr;
+			int pitch = 0;
+			if (SDL_LockTexture(_texture, nullptr, &dst, &pitch) != 0)
+				return false;
+			_scaler->scale(_scaleFactor, static_cast<uint32_t *>(dst), pitch / sizeof(uint32_t),
+			               _screenBuffer, _screenW, _screenW, _screenH);
 			SDL_UnlockTexture(_texture);
-		}
-	} else {
-		SDL_UpdateTexture(_texture, 0, _screenBuffer, _screenW * sizeof(uint32_t));
-	}
-	_frameDirty = false;
+		} else if (SDL_UpdateTexture(_texture, nullptr, _screenBuffer,
+		                             _screenW * sizeof(uint32_t)) != 0)
+			return false;
+		_frameDirty = false; // Failed uploads stay dirty and are retried on the next presentation.
 	}
 	SDL_RenderClear(_renderer);
 	if (_widescreenMode != kWidescreenNone) {
@@ -682,11 +740,18 @@ bool SystemStub_SDL::drawGameFrame(int shakeOffset) {
 }
 
 void SystemStub_SDL::updateScreen(int shakeOffset) {
-	if (!drawGameFrame(shakeOffset)) return;
-	if ((_preferences.showFps || (_gameplayActive && _preferences.showMenuButton)) && _overlay && !_settingsSession) {
+	if (!drawGameFrame(_preferences.reduceShake ? 0 : shakeOffset))
+		return;
+	const bool noticeVisible = _notice.visible(SDL_GetTicks());
+	if ((noticeVisible || _preferences.showFps ||
+	     (_gameplayActive &&
+	      (_preferences.showMenuButton || _journalNotice || !_contextHint.empty()))) &&
+	    _overlay && !_settingsSession) {
 		SDL_RenderSetLogicalSize(_renderer, 0, 0);
 		_overlay->beginFrame(_preferences);
-		if (_overlay->drawHud(_preferences, _gameplayActive)) _pi.escape = true;
+		if (_overlay->drawHud(_preferences, _gameplayActive, _journalNotice, _contextHint,
+		                      noticeVisible ? _notice.text : std::string(), _notice.error))
+			_pi.escape = true;
 		_overlay->render();
 	}
 	SDL_RenderPresent(_renderer);
@@ -698,7 +763,8 @@ void SystemStub_SDL::updateScreen(int shakeOffset) {
 }
 
 void SystemStub_SDL::processEvents() {
-	bool paused = false;
+	pumpSilentAudio();
+	bool paused = _backgrounded || (_focusLost && _preferences.pauseOnFocusLoss);
 	while (true) {
 		SDL_Event ev;
 		while (SDL_PollEvent(&ev)) {
@@ -710,8 +776,14 @@ void SystemStub_SDL::processEvents() {
 		if (!paused) {
 			break;
 		}
-		SDL_Delay(100);
+		SDL_Event waiting;
+		if (SDL_WaitEventTimeout(&waiting, 100)) {
+			processEvent(waiting, paused);
+			if (_pi.quit)
+				return;
+		}
 	}
+	_input.publish(_pi, _preferences, _gameplayActive, SDL_GetTicks());
 }
 
 // only used for the protection codes and level passwords
@@ -732,18 +804,57 @@ static void setAsciiChar(PlayerInput &pi, const SDL_Keysym *key) {
 }
 
 void SystemStub_SDL::processEvent(const SDL_Event &raw, bool &paused) {
+	if (raw.type == SDL_AUDIODEVICEREMOVED && !raw.adevice.iscapture &&
+	    raw.adevice.which == _audioDevice) {
+		SDL_CloseAudioDevice(_audioDevice);
+		_audioDevice = 0;
+		_silentStamp = SDL_GetTicks();
+		_silentRemainder = 0;
+		notify("Audio device disconnected. Continuing silently until an output reconnects.", true);
+		return;
+	}
+	if (raw.type == SDL_AUDIODEVICEADDED && !raw.adevice.iscapture) {
+		openAudioOutput(false);
+		return;
+	}
 	if (raw.type == SDL_JOYDEVICEADDED || raw.type == SDL_CONTROLLERDEVICEADDED) { openInputDevice(); return; }
 	if (raw.type == SDL_JOYDEVICEREMOVED || raw.type == SDL_CONTROLLERDEVICEREMOVED) {
-		if (raw.jdevice.which == _inputDevice) { closeInputDevice(); openInputDevice(); }
+		if (raw.jdevice.which == _inputDevice) {
+			closeInputDevice();
+			if (_gameplayActive || _settingsSession) {
+				_controllerDisconnected = true;
+				notify(
+				    "Controller disconnected. Reconnect or use the keyboard; gameplay is paused.",
+				    true);
+				if (!_settingsSession) {
+					_input.clear(_pi);
+					_pauseRequested = true;
+				}
+			}
+			openInputDevice();
+		}
 		return;
 	}
 	if (raw.type == SDL_RENDER_DEVICE_RESET || raw.type == SDL_RENDER_TARGETS_RESET) { restoreTextures(); return; }
 	if (raw.type == SDL_APP_WILLENTERBACKGROUND || raw.type == SDL_APP_DIDENTERFOREGROUND) {
-		paused = raw.type == SDL_APP_WILLENTERBACKGROUND;
-		_pi.dirMask = 0; _pi.enter = _pi.shift = _pi.space = _pi.backspace = false;
+		_backgrounded = raw.type == SDL_APP_WILLENTERBACKGROUND;
+		_silentStamp = SDL_GetTicks();
+		_silentRemainder = 0;
+		paused = _backgrounded || (_focusLost && _preferences.pauseOnFocusLoss);
+		_input.clear(_pi);
 		if (_audioDevice) SDL_PauseAudioDevice(_audioDevice, paused);
 		return;
 	}
+
+	if (raw.type == SDL_JOYAXISMOTION || raw.type == SDL_JOYHATMOTION ||
+	    raw.type == SDL_JOYBUTTONDOWN || raw.type == SDL_JOYBUTTONUP) {
+		if (_controller || raw.jaxis.which != _inputDevice)
+			return;
+	}
+	if ((raw.type == SDL_CONTROLLERAXISMOTION || raw.type == SDL_CONTROLLERBUTTONDOWN ||
+	     raw.type == SDL_CONTROLLERBUTTONUP) &&
+	    raw.caxis.which != _inputDevice)
+		return;
 
 	if (_settingsSession && _overlay) {
 		_overlay->processEvent(raw, _settingsSession);
@@ -785,164 +896,56 @@ void SystemStub_SDL::processEvent(const SDL_Event &raw, bool &paused) {
 		switch (ev.window.event) {
 		case SDL_WINDOWEVENT_FOCUS_GAINED:
 		case SDL_WINDOWEVENT_FOCUS_LOST:
-			paused = (ev.window.event == SDL_WINDOWEVENT_FOCUS_LOST) && _preferences.pauseOnFocusLoss;
+			_focusLost = ev.window.event == SDL_WINDOWEVENT_FOCUS_LOST;
+			_silentStamp = SDL_GetTicks();
+			_silentRemainder = 0;
+			paused = _backgrounded || (_focusLost && _preferences.pauseOnFocusLoss);
 			if (_audioDevice) {
 				SDL_PauseAudioDevice(_audioDevice, paused);
 			}
 			if (ev.window.event == SDL_WINDOWEVENT_FOCUS_LOST) {
 				// Lost key-up events must not leave Conrad running on return.
-				_pi.dirMask = 0;
-				_pi.shift = _pi.enter = _pi.space = _pi.backspace = false;
+				_input.clear(_pi);
 			}
 			break;
 		}
 		break;
 	case SDL_JOYHATMOTION:
 		if (_joystick && ev.jhat.which == _inputDevice) {
-			_pi.dirMask = 0;
-			if (ev.jhat.value & SDL_HAT_UP) {
-				_pi.dirMask |= PlayerInput::DIR_UP;
-			}
-			if (ev.jhat.value & SDL_HAT_DOWN) {
-				_pi.dirMask |= PlayerInput::DIR_DOWN;
-			}
-			if (ev.jhat.value & SDL_HAT_LEFT) {
-				_pi.dirMask |= PlayerInput::DIR_LEFT;
-			}
-			if (ev.jhat.value & SDL_HAT_RIGHT) {
-				_pi.dirMask |= PlayerInput::DIR_RIGHT;
-			}
+			_input.hat(ev.jhat.value);
+			_input.publish(_pi, _preferences, _gameplayActive, SDL_GetTicks());
 		}
 		break;
 	case SDL_JOYAXISMOTION:
-		if (_joystick && ev.jaxis.which == _inputDevice) {
-			switch (ev.jaxis.axis) {
-			case 0:
-				_pi.dirMask &= ~(PlayerInput::DIR_RIGHT | PlayerInput::DIR_LEFT);
-				if (ev.jaxis.value > kJoystickCommitValue) {
-					_pi.dirMask |= PlayerInput::DIR_RIGHT;
-				} else if (ev.jaxis.value < -kJoystickCommitValue) {
-					_pi.dirMask |= PlayerInput::DIR_LEFT;
-				}
-				break;
-			case 1:
-				_pi.dirMask &= ~(PlayerInput::DIR_UP | PlayerInput::DIR_DOWN);
-				if (ev.jaxis.value > kJoystickCommitValue) {
-					_pi.dirMask |= PlayerInput::DIR_DOWN;
-				} else if (ev.jaxis.value < -kJoystickCommitValue) {
-					_pi.dirMask |= PlayerInput::DIR_UP;
-				}
-				break;
-			}
+		if (_joystick && ev.jaxis.which == _inputDevice && ev.jaxis.axis < 4) {
+			_input.axis(ev.jaxis.axis, ev.jaxis.value);
+			_input.publish(_pi, _preferences, _gameplayActive, SDL_GetTicks());
+		}
+		break;
+	case SDL_CONTROLLERAXISMOTION:
+		if (_controller && ev.caxis.which == _inputDevice &&
+		    ev.caxis.axis < SDL_CONTROLLER_AXIS_MAX) {
+			_input.axis(ev.caxis.axis, ev.caxis.value);
+			_input.publish(_pi, _preferences, _gameplayActive, SDL_GetTicks());
 		}
 		break;
 	case SDL_JOYBUTTONDOWN:
 	case SDL_JOYBUTTONUP:
 		if (_joystick && ev.jbutton.which == _inputDevice) {
-			const bool pressed = (ev.jbutton.state == SDL_PRESSED);
-			switch (ev.jbutton.button) {
-			case 0:
-				_pi.space = pressed;
-				break;
-			case 1:
-				_pi.shift = pressed;
-				break;
-			case 2:
-				_pi.enter = pressed;
-				break;
-			case 3:
-				_pi.backspace = pressed;
-				break;
-			case 9:
-				_pi.escape = pressed;
-			}
-		}
-		break;
-	case SDL_CONTROLLERAXISMOTION:
-		if (_controller && ev.caxis.which == _inputDevice) {
-			switch (ev.caxis.axis) {
-			case SDL_CONTROLLER_AXIS_LEFTX:
-			case SDL_CONTROLLER_AXIS_RIGHTX:
-				if (ev.caxis.value < -kJoystickCommitValue) {
-					_pi.dirMask |= PlayerInput::DIR_LEFT;
-				} else {
-					_pi.dirMask &= ~PlayerInput::DIR_LEFT;
-				}
-				if (ev.caxis.value > kJoystickCommitValue) {
-					_pi.dirMask |= PlayerInput::DIR_RIGHT;
-				} else {
-					_pi.dirMask &= ~PlayerInput::DIR_RIGHT;
-				}
-				break;
-			case SDL_CONTROLLER_AXIS_LEFTY:
-			case SDL_CONTROLLER_AXIS_RIGHTY:
-				if (ev.caxis.value < -kJoystickCommitValue) {
-					_pi.dirMask |= PlayerInput::DIR_UP;
-				} else {
-					_pi.dirMask &= ~PlayerInput::DIR_UP;
-				}
-				if (ev.caxis.value > kJoystickCommitValue) {
-					_pi.dirMask |= PlayerInput::DIR_DOWN;
-				} else {
-					_pi.dirMask &= ~PlayerInput::DIR_DOWN;
-				}
-				break;
-			}
+			_input.button(ev.jbutton.button, ev.jbutton.state == SDL_PRESSED, true);
+			_input.publish(_pi, _preferences, _gameplayActive, SDL_GetTicks());
 		}
 		break;
 	case SDL_CONTROLLERBUTTONDOWN:
 	case SDL_CONTROLLERBUTTONUP:
 		if (_controller && ev.cbutton.which == _inputDevice) {
-			const bool pressed = (ev.cbutton.state == SDL_PRESSED);
-			switch (ev.cbutton.button) {
-			case SDL_CONTROLLER_BUTTON_A:
-				_pi.enter = pressed;
-				break;
-			case SDL_CONTROLLER_BUTTON_B:
-				_pi.space = pressed;
-				break;
-			case SDL_CONTROLLER_BUTTON_X:
-				_pi.shift = pressed;
-				break;
-			case SDL_CONTROLLER_BUTTON_Y:
-				_pi.backspace = pressed;
-				break;
-			case SDL_CONTROLLER_BUTTON_BACK:
-			case SDL_CONTROLLER_BUTTON_START:
-				_pi.escape = pressed;
-				break;
-			case SDL_CONTROLLER_BUTTON_DPAD_UP:
-				if (pressed) {
-					_pi.dirMask |= PlayerInput::DIR_UP;
-				} else {
-					_pi.dirMask &= ~PlayerInput::DIR_UP;
-				}
-				break;
-			case SDL_CONTROLLER_BUTTON_DPAD_DOWN:
-				if (pressed) {
-					_pi.dirMask |= PlayerInput::DIR_DOWN;
-				} else {
-					_pi.dirMask &= ~PlayerInput::DIR_DOWN;
-				}
-				break;
-			case SDL_CONTROLLER_BUTTON_DPAD_LEFT:
-				if (pressed) {
-					_pi.dirMask |= PlayerInput::DIR_LEFT;
-				} else {
-					_pi.dirMask &= ~PlayerInput::DIR_LEFT;
-				}
-				break;
-			case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:
-				if (pressed) {
-					_pi.dirMask |= PlayerInput::DIR_RIGHT;
-				} else {
-					_pi.dirMask &= ~PlayerInput::DIR_RIGHT;
-				}
-				break;
-			}
+			_input.button(ev.cbutton.button, ev.cbutton.state == SDL_PRESSED, false);
+			_input.publish(_pi, _preferences, _gameplayActive, SDL_GetTicks());
 		}
 		break;
 	case SDL_KEYUP:
+		_input.key(raw.key.keysym.scancode, SDLK_UNKNOWN, false);
+		_input.publish(_pi, _preferences, _gameplayActive, SDL_GetTicks());
 		if (ev.key.keysym.mod & KMOD_ALT) {
 			switch (ev.key.keysym.sym) {
 			case SDLK_RETURN:
@@ -1012,35 +1015,6 @@ void SystemStub_SDL::processEvent(const SDL_Event &raw, bool &paused) {
 		}
 		setAsciiChar(_pi, &raw.key.keysym);
 		switch (ev.key.keysym.sym) {
-		case SDLK_LEFT:
-		case SDLK_KP_4:
-			_pi.dirMask &= ~PlayerInput::DIR_LEFT;
-			break;
-		case SDLK_RIGHT:
-		case SDLK_KP_6:
-			_pi.dirMask &= ~PlayerInput::DIR_RIGHT;
-			break;
-		case SDLK_UP:
-		case SDLK_KP_8:
-			_pi.dirMask &= ~PlayerInput::DIR_UP;
-			break;
-		case SDLK_DOWN:
-		case SDLK_KP_2:
-			_pi.dirMask &= ~PlayerInput::DIR_DOWN;
-			break;
-		case SDLK_SPACE:
-			_pi.space = false;
-			break;
-		case SDLK_RSHIFT:
-		case SDLK_LSHIFT:
-			_pi.shift = false;
-			break;
-		case SDLK_RETURN:
-			_pi.enter = false;
-			break;
-		case SDLK_ESCAPE:
-			_pi.escape = false;
-			break;
 		case SDLK_F1:
 		case SDLK_F2:
 		case SDLK_F3:
@@ -1059,43 +1033,8 @@ void SystemStub_SDL::processEvent(const SDL_Event &raw, bool &paused) {
 		if (ev.key.keysym.mod & (KMOD_ALT | KMOD_CTRL)) {
 			break;
 		}
-		switch (ev.key.keysym.sym) {
-		case SDLK_LEFT:
-		case SDLK_KP_4:
-			_pi.dirMask |= PlayerInput::DIR_LEFT;
-			break;
-		case SDLK_RIGHT:
-		case SDLK_KP_6:
-			_pi.dirMask |= PlayerInput::DIR_RIGHT;
-			break;
-		case SDLK_UP:
-		case SDLK_KP_8:
-			_pi.dirMask |= PlayerInput::DIR_UP;
-			break;
-		case SDLK_DOWN:
-		case SDLK_KP_2:
-			_pi.dirMask |= PlayerInput::DIR_DOWN;
-			break;
-		case SDLK_BACKSPACE:
-		case SDLK_TAB:
-			_pi.backspace = true;
-			break;
-		case SDLK_SPACE:
-			_pi.space = true;
-			break;
-		case SDLK_RSHIFT:
-		case SDLK_LSHIFT:
-			_pi.shift = true;
-			break;
-		case SDLK_RETURN:
-			_pi.enter = true;
-			break;
-		case SDLK_ESCAPE:
-			_pi.escape = true;
-			break;
-		default:
-			break;
-		}
+		_input.key(raw.key.keysym.scancode, ev.key.keysym.sym, true);
+		_input.publish(_pi, _preferences, _gameplayActive, SDL_GetTicks());
 		break;
 	default:
 		break;
@@ -1104,6 +1043,7 @@ void SystemStub_SDL::processEvent(const SDL_Event &raw, bool &paused) {
 
 void SystemStub_SDL::sleep(int duration) {
 	SDL_Delay(duration);
+	pumpSilentAudio();
 }
 
 uint32_t SystemStub_SDL::getTimeStamp() {
@@ -1119,30 +1059,67 @@ static void mixAudioS16(void *param, uint8_t *buf, int len) {
 
 void SystemStub_SDL::startAudio(AudioCallback callback, void *param) {
 	stopAudio();
-	SDL_AudioSpec desired;
-	memset(&desired, 0, sizeof(desired));
-	desired.freq = _options.outputSampleRate;
-	desired.format = AUDIO_S16SYS;
-	desired.channels = 2;
-	// Approximately 23 ms at the requested rate, rounded to a power of two.
-	// The simulation clock is independent of this device buffer size.
-	desired.samples = 256;
-	while (desired.samples < desired.freq / 43 && desired.samples < 4096) {
-		desired.samples *= 2;
-	}
-	desired.callback = mixAudioS16;
-	desired.userdata = this;
-	SDL_AudioSpec obtained = {};
 	_audioCbProc = callback;
 	_audioCbData = param;
-	_audioDevice =
-	    SDL_OpenAudioDevice(nullptr, 0, &desired, &obtained, SDL_AUDIO_ALLOW_FREQUENCY_CHANGE);
+	_outputSampleRate = _options.outputSampleRate;
+	_silentStamp = SDL_GetTicks();
+	_silentRemainder = 0;
+	openAudioOutput(true);
+}
+void SystemStub_SDL::openAudioOutput(bool initial) {
+	if (_audioDevice || !_audioCbProc)
+		return;
+	SDL_AudioSpec desired{};
+	desired.freq = _outputSampleRate;
+	desired.format = AUDIO_S16SYS;
+	desired.channels = 2;
+	desired.samples = 256;
+	while (desired.samples < desired.freq / 43 && desired.samples < 4096)
+		desired.samples *= 2;
+	desired.callback = mixAudioS16;
+	desired.userdata = this;
+	SDL_AudioSpec obtained{};
+	_audioDevice = SDL_OpenAudioDevice(nullptr, 0, &desired, &obtained,
+	                                   initial ? SDL_AUDIO_ALLOW_FREQUENCY_CHANGE : 0);
 	if (!_audioDevice) {
-		error("Unable to open sound device: %s", SDL_GetError());
+		warning("Audio output unavailable: %s", SDL_GetError());
+		notify(
+		    "Audio output unavailable. Continuing silently; reconnect an output device to retry.",
+		    true);
+		_silentStamp = SDL_GetTicks();
+		return;
 	}
+	// An already running mixer keeps its negotiated rate when outputs change.
+	// Reopening at a different rate would change voice/music duration mid-track.
 	_outputSampleRate = obtained.freq;
+	_silentRemainder = 0;
+	SDL_PauseAudioDevice(_audioDevice,
+	                     _backgrounded || (_focusLost && _preferences.pauseOnFocusLoss));
+	if (!initial)
+		notify("Audio output reconnected.");
 	info("Audio output: %d Hz, stereo, %d frames", obtained.freq, obtained.samples);
-	SDL_PauseAudioDevice(_audioDevice, 0);
+}
+void SystemStub_SDL::pumpSilentAudio() {
+	const uint32_t now = SDL_GetTicks();
+	const unsigned elapsed = std::min<uint32_t>(now - _silentStamp, 250);
+	_silentStamp = now;
+	if (_audioDevice || !_audioCbProc || _backgrounded ||
+	    (_focusLost && _preferences.pauseOnFocusLoss)) {
+		_silentRemainder = 0;
+		return;
+	}
+	_silentRemainder += uint64_t(elapsed) * _outputSampleRate;
+	unsigned frames = unsigned(_silentRemainder / 1000);
+	_silentRemainder %= 1000;
+	// No device thread exists in this mode. Advance the same callback on the main
+	// thread with a bounded scratch buffer so voice/dialogue can finish normally.
+	int16_t discard[512 * 2]{};
+	while (frames) {
+		const unsigned count = std::min(frames, 512u);
+		std::fill_n(discard, count * 2, 0);
+		_audioCbProc(_audioCbData, discard, count);
+		frames -= count;
+	}
 }
 
 void SystemStub_SDL::stopAudio() {
@@ -1270,13 +1247,25 @@ void SystemStub_SDL::cleanupGraphics() {
 }
 
 void SystemStub_SDL::readPreferences(settings::Preferences &p) const {
-    p.fullscreen = _fullscreen;
-    p.vsync = _preferences.vsync;
-    p.pauseOnFocusLoss = _preferences.pauseOnFocusLoss;
-    p.showFps = _preferences.showFps;
-    p.showMenuButton = _preferences.showMenuButton;
-    p.menuLayout = _preferences.menuLayout;
-    p.uiScale = _preferences.uiScale;
+	p.inputBuffer = _preferences.inputBuffer;
+	p.reduceBlink = _preferences.reduceBlink;
+	p.stickyAction = _preferences.stickyAction;
+	p.reduceShake = _preferences.reduceShake;
+	p.gameSpeed = _preferences.gameSpeed;
+	p.objectivesNotebook = _preferences.objectivesNotebook;
+	p.padButtons = _preferences.padButtons;
+	p.joystickButtons = _preferences.joystickButtons;
+	p.stickDeadzone = _preferences.stickDeadzone;
+	p.rightStickMovement = _preferences.rightStickMovement;
+	p.storyJournal = _preferences.storyJournal;
+	p.journalNotifications = _preferences.journalNotifications;
+	p.fullscreen = _fullscreen;
+	p.vsync = _preferences.vsync;
+	p.pauseOnFocusLoss = _preferences.pauseOnFocusLoss;
+	p.showFps = _preferences.showFps;
+	p.showMenuButton = _preferences.showMenuButton;
+	p.menuLayout = _preferences.menuLayout;
+	p.uiScale = _preferences.uiScale;
     p.keys = _preferences.keys;
     p.filter = _scalerType == kScalerTypePoint ? settings::Filter::Point :
                _scalerType == kScalerTypeLinear ? settings::Filter::Linear : settings::Filter::Scale;
@@ -1351,9 +1340,15 @@ bool SystemStub_SDL::applyPreferences(const settings::Preferences &p, std::strin
         if (!_fullscreen) SDL_SetWindowSize(_window, _logicalW, _logicalH);
         SDL_RenderSetLogicalSize(_renderer, _settingsSession ? 0 : _logicalW, _settingsSession ? 0 : _logicalH);
     }
-    _preferences = p;
-    reason.clear();
-    return true;
+	if (_preferences.inputBuffer != p.inputBuffer || _preferences.stickyAction != p.stickyAction ||
+	    _preferences.keys != p.keys || _preferences.padButtons != p.padButtons ||
+	    _preferences.joystickButtons != p.joystickButtons ||
+	    _preferences.stickDeadzone != p.stickDeadzone ||
+	    _preferences.rightStickMovement != p.rightStickMovement)
+		_input.clear(_pi);
+	_preferences = p;
+	reason.clear();
+	return true;
 }
 
 SDL_Keycode SystemStub_SDL::remapKey(const SDL_KeyboardEvent &event) const {
@@ -1379,19 +1374,32 @@ SDL_Keycode SystemStub_SDL::remapKey(const SDL_KeyboardEvent &event) const {
 
 void SystemStub_SDL::showSettings(settings::Session &s) {
     auto applied = s.values;
-    _settingsSession = &s;
-    _pi.dirMask = 0;
-    _pi.enter = _pi.shift = _pi.space = _pi.backspace = _pi.escape = false;
-    SDL_RenderSetLogicalSize(_renderer, 0, 0);
-    _overlay->open(s.values);
-    while (!_pi.quit && s.action != settings::Action::Resume && s.action != settings::Action::Title && s.action != settings::Action::Quit) {
-        processEvents();
-        if (_pi.quit) break;
-        _overlay->beginFrame(s.values);
-        _overlay->draw(s);
-        SDL_RenderSetLogicalSize(_renderer, _logicalW, _logicalH);
-        drawGameFrame(0);
-        SDL_RenderSetLogicalSize(_renderer, 0, 0);
+	unsigned generation = _inputGeneration;
+	_settingsSession = &s;
+	_input.clear(_pi);
+	SDL_RenderSetLogicalSize(_renderer, 0, 0);
+	_overlay->open(s.values);
+	while (!_pi.quit && s.action != settings::Action::Resume &&
+	       s.action != settings::Action::Title && s.action != settings::Action::Quit) {
+		const uint32_t uiStart = SDL_GetTicks();
+		processEvents();
+		if (_pi.quit)
+			break;
+		s.audioAvailable = audioOutputAvailable();
+		s.controllerStyle = controllerLabelStyle();
+		s.controllerName = _controllerName;
+		s.controllerProfile = _controllerProfile;
+		s.controllerDisconnected = _controllerDisconnected;
+		if (generation != _inputGeneration) {
+			controller::copyBindings(s.values, _preferences);
+			controller::copyBindings(applied, _preferences);
+			generation = _inputGeneration;
+		}
+		_overlay->beginFrame(s.values);
+		_overlay->draw(s);
+		SDL_RenderSetLogicalSize(_renderer, _logicalW, _logicalH);
+		drawGameFrame(0);
+		SDL_RenderSetLogicalSize(_renderer, 0, 0);
         _overlay->render();
         SDL_RenderPresent(_renderer);
         if (s.applyRequested) {
@@ -1409,8 +1417,17 @@ void SystemStub_SDL::showSettings(settings::Session &s) {
         }
         if (s.saveRequested) {
             s.statusError = !s.persist || !s.persist(applied, s.status);
-            s.saveRequested = false;
-        }
+			if (!s.statusError) {
+				// A newly seen device inherits the last saved global bindings.
+				controller::copyBindings(_inputDefaults, applied);
+				if (!controller::save(_controllerProfile, applied, s.status))
+					s.statusError = true;
+			}
+			if (!s.statusError)
+				s.status = "Settings and connected controller profile saved.";
+			notify(s.status, s.statusError);
+			s.saveRequested = false;
+		}
         if (s.cheatsRequested) {
             if (s.applyCheats) s.applyCheats(s.cheats, s.debugFlags);
             s.cheatsRequested = false;
@@ -1421,22 +1438,35 @@ void SystemStub_SDL::showSettings(settings::Session &s) {
             if (s.refreshSaves) s.refreshSaves();
             s.refreshRequested = false;
         }
-        if (s.action == settings::Action::SaveGame || s.action == settings::Action::LoadGame ||
-            s.action == settings::Action::Rewind || s.action == settings::Action::Heal ||
-            s.action == settings::Action::Screenshot || s.action == settings::Action::StartLevel) {
-            const auto command = s.action;
-            const int slot = s.commandSlot >= 0 ? s.commandSlot : s.saveSlot;
-            s.commandSlot = -1;
-            const bool success = s.command && s.command(command, slot, s.status);
-            s.statusError = !success;
-            const bool resume = command == settings::Action::LoadGame || command == settings::Action::Rewind || command == settings::Action::StartLevel;
-            s.action = success && resume ? settings::Action::Resume : settings::Action::None;
-        }
-        SDL_Delay(16);
-    }
-    _settingsSession = nullptr;
-    SDL_RenderSetLogicalSize(_renderer, _logicalW, _logicalH);
-    SDL_ShowCursor(SDL_DISABLE);
+		if (s.action == settings::Action::SaveGame || s.action == settings::Action::LoadGame ||
+		    s.action == settings::Action::UpdateSaveDetails ||
+		    s.action == settings::Action::Rewind || s.action == settings::Action::Heal ||
+		    s.action == settings::Action::Screenshot || s.action == settings::Action::StartLevel ||
+		    s.action == settings::Action::ContinueLatest ||
+		    s.action == settings::Action::LoadAutosave) {
+			const auto command = s.action;
+			const int slot = s.commandSlot >= 0 ? s.commandSlot : s.saveSlot;
+			s.commandSlot = -1;
+			const bool success = s.command && s.command(command, slot, s.status);
+			s.statusError = !success;
+			notify(s.status, !success);
+			const bool resume = command == settings::Action::LoadGame ||
+			                    command == settings::Action::Rewind ||
+			                    command == settings::Action::StartLevel ||
+			                    command == settings::Action::ContinueLatest ||
+			                    command == settings::Action::LoadAutosave;
+			s.action = success && resume ? settings::Action::Resume : settings::Action::None;
+		}
+		const uint32_t spent = SDL_GetTicks() - uiStart;
+		if (spent < 16)
+			SDL_Delay(16 - spent);
+	}
+	_settingsSession = nullptr;
+	_controllerDisconnected = false;
+	_pauseRequested = false;
+	_input.clear(_pi);
+	SDL_RenderSetLogicalSize(_renderer, _logicalW, _logicalH);
+	SDL_ShowCursor(SDL_DISABLE);
 }
 
 void SystemStub_SDL::changeGraphics(bool fullscreen, int scaleFactor) {
@@ -1505,7 +1535,8 @@ void SystemStub_SDL::setScaler(const ScalerParameters *parameters) {
 			}
 		}
 	}
-	_scaleFactor = _scaler ? CLIP(parameters->factor, _scaler->factorMin, _scaler->factorMax) : parameters->factor;
+	_scaleFactor = _scaler ? CLIP(parameters->factor, _scaler->factorMin, _scaler->factorMax)
+	                       : CLIP(parameters->factor, 1, 6);
 }
 
 void SystemStub_SDL::changeScaler(int scalerNum) {

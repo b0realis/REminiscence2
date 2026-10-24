@@ -128,6 +128,8 @@ struct Resource {
 
 	FileSystem *_fs;
 	ResourceType _type;
+	uint32_t _aniSize = 0, _levSize = 0, _sgdSize = 0;
+	bool validStateActor(const uint8_t *actor, unsigned skill) const;
 	uint32_t _spr1Size, _sprDataSizes[NUM_SPRITES];
  uint32_t _mbkSize, _bnqSize;
 	Language _lang;
@@ -233,7 +235,7 @@ struct Resource {
 	void load_OBJ(File *pf);
 	void free_OBJ();
 	void load_OBC(File *pf);
-	void decodeOBJ(const uint8_t *, int);
+	void decodeOBJ(const uint8_t *, int, unsigned count = 230);
 	void load_PGE(File *pf);
 	void decodePGE(const uint8_t *, int);
 	void load_ANI(File *pf);

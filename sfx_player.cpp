@@ -36,8 +36,9 @@ SfxPlayer::SfxPlayer(Mixer *mixer)
 
 void SfxPlayer::play(uint8_t num) {
 	debug(DBG_SFX, "SfxPlayer::play(%d)", num);
-	if (!_playing) {
-		assert(num >= 68 && num <= 75);
+	if (!_mix->hasPremixHook(this)) {
+		if (num < 68 || num > 75)
+			return;
 		static const Module *modTable[] = {
 			&_module68, &_module68, &_module70, &_module70,
 			&_module72, &_module73, &_module74, &_module75,
@@ -49,6 +50,7 @@ void SfxPlayer::play(uint8_t num) {
 		_modData = _mod->moduleData + 0x22;
 		memset(_samples, 0, sizeof(_samples));
 		_samplesLeft = 0;
+		_tickRemainder = 0;
 		_mix->setPremixHook(mixCallback, this);
 		_playing = true;
 		if (kLowPassFilter) {
@@ -59,14 +61,13 @@ void SfxPlayer::play(uint8_t num) {
 }
 
 void SfxPlayer::stop() {
-	if (_playing) {
-		_mix->setPremixHook(0, 0);
-		_playing = false;
-	}
+	_mix->clearPremixHook(this);
+	_playing = false;
 }
 
 void SfxPlayer::playSample(int channel, const uint8_t *sampleData, uint16_t period) {
-	assert(channel < NUM_CHANNELS);
+	if (channel < 0 || channel >= NUM_CHANNELS || !sampleData || !period)
+		return;
 	SampleInfo *si = &_samples[channel];
 	si->len = READ_BE_UINT16(sampleData); sampleData += 2;
 	si->vol = READ_BE_UINT16(sampleData); sampleData += 2;
@@ -167,11 +168,12 @@ void SfxPlayer::mixSamples(int16_t *buf, int samplesLen) {
 bool SfxPlayer::mix(int16_t *buf, int len) {
 	memset(buf, 0, sizeof(int16_t) * len * 2); // stereo
 	if (_playing) {
-		const int samplesPerTick = _mix->getSampleRate() / 50;
 		while (len != 0) {
 			if (_samplesLeft == 0) {
 				handleTick();
-				_samplesLeft = samplesPerTick;
+				_tickRemainder += _mix->getSampleRate();
+				_samplesLeft = _tickRemainder / 50;
+				_tickRemainder %= 50;
 			}
 			int count = _samplesLeft;
 			if (count > len) {

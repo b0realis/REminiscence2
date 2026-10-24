@@ -12,6 +12,7 @@
 void Game::configurePreferences(const settings::Preferences &preferences) {
 	_preferences = preferences;
 	_vid._conradShirt = preferences.conradShirt;
+	_stub->setInputProfileDirectory(_savePath);
 	_stub->configurePreferences(preferences);
 	_preferences.applyCompatibility(g_options);
 	_autoSave = preferences.rewind;
@@ -23,6 +24,12 @@ void Game::configurePreferences(const settings::Preferences &preferences) {
 bool Game::applyPreferences(const settings::Preferences &preferences, std::string &reason) {
 	if (!settings::validate(preferences, reason) || !_stub->applyPreferences(preferences, reason)) {
 		return false;
+	}
+	if (!_preferences.contextualHints && preferences.contextualHints)
+		_hints = {};
+	if (_preferences.diskAutosave != preferences.diskAutosave) {
+		_persistentDue = true;
+		_nextPersistentAttempt = 0;
 	}
 	const bool redrawSides = _widescreenMode != preferences.widescreen;
 	const bool redrawShirt = _preferences.conradShirt != preferences.conradShirt;
@@ -83,6 +90,9 @@ bool Game::startSettingsLevel(int level, int skill, std::string &reason) {
 	_currentLevel = _menu._level = level;
 	_skillLevel = _menu._skill = skill;
 	_score = 0;
+	_journal = {};
+	_hints = {};
+	_playTicks = _lastPersistentTick = 0;
 	loadLevelData();
 	resetGameState();
 	_pge_opGunVar = 0;
@@ -96,8 +106,20 @@ bool Game::startSettingsLevel(int level, int skill, std::string &reason) {
 	return true;
 }
 
-bool Game::handleConfigPanel() {
+bool Game::handleConfigPanel(bool recovery) {
 	settings::Session session;
+	session.startup = _startupMenu;
+	session.recovery = recovery;
+	session.browseLevel = _currentLevel;
+	session.autosaves = progress::scan(_savePath, _res._type);
+	for (int age = 0; age < _rewindLen; ++age) {
+		const auto &record = _rewindRecords[(_rewindPtr - age + kRewindSize) % kRewindSize];
+		session.rewindPoints.push_back({record.preview, unsigned((_playTicks - record.tick) / 30),
+		                                record.room, record.health});
+	}
+	session.journalEntries = _journal.entries();
+	session.objectives = journal::objectives(_journal, _currentLevel);
+	session.readJournalEntry = [&](unsigned id) { _journal.markRead(id); };
 	session.values = _preferences;
 	session.values.readCompatibility(g_options);
 	// The legacy bool cannot express the explicit Red/Pink choice.
@@ -132,6 +154,24 @@ bool Game::handleConfigPanel() {
 	session.saveSlot = _stateSlot;
 	session.outputRate = _stub->getOutputSampleRate();
 	session.audioBackend = _settingsAudioBackend;
+	session.lastSaveMs = _lastDiskSaveMs;
+	session.worstSaveMs = _worstDiskSaveMs;
+	session.diagnostics.push_back("Detected assets: " + session.edition + " / " + session.language);
+	session.diagnostics.push_back("Saves and profiles: " + std::string(_savePath));
+	session.diagnostics.push_back("Voice source: " +
+	                              std::string(_res.fileExists("VOICE.VCE")
+	                                              ? "VOICE.VCE found"
+												  : "No VOICE.VCE in this asset set (optional)"));
+	session.diagnostics.push_back(
+	    "Cutscenes: " + std::string(_res._hasSeqData
+	                                    ? "PC CD SEQ replacements available"
+										: "Original polygon scenes / available edition resources"));
+	session.diagnostics.push_back(
+	    "State preflight: edition, level, actor scripts, animation and gameplay fingerprint");
+	for (int i = 0; i < 7; ++i)
+		session.diagnostics.push_back(
+		    "Level " + std::to_string(i + 1) + ": " +
+		    (session.levelAvailable[i] ? "primary resources found" : "not found in these assets"));
 	session.canSave = _res._pgeNum && _pgeLive[0].life > 0 && !_deathCutsceneCounter;
 	session.canRewind = _rewindLen > 0;
 	session.apply = [&](const settings::Preferences &p, std::string &reason) {
@@ -147,10 +187,21 @@ bool Game::handleConfigPanel() {
 		char name[40];
 		makeGameStateName(slot, name, sizeof(name));
 		File file;
-		return file.open(name, "rb", _savePath);
+		return file.open(name, "rb", _savePath) ||
+		       file.open(saves::name(-1, _currentLevel, slot).c_str(), "rb", _savePath);
 	};
-	session.refreshSaves = [&] { session.saves = saves::scan(_savePath, _currentLevel); };
+	session.refreshSaves = [&] {
+		session.saves = saves::scanAll(_savePath, _res._type);
+		session.autosaves = progress::scan(_savePath, _res._type);
+		session.autosaveIndex = std::min<int>(session.autosaveIndex,
+		                                      std::max<int>(0, int(session.autosaves.size()) - 1));
+	};
 	session.refreshSaves();
+	for (const auto &info : session.saves)
+		if (info.level == session.browseLevel && info.slot == session.saveSlot) {
+			snprintf(session.saveName.data(), session.saveName.size(), "%s", info.label.c_str());
+			session.protectSave = info.protectedSave;
+		}
 	session.applyCheats = [&](uint32_t cheats, uint8_t flags) {
 		_cheats = cheats & (kCheatOneHitKill | kCheatNoHit | kCheatLifeCounter);
 		if (!_res.isDOS())
@@ -159,6 +210,23 @@ bool Game::handleConfigPanel() {
 		                              PlayerInput::DF_SETLIFE | PlayerInput::DF_AUTOZOOM);
 	};
 	session.command = [&](settings::Action action, int slot, std::string &message) {
+		if (action == settings::Action::ContinueLatest)
+			return continueLatest(message);
+		if (action == settings::Action::LoadAutosave) {
+			if (session.autosaveIndex < 0 ||
+			    size_t(session.autosaveIndex) >= session.autosaves.size()) {
+				message = "No autosave selected.";
+				return false;
+			}
+			return loadPersistent(session.autosaves[session.autosaveIndex], message);
+		}
+		if (action == settings::Action::Rewind) {
+			const bool loaded = loadStateRewind(session.rewindIndex);
+			if (loaded)
+				refreshRestoredFrame();
+			message = loaded ? "Rewind restored." : "No rewind snapshot is available.";
+			return loaded;
+		}
 		if (action == settings::Action::StartLevel)
 			return startSettingsLevel(session.targetLevel, session.targetSkill, message);
 		if (action == settings::Action::Screenshot) {
@@ -187,6 +255,16 @@ bool Game::handleConfigPanel() {
 			message = "Health restored.";
 			return true;
 		}
+		if (action == settings::Action::UpdateSaveDetails) {
+			const bool saved =
+			    progress::updateManual(_savePath, _res._type, session.browseLevel, slot,
+				                       session.saveName.data(), session.protectSave, message);
+			if (saved) {
+				message = "Save name and protection updated.";
+				session.refreshSaves();
+			}
+			return saved;
+		}
 		if (slot < 0 || slot > 99 ||
 		    (action == settings::Action::SaveGame && (!session.canSave || slot == 0))) {
 			message = "Choose a manual slot from 1 to 99 while Conrad is alive.";
@@ -195,28 +273,31 @@ bool Game::handleConfigPanel() {
 		if (slot > 0)
 			_stateSlot = slot;
 		if (action == settings::Action::SaveGame) {
-			const bool saved = saveGameState(slot);
-			if (saved)
-				_validSaveState = true;
+			if (session.browseLevel != _currentLevel) {
+				message =
+				    "Choose the current level to save; other levels can be browsed and loaded.";
+				return false;
+			}
+			const bool saved =
+			    saveManualState(slot, session.saveName.data(), session.protectSave, message);
+			_stub->notify(saved ? "Game saved." : message, !saved);
 			if (saved && g_options.play_gamesaved_sound) {
 				_mix.play(Resource::_gameSavedSoundData, Resource::_gameSavedSoundLen, 8000,
 				          Mixer::MAX_VOLUME);
 			}
-			message = saved ? "Game saved in slot " + std::to_string(slot) + '.'
-			                : "Could not save the game. Check the save directory.";
+			if (saved)
+				message = "Game saved in slot " + std::to_string(slot) + '.';
+			else if (message.empty())
+				message = "Could not save the game. Check the save directory.";
 			if (saved)
 				session.refreshSaves();
+			session.lastSaveMs = _lastDiskSaveMs;
+			session.worstSaveMs = _worstDiskSaveMs;
 			return saved;
 		}
 		if (action == settings::Action::LoadGame) {
-			const bool loaded = loadGameState(slot);
-			message = loaded ? "Game loaded."
-			                 : "Could not load this level/slot. Check the save file and version.";
-			return loaded;
-		}
-		if (action == settings::Action::Rewind) {
-			const bool loaded = _rewindLen && loadStateRewind();
-			message = loaded ? "Rewind restored." : "No rewind snapshot is available.";
+			const bool loaded = loadManualState(session.browseLevel, slot, message);
+			_stub->notify(message, !loaded);
 			return loaded;
 		}
 		return false;

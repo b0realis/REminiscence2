@@ -2,8 +2,48 @@
 
 # REminiscence2 screenshots
 
-Gameplay and menu captures from REminiscence2 `0.1.0-dev` with player-supplied
-Amiga assets. Select an image to view its full resolution.
+Select an image to view its full resolution. The new sections use synthetic
+session data and original preview patterns; the older gameplay captures below
+were made with player-supplied Amiga assets in `0.1.0-dev`.
+
+## Recovery, manual milestones and objectives (1.10)
+
+Verified production-overlay captures with synthetic save metadata and original
+color grids. Actual play captures the player's game frame in each preview.
+Native recovery places the three main actions above expandable preview details;
+all pages retain their fixed footer and scroll when necessary.
+
+![Recovery choices and previews](qol-recovery-1.10.png)
+![Native recovery](qol-native-recovery-1.10.png)
+![Cross-level manual browser and protected milestone](qol-manual-browser-1.10.png)
+![Native manual browser](qol-native-manual-browser-1.10.png)
+![Objectives notebook with folded hint](qol-objectives-1.10.png)
+![Native objectives notebook](qol-native-objectives-1.10.png)
+
+## Continue, autosaves and rewind (1.08)
+
+Production-overlay captures with synthetic data and an original color-grid
+preview, without commercial artwork. During actual play the preview is the
+captured game frame. Native views use scrolling content and keep EXIT GAME
+visible; the welcome screen offers New game in the other footer button.
+
+![Welcome-back Continue](qol-welcome-1.08.png)
+![Persistent autosave generations](qol-autosaves-1.08.png)
+![Rewind timeline](qol-rewind-1.08.png)
+![Native welcome](qol-native-welcome-1.08.png)
+![Native autosaves](qol-native-autosaves-1.08.png)
+![Native rewind](qol-native-rewind-1.08.png)
+
+## Joypad and journal (1.07)
+
+Production-overlay captures using synthetic session data, without game artwork.
+The smaller views are the actual 256×224 layout, with scrolling content and
+permanently visible Resume / EXIT GAME controls.
+
+![Joypad mappings and stick settings](qol-joypad-1.07.png)
+![Optional story journal](qol-journal-1.07.png)
+![Native joypad page](qol-native-joypad-1.07.png)
+![Native journal page](qol-native-journal-1.07.png)
 
 ## High-resolution QoL menu
 

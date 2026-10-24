@@ -50,7 +50,7 @@ def verify_files(directory):
         if path.suffix != '.apk' and 'source' not in path.name:
             if any('/assets/' in n and not n.endswith(('/assets/', '/assets/README.txt')) for n in names):
                 raise RuntimeError('Original game data must not be bundled in assets')
-        if any('/.local/' in n.lower() or n.lower().endswith(('.lha', '.state', '.p12', '.jks', '.pem')) for n in names):
+        if any('/.local/' in n.lower() or n.lower().endswith(('.lha', '.state', '.r2s', '.r2m', '.p12', '.jks', '.pem')) for n in names):
             raise RuntimeError('Private game data or signing material in archive')
     return sorted(directory.iterdir())
 
@@ -89,7 +89,7 @@ def main():
         if output('git','rev-list','-n','1',tag) != revision: raise RuntimeError('Existing tag points to a different commit')
     else: subprocess.run(['git','tag','-a',tag,'-m',f'REminiscence2 {VERSION} preview release',revision],cwd=ROOT,check=True)
     subprocess.run(['git','push','origin','refs/tags/'+tag],cwd=ROOT,check=True)
-    subprocess.run(['gh','release','create',tag,'--repo',REPOSITORY,'--verify-tag','--title',f'REminiscence2 {VERSION} — first multiplatform preview','--notes-file',str(args.notes.resolve()),'--prerelease',*[str(p) for p in files],str(sums)],cwd=ROOT,check=True)
+    subprocess.run(['gh','release','create',tag,'--repo',REPOSITORY,'--verify-tag','--title',f'REminiscence2 {VERSION} — multiplatform preview','--notes-file',str(args.notes.resolve()),'--prerelease',*[str(p) for p in files],str(sums)],cwd=ROOT,check=True)
     print('Published https://github.com/'+REPOSITORY+'/releases/tag/'+tag)
 
 if __name__ == '__main__': main()

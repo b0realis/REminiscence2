@@ -65,7 +65,7 @@ def check(root: Path) -> list[str]:
                 problems.append("packaging/public-docs.json must match tracked docs paths")
             for name in tracked:
                 first = name.split("/", 1)[0]
-                if first in (".local", "build") or first.startswith("build-"):
+                if first in (".local", "build") or first.startswith("build-") or name.lower().endswith((".state", ".r2s", ".r2m")):
                     problems.append(f"Private/generated path is tracked: {name}")
     return problems
 

@@ -24,6 +24,8 @@ struct File {
 	bool openDescriptor(int descriptor, bool compressed);
 	bool close();
 	bool ioErr() const;
+	// Verify exact end of a read stream, including gzip checksum/trailer.
+	bool atEnd();
 	uint32_t size();
 	void seek(int32_t off);
 	uint32_t tell();

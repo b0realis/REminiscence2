@@ -1077,6 +1077,7 @@ uint16_t Cutscene::fetchNextCmdWord() {
 }
 
 void Cutscene::mainLoop(uint16_t num) {
+	_completed = false;
 	std::vector<size_t> parts;
 	std::string reason;
 	if (!cutscenePartOffsets(getCommandData(), _res->_cmdSize, _res->isMac(), parts, reason) ||
@@ -1127,6 +1128,7 @@ void Cutscene::mainLoop(uint16_t num) {
 			_interrupted = true;
 		}
 	}
+	_completed = !_interrupted && !_stub->_pi.quit;
 }
 
 const char *Cutscene::resourceName(size_t index, ResourceType type) {
@@ -1291,6 +1293,7 @@ void Cutscene::playText(const char *str) {
 }
 
 void Cutscene::play() {
+	_completed = false;
 	if (_id != 0xFFFF) {
 		_textCurBuf = NULL;
 		debug(DBG_CUT, "Cutscene::play() _id=0x%X", _id);
@@ -1347,6 +1350,7 @@ void Cutscene::play() {
 			for (int i = 0; textsTable[i].str; ++i) {
 				if (_id == textsTable[i].num) {
 					playText(textsTable[i].str);
+					_completed = !_stub->_pi.quit;
 					break;
 				}
 			}

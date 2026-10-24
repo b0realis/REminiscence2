@@ -65,10 +65,10 @@ target_include_directories(dear_imgui PUBLIC third_party/imgui third_party/imgui
 target_link_libraries(dear_imgui PUBLIC SDL2::SDL2 PRIVATE reminiscence2_build_options)
 
 add_library(reminiscence2_engine STATIC
-    collision.cpp config.cpp cpc_player.cpp cutscene.cpp cutscene_assets.cpp cutscene_tool.cpp decode_mac.cpp decode_sega.cpp file.cpp
-    atomic_file.cpp fs.cpp game.cpp game_settings.cpp graphics.cpp menu.cpp mixer.cpp mod_player.cpp ogg_player.cpp
+    collision.cpp config.cpp cpc_player.cpp cutscene.cpp cutscene_assets.cpp cutscene_tool.cpp decode_mac.cpp decode_sega.cpp decode_seq.cpp decode_sgd.cpp file.cpp
+    atomic_file.cpp fs.cpp game.cpp game_settings.cpp game_progress.cpp progress_store.cpp controller_profile.cpp context_hints.cpp graphics.cpp menu.cpp mixer.cpp mod_player.cpp ogg_player.cpp
     settings.cpp settings_store.cpp settings_overlay.cpp keyboard_diagram.cpp save_catalog.cpp appearance.cpp
-    music_midi.cpp music_prf.cpp music_synth.cpp
+    music_midi.cpp music_prf.cpp music_synth.cpp object_data.cpp journal.cpp
     piege.cpp protection.cpp resource.cpp resource_aba.cpp resource_mac.cpp
     resource_paq.cpp scaler.cpp screenshot.cpp seq_player.cpp sfx_player.cpp
     staticres.cpp staticres_controllers.cpp systemstub_sdl.cpp unpack.cpp util.cpp video.cpp)
@@ -126,6 +126,14 @@ configure_file(fb.cfg fb.cfg COPYONLY)
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(campaign_tests tests/campaign_tests.cpp)
+    target_link_libraries(campaign_tests PRIVATE reminiscence2_engine)
+    add_test(NAME campaign COMMAND campaign_tests "${CMAKE_CURRENT_BINARY_DIR}/campaign-fixtures")
+    set_tests_properties(campaign PROPERTIES TIMEOUT 30)
+    add_executable(progress_tests tests/progress_tests.cpp)
+    target_link_libraries(progress_tests PRIVATE reminiscence2_engine)
+    add_test(NAME progress COMMAND progress_tests "${CMAKE_CURRENT_BINARY_DIR}/progress-fixtures")
+    set_tests_properties(progress PROPERTIES TIMEOUT 20)
     add_executable(reliability_tests tests/reliability_tests.cpp)
     target_link_libraries(reliability_tests PRIVATE reminiscence2_engine)
     add_test(NAME reliability COMMAND reliability_tests "${CMAKE_CURRENT_BINARY_DIR}/reliability-fixtures")
@@ -142,6 +150,10 @@ if(BUILD_TESTING)
     add_test(NAME music COMMAND music_tests "${REMINISCENCE2_TEST_SOUNDFONT}")
     set_tests_properties(music PROPERTIES TIMEOUT 30)
     add_executable(platform_tests tests/platform_tests.cpp)
+    add_executable(input_audio_tests tests/input_audio_tests.cpp)
+    target_link_libraries(input_audio_tests PRIVATE reminiscence2_engine)
+    add_test(NAME input_audio COMMAND input_audio_tests "${CMAKE_CURRENT_BINARY_DIR}/input-audio-fixtures")
+    set_tests_properties(input_audio PROPERTIES TIMEOUT 20)
     target_link_libraries(platform_tests PRIVATE reminiscence2_engine)
     add_test(NAME platform COMMAND platform_tests)
     set_tests_properties(platform PROPERTIES TIMEOUT 20 ENVIRONMENT "SDL_VIDEODRIVER=dummy;SDL_AUDIODRIVER=dummy;SDL_RENDER_DRIVER=software")

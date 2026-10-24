@@ -105,6 +105,11 @@ class ReleaseTools(unittest.TestCase):
                     for name,content in data.items():
                         info = tarfile.TarInfo(prefix+'-'+target+'/'+name); info.size = len(content); archive.addfile(info,io.BytesIO(content))
             self.assertEqual(len(publish_release.verify_files(root)),8)
+            windows = root/(prefix+'-win64.zip')
+            for suffix in ('R2S', 'R2M'):
+                with zipfile.ZipFile(windows,'a') as z: z.writestr(prefix+'-win64/SAVE/private.'+suffix,b'private preview fixture')
+                with self.assertRaises(RuntimeError): publish_release.verify_files(root)
+                with zipfile.ZipFile(windows,'w') as z: z.writestr(prefix+'-win64/assets/README.txt',b'placeholder')
             with zipfile.ZipFile(root/(prefix+'-win64.zip'),'a') as z: z.writestr(prefix+'-win64/signing.p12',b'private fixture')
             with self.assertRaises(RuntimeError): publish_release.verify_files(root)
     def test_zip_preserves_launcher_mode_and_empty_assets_folder(self):

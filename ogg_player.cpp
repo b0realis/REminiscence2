@@ -14,6 +14,7 @@
 #include "mixer.h"
 #include "ogg_player.h"
 #include "util.h"
+#include <array>
 
 #ifdef USE_TREMOR
 struct VorbisFile: File {
@@ -48,9 +49,8 @@ struct VorbisFile: File {
 	}
 	static int closeHelper(void *datasource) {
 		VorbisFile *vf = (VorbisFile *)datasource;
-		vf->close();
-		delete vf;
-		return 0;
+		// The datasource is the decoder's embedded File, not a heap allocation.
+		return vf->close() ? 0 : -1;
 	}
 	static long tellHelper(void *datasource) {
 		VorbisFile *vf = (VorbisFile *)datasource;
@@ -71,6 +71,10 @@ struct OggDecoder_impl {
 	}
 
 	bool load(const char *name, FileSystem *fs, int mixerSampleRate) {
+		if (_open) {
+			ov_clear(&_ovf);
+			_open = false;
+		}
 		if (!_f.open(name, "rb", fs)) {
 			return false;
 		}
@@ -94,6 +98,9 @@ struct OggDecoder_impl {
 		return true;
 	}
 	int read(int16_t *dst, int samples) {
+		if (!_open)
+			return 0;
+		bool restarted = false;
 		int size = samples * _channels * sizeof(int16_t);
 		if (size > _readBufSize) {
 			_readBufSize = size;
@@ -110,10 +117,13 @@ struct OggDecoder_impl {
 				// error in decoder
 				return count;
 			} else if (len == 0) {
-				// loop
-				ov_raw_seek(&_ovf, 0);
+				// A damaged or empty stream must not spin on the audio thread.
+				if (restarted || ov_raw_seek(&_ovf, 0) != 0)
+					return count;
+				restarted = true;
 				continue;
 			}
+			restarted = false;
 			assert((len & 1) == 0);
 			switch (_channels) {
 			case 2:
@@ -164,6 +174,11 @@ struct OggDecoder_impl {
 		}
 	}
 	bool load(const char *name, FileSystem *fs, int mixerSampleRate) {
+		if (_v) {
+			stb_vorbis_close(_v);
+			_v = nullptr;
+		}
+		_decodedSamplesLen = _decodedSamplesOffset = 0;
 		if (!_f.open(name, "rb", fs)) {
 			return false;
 		}
@@ -175,11 +190,13 @@ struct OggDecoder_impl {
 			if (_v) {
 				_offset = bytes;
 				stb_vorbis_info info = stb_vorbis_get_info(_v);
-				if (info.channels != 2 || (int)info.sample_rate != mixerSampleRate) {
+				if (info.channels != 2 || (int)info.sample_rate != mixerSampleRate ||
+				    info.max_frame_size > 8192) {
 					warning("Unhandled ogg/pcm format ch %d rate %d", info.channels, info.sample_rate);
 					return false;
 				}
 				_decodedSamplesLen = 0;
+				_decodedSamplesOffset = 0;
 				return true;
 			}
 		}
@@ -187,18 +204,22 @@ struct OggDecoder_impl {
 	}
 	int read(int16_t *dst, int samples) {
 		int total = 0;
+		int emptyLoops = 0;
 		if (_decodedSamplesLen != 0) {
 			const int len = MIN(_decodedSamplesLen, samples);
 			for (int i = 0; i < len; ++i) {
-				*dst = ADDC_S16(*dst, ((_decodedSamples[0][i] * kMusicVolume) >> 8));
+				*dst = ADDC_S16(
+				    *dst, ((_decodedSamples[0][_decodedSamplesOffset + i] * kMusicVolume) >> 8));
 				++dst;
-				*dst = ADDC_S16(*dst, ((_decodedSamples[1][i] * kMusicVolume) >> 8));
+				*dst = ADDC_S16(
+				    *dst, ((_decodedSamples[1][_decodedSamplesOffset + i] * kMusicVolume) >> 8));
 				++dst;
 			}
 			total += len;
 			_decodedSamplesLen -= len;
+			_decodedSamplesOffset += len;
 		}
-		while (total < samples) {
+		while (_v && total < samples) {
 			int channels = 0;
 			float **outputs;
 			int count;
@@ -217,6 +238,8 @@ struct OggDecoder_impl {
 				}
 				if (bytes == 0) {
 					// rewind
+					if (++emptyLoops > 1)
+						break; // Empty/corrupt streams cannot spin in the audio callback.
 					_f.seek(0);
 					_count = _f.read(_buffer, sizeof(_buffer));
 					stb_vorbis_flush_pushdata(_v);
@@ -228,6 +251,8 @@ struct OggDecoder_impl {
 			}
 			_offset += bytes;
 			if (channels == 2) {
+				if (count > 0)
+					emptyLoops = 0;
 				const int remain = samples - total;
 				const int len = MIN(count, remain);
 				for (int i = 0; i < len; ++i) {
@@ -240,7 +265,9 @@ struct OggDecoder_impl {
 				}
 				if (count > remain) {
 					_decodedSamplesLen = count - remain;
-					assert(_decodedSamplesLen < 1024);
+					_decodedSamplesOffset = 0;
+					if (_decodedSamplesLen > 8192)
+						return total;
 					for (int i = 0; i < _decodedSamplesLen; ++i) {
 						_decodedSamples[0][i] = int(outputs[0][len + i] * 32768 + .5);
 						_decodedSamples[1][i] = int(outputs[1][len + i] * 32768 + .5);
@@ -257,8 +284,8 @@ struct OggDecoder_impl {
 	}
 
 	uint8_t _buffer[8192];
-	int16_t _decodedSamples[2][1024];
-	int _decodedSamplesLen;
+	std::array<std::array<int16_t, 8192>, 2> _decodedSamples;
+	int _decodedSamplesLen = 0, _decodedSamplesOffset = 0;
 	uint32_t _offset, _count;
 	stb_vorbis *_v;
 	File _f;
@@ -271,6 +298,7 @@ OggPlayer::OggPlayer(Mixer *mixer, FileSystem *fs)
 }
 
 OggPlayer::~OggPlayer() {
+	stopTrack();
 	delete _impl;
 	_impl = 0;
 }
@@ -292,13 +320,13 @@ bool OggPlayer::playTrack(int num) {
 
 void OggPlayer::stopTrack() {
 	if (_impl) {
-		_mix->setPremixHook(0, 0);
+		_mix->clearPremixHook(this);
 	}
 }
 
 void OggPlayer::pauseTrack() {
 	if (_impl) {
-		_mix->setPremixHook(0, 0);
+		_mix->clearPremixHook(this);
 	}
 }
 
@@ -318,4 +346,3 @@ bool OggPlayer::mix(int16_t *buf, int len) {
 bool OggPlayer::mixCallback(void *param, int16_t *buf, int len) {
 	return ((OggPlayer *)param)->mix(buf, len);
 }
-

@@ -4,6 +4,8 @@
 
 #include "intern.h"
 #include "appearance.h"
+#include "journal.h"
+#include "progress_store.h"
 #include <array>
 #include <functional>
 #include <string>
@@ -13,6 +15,7 @@ namespace settings {
 enum class Filter { Point, Linear, Scale };
 enum class Binding { Left, Right, Up, Down, Action, Use, Weapon, Inventory, Pause, Count };
 constexpr size_t BindingCount = static_cast<size_t>(Binding::Count);
+constexpr size_t PadBindingCount = 8;
 
 struct Preferences {
 	bool fullscreen = true, vsync = false, pauseOnFocusLoss = true, showFps = false;
@@ -30,6 +33,17 @@ struct Preferences {
 	// Stable SDL scancodes, independent of keyboard layout. Display names and
 	// capture belong to the SDL frontend; the model/storage never opens devices.
 	std::array<int, BindingCount> keys = {{80, 79, 82, 81, 225, 40, 44, 43, 41}};
+	// SDL controller button numbers; -1 leaves an optional shortcut unassigned.
+	std::array<int, PadBindingCount> padButtons = {{2, 0, 1, 3, 6, -1, -1, -1}};
+	std::array<int, PadBindingCount> joystickButtons = {{1, 2, 0, 3, 9, -1, -1, -1}};
+	int stickDeadzone = 15;
+	bool rightStickMovement = false;
+	bool storyJournal = true, journalNotifications = true;
+	bool diskAutosave = true, contextualHints = false;
+	bool stickyAction = false, reduceShake = false, reduceBlink = false, inputBuffer = false;
+	int gameSpeed = 100;
+	bool objectivesNotebook = true;
+	int diskAutosaveSeconds = 60;
 
 	void readCompatibility(const Options &options);
 	void applyCompatibility(Options &options) const;
@@ -38,6 +52,9 @@ struct Preferences {
 };
 
 const char *bindingName(size_t index);
+const char *padBindingName(size_t index);
+const char *padButtonName(int button, int style = 0);
+bool validPadBinding(int button, const Preferences &, size_t index, bool raw, std::string &reason);
 bool validate(const Preferences &preferences, std::string &reason);
 bool validBinding(int scancode, const Preferences &preferences, size_t index, std::string &reason);
 // Missing files are normal. Invalid fields retain their previous values; an
@@ -50,7 +67,10 @@ enum class Action {
 	Resume,
 	SaveGame,
 	LoadGame,
+	UpdateSaveDetails,
 	Rewind,
+	ContinueLatest,
+	LoadAutosave,
 	Heal,
 	Screenshot,
 	StartLevel,
@@ -61,10 +81,30 @@ struct SaveSlot {
 	int slot = 0, room = -1;
 	bool exists = false, supported = false;
 	std::string modified;
+	int level = 0;
+	std::string label;
+	bool modern = false, protectedSave = false;
+	std::shared_ptr<const progress::Preview> preview;
+};
+struct RewindPoint {
+	std::shared_ptr<const progress::Preview> preview;
+	unsigned ageSeconds = 0;
+	int room = 0, health = 0;
 };
 struct Session {
 	Preferences values;
-	std::string preferencePath, edition, language, audioBackend;
+	bool startup = false, recovery = false;
+	int autosaveIndex = 0, rewindIndex = 0;
+	std::vector<progress::Snapshot> autosaves;
+	std::vector<RewindPoint> rewindPoints;
+	std::string preferencePath, edition, language, audioBackend, controllerName, controllerProfile;
+	bool controllerDisconnected = false, audioAvailable = true;
+	int controllerStyle = 0;
+	int browseLevel = 0;
+	std::vector<std::string> diagnostics;
+	double lastSaveMs = 0, worstSaveMs = 0;
+	std::array<char, 97> saveName{};
+	bool protectSave = false;
 	std::string status;
 	bool statusError = false, canSave = true, canLoad = true, canRewind = false;
 	int level = 0, room = 0, saveSlot = 1, outputRate = 0;
@@ -76,6 +116,9 @@ struct Session {
 	bool cheatsRequested = false, refreshRequested = false, autoZoomAvailable = false;
 	std::array<bool, 7> levelAvailable = {{true, true, true, true, true, true, true}};
 	std::vector<SaveSlot> saves;
+	std::vector<journal::Entry> journalEntries;
+	std::vector<journal::Objective> objectives;
+	std::function<void(unsigned)> readJournalEntry;
 	bool applyRequested = false, saveRequested = false;
 	Action action = Action::None;
 	std::function<bool(const Preferences &, std::string &)> apply;

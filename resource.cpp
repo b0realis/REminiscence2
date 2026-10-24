@@ -8,7 +8,9 @@
 #include "cutscene_assets.h"
 #include "edition.h"
 #include "credits.h"
+#include "object_data.h"
 #include <vector>
+#include <algorithm>
 #include "file.h"
 #include "fs.h"
 #include "resource.h"
@@ -154,13 +156,18 @@ void Resource::clearLevelRes() {
 	free(_mbk); _mbk = 0;
 	free(_pal); _pal = 0;
 	free(_map); _map = 0;
-	free(_lev); _lev = 0;
+	free(_lev);
+	_lev = 0;
+	_levSize = 0;
 	_levNum = -1;
-	free(_sgd); _sgd = 0;
+	free(_sgd);
+	_sgd = 0;
+	_sgdSize = 0;
 	free(_bnq); _bnq = 0;
 	if (!isSega()) {
 		free(_ani);
 		_ani = 0;
+		_aniSize = 0;
 		free_OBJ();
 	}
 }
@@ -797,6 +804,7 @@ void Resource::load(const char *objName, int objType, const char *ext) {
 					break;
 				case OT_PGE:
 					decodePGE(dat, size);
+					free(dat);
 					break;
 				case OT_PAL:
 					_pal = dat;
@@ -825,12 +833,14 @@ void Resource::load(const char *objName, int objType, const char *ext) {
 					_fnt = dat;
 					break;
 				case OT_OBJ:
-					_numObjectNodes = READ_LE_UINT16(dat);
-					assert(_numObjectNodes == 230);
-					decodeOBJ(dat + 2, size - 2);
+					if (size < 2)
+						error("Truncated archived OBJ header");
+					decodeOBJ(dat + 2, size - 2, READ_LE_UINT16(dat));
+					free(dat);
 					break;
 				case OT_ANI:
 					_ani = dat;
+					_aniSize = size;
 					break;
 				case OT_TBN:
 					_tbn = dat;
@@ -854,12 +864,20 @@ void Resource::load(const char *objName, int objType, const char *ext) {
 					assert(memcmp(dat, "SPP", 3) == 0);
 					memcpy(_sprm, dat + 12, size - 12);
 					break;
+				case OT_LEV:
+					_lev = dat;
+					_levSize = size;
+					break;
 				case OT_SGD:
 					_sgd = dat;
+					_sgdSize = size;
+					if (!size)
+						error("Empty SGD");
 					_sgd[0] = 0; // clear number of entries, fix first offset
 					break;
 				case OT_BNQ:
 					_bnq = dat;
+					_bnqSize = size;
 					break;
 				default:
 					error("Cannot load '%s' type %d", _entryName, objType);
@@ -998,72 +1016,16 @@ void Resource::load_MAP(File *f) {
 }
 
 void Resource::load_OBJ(File *f) {
-	debug(DBG_RES, "Resource::load_OBJ()");
-	if (_type == kResourceTypeAmiga || isSega()) { // uncompressed objects data
-		const int size = f->size();
-		uint8_t *buf = (uint8_t *)malloc(size);
-		if (!buf) {
-			error("Unable to allocate OBJ buffer");
-		} else {
-			f->read(buf, size);
-			decodeOBJ(buf, size);
-			free(buf);
-		}
-		return;
-	}
-	_numObjectNodes = f->readUint16LE();
-	assert(_numObjectNodes < 255);
-	uint32_t offsets[256];
-	for (int i = 0; i < _numObjectNodes; ++i) {
-		offsets[i] = f->readUint32LE();
-	}
-	offsets[_numObjectNodes] = f->size() - 2;
-	int numObjectsCount = 0;
-	uint16_t objectsCount[256];
-	for (int i = 0; i < _numObjectNodes; ++i) {
-		int diff = offsets[i + 1] - offsets[i];
-		if (diff != 0) {
-			objectsCount[numObjectsCount] = (diff - 2) / 0x12;
-			debug(DBG_RES, "i=%d objectsCount[numObjectsCount]=%d", i, objectsCount[numObjectsCount]);
-			++numObjectsCount;
-		}
-	}
-	uint32_t prevOffset = 0;
-	ObjectNode *prevNode = 0;
-	int iObj = 0;
-	for (int i = 0; i < _numObjectNodes; ++i) {
-		if (prevOffset != offsets[i]) {
-			ObjectNode *on = (ObjectNode *)malloc(sizeof(ObjectNode));
-			if (!on) {
-				error("Unable to allocate ObjectNode num=%d", i);
-			}
-			f->seek(offsets[i] + 2);
-			on->num_objects = f->readUint16LE();
-			debug(DBG_RES, "count=%d", on->num_objects, objectsCount[iObj]);
-			assert(on->num_objects == objectsCount[iObj]);
-			on->objects = (Object *)malloc(sizeof(Object) * on->num_objects);
-			for (int j = 0; j < on->num_objects; ++j) {
-				Object *obj = &on->objects[j];
-				obj->type = f->readUint16LE();
-				obj->dx = f->readByte();
-				obj->dy = f->readByte();
-				obj->init_obj_type = f->readUint16LE();
-				obj->opcode2 = f->readByte();
-				obj->opcode1 = f->readByte();
-				obj->flags = f->readByte();
-				obj->opcode3 = f->readByte();
-				obj->init_obj_number = f->readUint16LE();
-				obj->opcode_arg1 = f->readUint16LE();
-				obj->opcode_arg2 = f->readUint16LE();
-				obj->opcode_arg3 = f->readUint16LE();
-				debug(DBG_RES, "obj_node=%d obj=%d op1=0x%X op2=0x%X op3=0x%X", i, j, obj->opcode2, obj->opcode1, obj->opcode3);
-			}
-			++iObj;
-			prevOffset = offsets[i];
-			prevNode = on;
-		}
-		_objectNodesMap[i] = prevNode;
-	}
+	const unsigned size = f->size();
+	if (size < 2 || size > 16 * 1024 * 1024)
+		error("Invalid OBJ file size");
+	std::vector<uint8_t> bytes(size);
+	if (f->read(bytes.data(), size) != size)
+		error("Truncated OBJ file");
+	if (isAmiga() || isSega())
+		decodeOBJ(bytes.data(), size);
+	else
+		decodeOBJ(bytes.data() + 2, size - 2, READ_LE_UINT16(bytes.data()));
 }
 
 void Resource::free_OBJ() {
@@ -1082,19 +1044,27 @@ void Resource::free_OBJ() {
 }
 
 void Resource::load_OBC(File *f) {
-	const int packedSize = f->readUint32BE();
+	const auto fileSize = f->size();
+	if (fileSize < 16 || fileSize > 16 * 1024 * 1024)
+		error("Invalid OBC size");
+	const uint32_t packedSize = f->readUint32BE();
+	if (packedSize < 12 || packedSize > fileSize - 4)
+		error("Invalid OBC packed size");
 	uint8_t *packedData = (uint8_t *)malloc(packedSize);
 	if (!packedData) {
 		error("Unable to allocate OBC temporary buffer 1");
 	}
 	f->seek(packedSize);
-	const int unpackedSize = f->readUint32BE();
+	const uint32_t unpackedSize = f->readUint32BE();
+	if (!unpackedSize || unpackedSize > 16 * 1024 * 1024)
+		error("Invalid OBC expanded size");
 	uint8_t *tmp = (uint8_t *)malloc(unpackedSize);
 	if (!tmp) {
 		error("Unable to allocate OBC temporary buffer 2");
 	}
 	f->seek(4);
-	f->read(packedData, packedSize);
+	if (f->read(packedData, packedSize) != packedSize)
+		error("Truncated OBC data");
 	if (!bytekiller_unpack(tmp, unpackedSize, packedData, packedSize)) {
 		error("Bad CRC for compressed object data");
 	}
@@ -1103,62 +1073,33 @@ void Resource::load_OBC(File *f) {
 	free(tmp);
 }
 
-void Resource::decodeOBJ(const uint8_t *tmp, int size) {
-	uint32_t offsets[256];
-	int tmpOffset = 0;
-	_numObjectNodes = 230;
-	if (_type == kResourceTypeMac) {
-		_numObjectNodes = _readUint16(tmp);
-		tmpOffset += 2;
+void Resource::decodeOBJ(const uint8_t *data, int size, unsigned count) {
+	const bool mac = isMac();
+	if (size < 2)
+		error("Truncated object header");
+	if (mac)
+		count = READ_BE_UINT16(data);
+	DecodedObjects decoded;
+	if (!decodeObjects(data, size, count, mac ? 2 : 0, editionTraits(_type).bigEndian, decoded))
+		error("Invalid object directory, counts or record bounds");
+	std::vector<ObjectNode *> nodes;
+	for (const auto &objects : decoded.nodes) {
+		auto *node = static_cast<ObjectNode *>(calloc(1, sizeof(ObjectNode)));
+		if (!node)
+			error("Unable to allocate object node");
+		node->num_objects = objects.size();
+		node->objects =
+		    static_cast<Object *>(malloc(std::max(size_t(1), objects.size()) * sizeof(Object)));
+		if (!node->objects)
+			error("Unable to allocate object records");
+		if (!objects.empty())
+			memcpy(node->objects, objects.data(), objects.size() * sizeof(Object));
+		nodes.push_back(node);
 	}
-	for (int i = 0; i < _numObjectNodes; ++i) {
-		offsets[i] = _readUint32(tmp + tmpOffset); tmpOffset += 4;
-	}
-	offsets[_numObjectNodes] = size;
-	int numObjectsCount = 0;
-	uint16_t objectsCount[256];
-	for (int i = 0; i < _numObjectNodes; ++i) {
-		int diff = offsets[i + 1] - offsets[i];
-		if (diff != 0) {
-			objectsCount[numObjectsCount] = (diff - 2) / 0x12;
-			++numObjectsCount;
-		}
-	}
-	uint32_t prevOffset = 0;
-	ObjectNode *prevNode = 0;
-	int iObj = 0;
-	for (int i = 0; i < _numObjectNodes; ++i) {
-		if (prevOffset != offsets[i]) {
-			ObjectNode *on = (ObjectNode *)malloc(sizeof(ObjectNode));
-			if (!on) {
-				error("Unable to allocate ObjectNode num=%d", i);
-			}
-			const uint8_t *objData = tmp + offsets[i];
-			on->num_objects = _readUint16(objData); objData += 2;
-			assert(on->num_objects == objectsCount[iObj]);
-			on->objects = (Object *)malloc(sizeof(Object) * on->num_objects);
-			for (int j = 0; j < on->num_objects; ++j) {
-				Object *obj = &on->objects[j];
-				obj->type = _readUint16(objData); objData += 2;
-				obj->dx = *objData++;
-				obj->dy = *objData++;
-				obj->init_obj_type = _readUint16(objData); objData += 2;
-				obj->opcode2 = *objData++;
-				obj->opcode1 = *objData++;
-				obj->flags = *objData++;
-				obj->opcode3 = *objData++;
-				obj->init_obj_number = _readUint16(objData); objData += 2;
-				obj->opcode_arg1 = _readUint16(objData); objData += 2;
-				obj->opcode_arg2 = _readUint16(objData); objData += 2;
-				obj->opcode_arg3 = _readUint16(objData); objData += 2;
-				debug(DBG_RES, "obj_node=%d obj=%d op1=0x%X op2=0x%X op3=0x%X", i, j, obj->opcode2, obj->opcode1, obj->opcode3);
-			}
-			++iObj;
-			prevOffset = offsets[i];
-			prevNode = on;
-		}
-		_objectNodesMap[i] = prevNode;
-	}
+	free_OBJ();
+	_numObjectNodes = count;
+	for (unsigned i = 0; i < count; ++i)
+		_objectNodesMap[i] = nodes[decoded.map[i]];
 }
 
 void Resource::load_PGE(File *file) {
@@ -1215,6 +1156,9 @@ void Resource::decodePGE(const uint8_t *p, int size) {
 void Resource::load_ANI(File *f) {
 	debug(DBG_RES, "Resource::load_ANI()");
 	const int size = f->size();
+	if (size < 2 || size > 16 * 1024 * 1024)
+		error("Invalid ANI size");
+	_aniSize = size;
 	_ani = (uint8_t *)malloc(size);
 	if (!_ani) {
 		error("Unable to allocate ANI buffer");
@@ -1369,6 +1313,9 @@ void Resource::load_SPL(File *f) {
 
 void Resource::load_LEV(File *f) {
 	const int len = f->size();
+	if (len < 4 || len > 16 * 1024 * 1024)
+		error("Invalid LEV size");
+	_levSize = len;
 	_lev = (uint8_t *)malloc(len);
 	if (!_lev) {
 		error("Unable to allocate LEV buffer");
@@ -1379,7 +1326,10 @@ void Resource::load_LEV(File *f) {
 
 void Resource::load_SGD(File *f) {
 	const int len = f->size();
+	if (len < 12 || len > 16 * 1024 * 1024)
+		error("Invalid SGD size");
 	if (_type == kResourceTypeDOS || isSega()) {
+		_sgdSize = len;
 		_sgd = (uint8_t *)malloc(len);
 		if (!_sgd) {
 			error("Unable to allocate SGD buffer");
@@ -1398,6 +1348,9 @@ void Resource::load_SGD(File *f) {
 		error("Unable to allocate SGD temporary buffer");
 	}
 	f->read(tmp, len);
+	if (size <= 0 || size > 16 * 1024 * 1024)
+		error("Invalid decoded SGD size");
+	_sgdSize = size;
 	_sgd = (uint8_t *)malloc(size);
 	if (!_sgd) {
 		error("Unable to allocate SGD buffer");
@@ -1741,6 +1694,7 @@ void Resource::MAC_loadTitleImage(int i, DecodeBuffer *buf) {
 void Resource::MAC_unloadLevelData() {
 	free(_ani);
 	_ani = 0;
+	_aniSize = 0;
 	free_OBJ();
 	free(_tbn);
 	_tbn = 0;
@@ -1763,6 +1717,7 @@ void Resource::MAC_loadLevelData(int level) {
 	// .ANI
 	snprintf(name, sizeof(name), "Level %s sequences", _macLevelNumbers[level]);
 	_ani = decodeResourceMacData(name, true, "ANIM");
+	_aniSize = _resourceMacDataSize;
 	assert(READ_BE_UINT16(_ani) == 0x48D);
 
 	// .OBJ
@@ -1971,4 +1926,30 @@ void Resource::loadExternalCredits() {
 	if (_credits) {
 		memcpy(_credits, bytes.data(), length);
 	}
+}
+
+// Validate saved actor references against the loaded level before committing a
+// restore. A file can be structurally complete yet address nonexistent scripts.
+bool Resource::validStateActor(const uint8_t *p, unsigned skill) const {
+	const unsigned index = p[19];
+	if (index >= _pgeNum)
+		return false;
+	if (_pgeInit[index].skill > skill)
+		return true;
+	const unsigned node = _pgeInit[index].obj_node_number;
+	if (node >= _numObjectNodes || !_objectNodesMap[node] ||
+	    READ_BE_UINT16(p + 20) >= _objectNodesMap[node]->num_objects || !_ani || _aniSize < 2)
+		return false;
+	const unsigned type = READ_BE_UINT16(p);
+	if (type >= _readUint16(_ani) || 2 + type * 2 + 2 > _aniSize)
+		return false;
+	const unsigned offset = _readUint16(_ani + 2 + type * 2) + (isMac() ? 0 : 2);
+	if (offset > _aniSize || _aniSize - offset < 6)
+		return false;
+	const unsigned frames = _readUint16(_ani + offset);
+	if (frames > (_aniSize - offset - 6) / 4 || p[6] > frames)
+		return false;
+	if (!isMac() && !(p[18] & 8) && READ_BE_UINT16(p + 16) >= NUM_SPRITES)
+		return false;
+	return true;
 }

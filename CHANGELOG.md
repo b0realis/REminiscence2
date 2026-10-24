@@ -1,6 +1,81 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 # Changes
 
+## 1.11
+
+- Preserve specific manual-save and quicksave failure messages, including
+  protected milestones, instead of replacing them with a generic error.
+- Let newly connected controllers inherit the most recently saved global
+  bindings, including changes made after startup.
+- Keep the composed gameplay frame intact when controller disconnect opens
+  the pause overlay, so screenshots and save previews retain actors.
+- Prepare the restored room and collision caches immediately after shortcut
+  rewind, before the next simulation tick.
+- Add regressions for these paths and assemble the 1.07–1.11 improvements for
+  the six-target preview release.
+
+## 1.10
+
+- Add unified death recovery with rewind/checkpoint/autosave previews, cross-level
+  manual saves and a compact layout with recovery actions immediately visible.
+- Store names, thumbnails and protected milestones atomically in `.r2m` bundles;
+  retain legacy `.state` loading and refuse protected quicksave overwrites.
+- Display save/error/device feedback and an assets/system Diagnostics page.
+- Pause on controller disconnect; add GUID profiles, trigger binding and detected
+  PlayStation labels. Keep reconnect separate from Resume.
+- Add opt-in Sticky Action, 100 ms tap buffering, steady shield-hit sprites,
+  reduced shake and slower gameplay, plus a spoiler-limited Objectives notebook.
+- Recover from audio-output loss with a silent mixer clock so voice/dialogue can
+  finish, and retry audio at the existing sample rate on reconnect.
+- Measure local save durations before adding background I/O; extend regression
+  and desktop/native rendering coverage. See [the guide](docs/QOL_1.10.md).
+
+## 1.09
+
+- Reject unsafe save identities, cyclic inventory/collision links, invalid script
+  and animation references, trailing data and damaged gzip trailers before restore.
+- Remove the 24-item inventory limit; initialize actors excluded by difficulty;
+  keep manual saves from changing checkpoint bookkeeping.
+- Correct music callback ownership, decoder replacement/teardown and shared state.
+  Bound and predecode CPC/SDX2 audio; resample against the negotiated device rate.
+- Carry fractional MOD/action-music tick timing and apply tempo changes immediately.
+- Keep rewind on active play time; open QoL settings from inventory; reset pause
+  deadlines and keep focus/background pause reasons independent.
+- Bound foreground/RLE decoding, clip edge pixels, and validate LEV/tile bank
+  extents. Preserve archived BNQ/LEV lengths and free archived PGE input.
+- Correct gzip sizing, screenshot close reporting, optional RWops file methods,
+  scaler argument validation and the Makefile runtime-path source list.
+- Exclude player states/autosave previews from tracked source and release archives.
+- Add 40,000 decoder mutations, 21,000 deterministic route ticks, and the
+  [four-campaign report](docs/CAMPAIGN_1.09.md).
+
+## 1.08
+
+- Keep three checksum-validated, atomically written autosave generations per
+  edition, independently of checkpoint/manual slots. Default interval: 60 active
+  seconds, adjustable from 15 to 600 seconds or disabled.
+- Add a welcome-back Continue screen, `--continue`, and cross-level autosave
+  recovery with asset-identity preflight and fallback to an older generation.
+- Add a Rewind page with captured-frame previews, room, health and age. Restoring
+  an older point discards its newer branch and retains older history.
+- Add optional contextual control reminders using current keyboard/pad bindings,
+  active-play timers and per-game suppression. Default off.
+- Document new controls and add corruption, rotation, recovery, timeline and
+  rendering regressions.
+
+## 1.07
+
+- Add persistent joypad/raw-joystick remapping, configurable stick dead zones,
+  optional save/load/rewind buttons and independent input-source ownership.
+- Add an optional, spoiler-limited story journal and unread notification.
+- Extend saves with edition/gameplay identity, random seed and journal state;
+  keep legacy imports and isolate new save filenames by edition.
+- Correct fractional 30 Hz pacing and avoid double-throttling paused menus.
+- Fix internal MOD default-tempo crashes, OGG remainder repetition, and SEQ
+  audio timing across device rates; use a bounded SEQ audio queue.
+- Bound object/SEQ decoding and retain failed texture uploads for retry.
+- Add input/audio/decoder regressions and journal/joypad menu captures.
+
 ## 1.06
 
 - Package public documentation from an explicit manifest, without requiring Git

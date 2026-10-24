@@ -1,5 +1,146 @@
 # REminiscence2 validation
 
+## Patch 1.11 — feature bug pass and release candidate
+
+Local validation on 24 October 2026:
+
+- All 15 CTest suites pass in Debug/UBSan and pinned-SDL Release, including the
+  private seven-level Amiga checks and 21,000 deterministic route ticks.
+- All 32 Python asset/release-tool tests pass. The documentation manifest,
+  private-file boundary and whitespace checks pass.
+- New tests first reproduced lost protected-save explanations and stale global
+  controller defaults on hotplug. Both pass after the fixes.
+- Production overlay/shortcut checks preserve protected-save failure reasons;
+  disconnect pause retains the composed frame; shortcut rewind prepares the
+  destination room and collision caches before another simulation tick.
+
+The release publisher requires successful Build and test and Release packages
+workflows for the exact commit before tagging. It validates all six target
+packages, the Quest deployment bundle, corresponding source and SHA-256 sums.
+Hosted results are attached to the GitHub release; the sections below retain
+the historical local validation records from earlier patches.
+
+Physical Deck/Quest/controllers/audio devices, actual GOG/Macintosh CD assets
+and complete playthroughs remain unverified. A successful native build or SDL
+dummy-device test does not establish those results. Local ASan still cannot
+start on this host; the Ubuntu CI configuration supplies ASan/UBSan coverage.
+
+## Patch 1.10 — recovery, input and accessibility
+
+See [the feature and format guide](QOL_1.10.md). This is a local patch; v1.06
+remains the published release.
+
+- Debug with UBSan and static-SDL Release: all 15 CTest suites pass.
+- The 32 Python asset/release-tool tests pass, including uppercase `.R2S` and
+  `.R2M` private-preview rejection. Documentation manifest and diff checks pass.
+- 44 production overlay layouts render with the turquoise EXIT GAME visible.
+  New desktop/native recovery, manual-browser, notebook and assist captures were
+  visually inspected; they use synthetic session data and original color grids.
+- New storage tests cover names/protection, checkpoint previews, failed protected
+  overwrite, metadata-only updates, truncation, CRC and portable-name limits.
+- Real Amiga regressions restore a protected manual milestone across levels,
+  refuse its quicksave overwrite and recover through the production death path.
+  The existing seven-level/419-room and 21,000-tick deterministic probes still pass.
+- Virtual pads cover disconnect pause and input clearing; controller profile
+  import preserves keyboard/display/audio preferences. Trigger capture and
+  hysteresis, sticky-action release, 100 ms buffer expiry and 50% pacing pass.
+- SDL dummy audio removal advances the callback silently, pauses that clock in
+  the background, and reconnects at the existing mixer rate. This verifies the
+  SDL event path, not physical audio-device or Quest lifecycle behavior.
+
+Local synchronous save timing is reported in Diagnostics. One Debug/UBSan run
+observed a worst sample of about 10.2 ms on this Mac; no cross-platform latency
+claim or background writer is implied. Physical controllers/audio devices,
+Windows/Linux/Deck/Quest runtime checks, actual GOG DOS/Mac CD data and complete
+playthroughs still need validation. The host ASan runtime limitation remains.
+
+## Patch 1.09 — four campaigns, 24 October 2026
+
+See [the campaign report](CAMPAIGN_1.09.md) for scope, findings, changes and limits.
+Fresh Debug/UBSan and pinned-SDL Release builds pass **15 CTest suites**. All
+**32 Python tests** pass using `.local/extract-venv/bin/python` with
+`REMINISCENCE2_ENGINE` set to the Release executable. The first system-Python run
+failed because it lacked the declared `lhafile` dependency; the configured
+extraction environment completed the full suite. The optional RWops adapter
+passes a separate syntax compile. The docs boundary check passes.
+
+New coverage includes 40,000 deterministic CPC/foreground mutations, exact save
+EOF/checksum and graph validation, owner-specific music teardown, tempo effects,
+26-item inventory, inventory-to-QoL access, independent background/focus pause,
+and archived BNQ/LEV resource adapters. Two route probes totaling 21,000 ticks
+across seven Amiga levels produce the same serialized hash, **3132929345**, in
+Debug and Release. They restart around death/story scenes and are not a complete
+playthrough. Seven level and three clothing captures are byte-identical to the
+pre-campaign 1.08 Release outputs.
+
+Clang analyzed 51 non-table engine/CLI translation units after the changes.
+The confirmed foreground, SFX-null and ABA-table warnings are resolved. Remaining
+notes are legacy dead stores and an unreproduced possible uninitialized value in
+bundled `stb_vorbis.c`; this is not claimed as a confirmed bug or a clean static
+analysis result. The previously recorded ASan host startup limitation remains;
+physical-device, actual DOS/Mac/CD-music, and cross-platform runtime validation
+remain pending. This is a local patch; no new release was published.
+
+## Patch 1.08 — 24 October 2026
+
+Fresh Debug/UBSan and pinned-SDL Release builds pass **14 CTest suites**. The
+release-tool Python suite passes 11 tests. Documentation/private-asset checks
+pass. This patch remains local; the public release is still v1.06.
+
+The new progress suite verifies bounded envelope parsing, exact state/summary
+agreement, CRC corruption and truncation rejection, three-generation rotation,
+manual-save isolation, failed replacement, symlink rejection, profile round trips,
+remapped hint labels, suppression, expiry, cooldown and rewind-time resets.
+
+Private Amiga integration checks interval boundaries and pause/disabled timers,
+preview capture, restoring an older rewind point while retaining earlier history,
+incompatible-asset fallback, recovery in a fresh Game/Resource, all seven levels,
+and both production startup flows: direct Continue and welcome-back Continue.
+Fresh-process recovery exposed a derived collision cache that was not initialized;
+restored-frame presentation now clears that cache before the next simulation tick.
+
+SDL checks dispatch Continue, selected autosave and rewind through the production
+paused command loop. Software rendering captures 34 overlay layouts, including
+new desktop/native recovery, autosave and rewind views; it checks native welcome
+buttons and recreates the rewind preview after a renderer reset. Public new
+captures use synthetic session data and an original color-grid preview; actual
+player frames stay in ignored build output.
+
+All platform binaries still require CI/release packaging for a new published
+release. Physical gamepads/Deck/Quest, actual GOG DOS/Macintosh CD data and a full
+playthrough remain unverified. The host AddressSanitizer limitation recorded
+below is unchanged; it is not counted as passing validation.
+
+## Patch 1.07 — 24 October 2026
+
+Fresh builds pass all **13 CTest suites** in both `build/debug` (UBSan with halt
+on error; optional synthesis backends) and `build/package-arm64` (Release,
+pinned static SDL/zlib, internal MOD, private Amiga data). Release-tool Python
+checks pass all 11 tests; the documentation/private-assets boundary check passes.
+
+New coverage includes independent keyboard/D-pad/stick input, Shift aliases,
+joypad shortcuts, dead-zone hysteresis, raw and mapped SDL virtual-device hotplug,
+joypad binding capture and persisted profiles, OGG callback partitioning, the
+public internal-MOD fallback with an unspecified tempo, bounded object/SEQ
+truncations and signed runs, a complete synthetic SEQ movie and corrupt fallback,
+SEQ source-rate duration at 8/22.05/44.1/48/192 kHz, and exact fractional 30 Hz
+pacing. Private Amiga checks verify rejected data-fingerprint mismatches, restored
+random/journal state, and memory-journal unlock only after the scene completes.
+Rendered captures cover the new pages at desktop and native resolution.
+
+AddressSanitizer cannot currently start on this host: even a standalone sanitized
+hello-world stalls before `main`. That run was stopped; it is not recorded as a
+pass. UBSan and the ordinary Release checks above completed successfully.
+Physical controller/Deck/Quest checks, real GOG/Macintosh assets and a complete
+playthrough remain outstanding. New SEQ decoding/audio is covered synthetically;
+original CD movie validation still needs the player's data.
+
+The following sections retain earlier validation records.
+
+---
+
+## Earlier validation record
+
 Validation date: 23 October 2026. These checks cover the local enhancement tree,
 not a released package or a completed playthrough.
 

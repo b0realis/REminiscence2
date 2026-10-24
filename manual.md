@@ -8,7 +8,7 @@
   ORIGINAL DATA / MODERN ENGINE / ONE MORE TRY
 ```
 
-**Edition:** 0.1.0-dev · **Interface:** command line + game window
+**Guide:** current engine · **Interface:** command line + game window
 
 Welcome back. REminiscence2 runs Flashback with the game files you supply.
 This guide gets you from an asset folder to a first session, then puts the
@@ -20,7 +20,7 @@ art, comic pages, screenshots, dialogue or publisher-manual passages.
 [Start playing](#start-playing) · [Prepare your data](#prepare-your-data) ·
 [Controls](#controls) · [Movement practice](#movement-practice) ·
 [In-game settings](#in-game-settings) ·
-[Keep your progress](#keep-your-progress) · [Picture and sound](#picture-and-sound) ·
+[Story journal](#story-journal) · [Keep your progress](#keep-your-progress) · [Picture and sound](#picture-and-sound) ·
 [Cutscene player](#cutscene-player) · [Build](#build) ·
 [Command reference](#command-reference) · [Configuration](#configuration) ·
 [Troubleshooting](#troubleshooting) · [Credits and license](#credits-and-license)
@@ -123,8 +123,7 @@ spaces. Normal game launches use these defaults:
 | Game resources | `assets` beside the executable (legacy `DATA` fallback) | `--datapath=PATH` |
 | Music resources | Game folder or discovered `TUNES` | `--tunepath=PATH` |
 | Persistent saves | User-data `REminiscence2/SAVE` | `--savepath=PATH` |
-| Compatibility settings | `fb.cfg` | `--portable` | Keep default assets/music/saves beside the executable. |
-| `--config=PATH` |
+| Compatibility settings | `fb.cfg` | `--config=PATH` |
 
 The game creates the save directory and its missing parents. Optional tune
 folders are read-only. Saves default to `%APPDATA%/REminiscence2/SAVE` on Windows,
@@ -184,9 +183,21 @@ adjustment and Enter / Space activation. On the Continue screen, choose with
 Up/Down and confirm with Enter.
 
 For SDL-recognized controllers, A uses/confirms, B draws the weapon, X performs
-actions and Y opens inventory. D-pad/sticks provide directions; Start/Back opens
-the settings overlay. Controller remapping and physical-device validation are
-still development work.
+actions and Y opens inventory. The D-pad and left stick provide directions;
+Start always opens settings (Back does too unless assigned to another action).
+Open **QoL → Joypad** to rebind gameplay buttons, assign optional quick save,
+quick load and rewind, adjust the stick dead zone (5–50%), or enable right-stick
+movement. Start remains a settings shortcut after remapping. Quick save/load/
+rewind are unassigned by default to avoid accidental actions.
+
+Keyboard, D-pad, hats and sticks can be used together. Releasing one source does
+not cancel another held source. Reconnect and focus changes release stale input.
+The default dead zone is 15%, with a small release margin to reduce stick jitter.
+Unmapped USB joysticks have a separate raw-button profile on the same page;
+button numbers in that profile start at 1. In menus, raw button 3 confirms,
+buttons 1/10 go back, and 5/6 change pages. Mapped controller menus use A/B and
+shoulders, independently of gameplay remapping. Physical Deck/Quest/pad checks
+remain pending.
 
 ## In-game settings
 
@@ -198,18 +209,23 @@ continue for volume adjustments. Move the mouse to reveal the cursor.
 
 | Page | What you can change or do |
 | --- | --- |
-| Session | View health/score/rewind count, rewind, capture a clean screenshot, restart, return to title, save/undo/reset preferences, and show or hide the shortcut. |
-| Save / Load | Browse occupied slots with room/time, select manual slots 1–99, save/load, restore checkpoint 00 and refresh. Overwrite/load actions ask first. |
+| Session | Continue latest autosave, set disk autosave interval and optional contextual hints; view health/score/rewind count, rewind, capture a clean screenshot, restart, return to title, save/undo/reset preferences, and show or hide the shortcut. |
+| Rewind | Preview captured moments, their age, room and health, then restore the selected point. |
+| Save / Load | Browse all levels, previews and names; protect milestones, save/load manual slots 1–99 and restore checkpoint 00. |
 | Graphics | Fullscreen, VSync, point/linear/ScaleNx filtering, window scale, side content, compact layout and menu text size. |
 | Audio | Separate master/music/effects levels, mute and save-confirmation sound. |
 | Enhancements | Conrad’s Original/Red-Pink/White T-shirt, rewind, inventory ordering, transitions and optional cutscene choices. |
 | Controls | Rebind the nine primary keyboard actions and review fixed shortcuts. |
 | Cheats | All three gameplay cheat flags, unlimited life, fast mode, diagnostic rectangles, DOS zoom, one-shot healing and clear-all. |
+| Joypad | Remap controller/raw buttons and mapped triggers, configure sticks, save a device profile and assign save/load/rewind shortcuts. |
+| Journal | Read optional companion passages for reached chapters and completed memory scenes; control notifications. |
+| Objectives | Read reached-chapter goals and open gentle hints; future chapters stay hidden. |
+| Diagnostics | Inspect asset presence, save location, controller profile, audio status and measured disk-write durations. |
 | Levels | Choose any available level and Easy/Normal/Expert difficulty. Starting resets current progress, score, inventory and rewind after confirmation. |
 
 Mouse, Tab/Shift+Tab, arrows and Enter/Space navigate the overlay. On a gamepad,
 use D-pad/stick, A to confirm, B to close/cancel and shoulders to change pages.
-Escape/F10/Start resumes play. A prominent turquoise **EXIT GAME** button is
+Escape/F10/Start resumes play. On the death recovery screen, choose a recovery point or restart instead. A prominent turquoise **EXIT GAME** button is
 always visible and asks for confirmation; Escape/B cancels that confirmation.
 
 At the original **256×224** resolution the menu uses a single-column layout with
@@ -224,9 +240,12 @@ opening values; **Restore default settings** resets built-in choices. The saved
 profile changes only when you choose Save settings. Cheats, selected levels and
 gameplay actions are session controls and are not stored in that profile.
 
-Save / Load lists saves for the current level; change levels first to load
-another level's save. The checkpoint (00) is load-only here. Manual slots are
-1–99. Keep saves from different asset editions in separate directories.
+Save / Load browses all seven levels. Loading validates the saved state and actual
+level assets before switching. The checkpoint (00) is load-only here. Manual
+slots are 1–99; saving requires the current playing level and a living Conrad.
+Expand Name / milestone protection to name a save or lock it against overwrite.
+Existing saves require Update to apply changed metadata. Unlock and Update
+before replacing a protected milestone; quicksave respects this protection too.
 Successful loading or rewind resumes play; saving leaves the overlay open.
 
 Capture clean screenshot writes the game frame without the overlay, at its
@@ -260,6 +279,31 @@ recovery shortcut. Menu inputs are cleared before resuming so confirming a
 setting does not fire or move Conrad. Gamepad shoulders switch pages, A
 confirms and B closes. See the [settings guide](docs/SETTINGS.md).
 
+### Recovery and optional assists
+
+After a death scene, recovery offers living rewind moments, checkpoint, retained
+autosaves and manual saves together. High resolution shows preview cards; the
+native menu places the three main recovery buttons before expandable previews.
+Escape/F10/Start keep this screen open. Select a recovery point, Restart level,
+Return to title or the turquoise EXIT GAME button. Failed loads keep progress.
+
+Enhancements provides Sticky Action (also affects firing), a 100 ms Up/Use/Weapon
+tap buffer, reduced camera shake, a steady shield-hit sprite and slower gameplay
+at 50–100%. Assists default off and speed defaults to 100%. The shield-hit option
+keeps original invulnerability timing; it does not filter movie/cutscene artwork.
+Menu text scaling remains under Graphics. Pause, focus loss and disconnect clear
+sticky/buffered input. Save settings keeps these preferences.
+
+Unplugging a pad during play opens a blocking pause. Reconnect or use the keyboard,
+then Resume explicitly. Save settings stores pad/stick bindings for that SDL GUID.
+Missing audio output uses a silent mixer clock so voiced dialogue still finishes;
+reconnecting retries sound without changing the mixer rate.
+
+The optional Objectives page is a companion guide, with reached-chapter goals
+and hints you open deliberately. Its knowledge follows the journal in saves and
+rewind. It does not mark individual puzzles complete automatically. See the
+[complete feature guide](docs/QOL_1.10.md) for profiles, formats and diagnostics.
+
 ## Movement practice
 
 Find a quiet stretch of floor and learn how one action leads into the next.
@@ -292,30 +336,113 @@ If an action does nothing, check your position, facing and selected object.
 Read the messages your own game data presents. This guide leaves story events,
 puzzle solutions and secret routes for you to discover.
 
+## Story journal
+
+Open **QoL → Journal** to read short, original companion passages. Seven chapter
+entries appear only when you play those chapters. A further entry follows a
+completed memory sequence. Skipping to a level does not reveal the chapters
+between. Future titles and passages remain hidden.
+
+A small **Journal: new entry** notice appears while an entry is unread. Opening
+an entry marks it read. The journal never interrupts a jump, fight or cutscene;
+its text can be read in the paused overlay. The page works at 256×224 and larger
+resolutions. Both the journal display and notification can be disabled, and the
+choices can be saved as preferences. Save/load and rewind restore the journal's
+unlocked/read state along with your progress. This is project-written companion
+prose, with no copied dialogue, comic panels or manual passages.
+
 ## Keep your progress
 
-There are three different kinds of progress recovery. Choose one deliberately:
+There are several kinds of progress recovery. Choose one deliberately:
 
 | Mechanism | What it remembers | Survives quitting? |
 | --- | --- | --- |
 | Manual save, slots 1–99 | A game state for the current level and slot. | Yes, when the save succeeds. |
 | In-game checkpoint, slot 0 | A checkpoint state for its level. | Stored in the save directory. |
+| Persistent autosaves | Three recent generations per edition, including a frame preview. | Yes, when a write succeeds. |
 | Rewind through `--autosave` | Recent snapshots from this running session. | No. |
 
 Manual slot 1 is selected initially. Ctrl+S writes it; Ctrl+L loads it. Check the
 slot shown on the Save / Load page before overwriting progress you want to keep.
-Save filenames identify both the level and slot, such as `fb-level1-01.state`.
+New save filenames identify edition, level and slot, such as
+`reminiscence2-0-level1-manual-1.r2m` (edition 0 is Amiga; 1 DOS, 2 Macintosh, 3 PC-98, 4 Sega).
+Version 4 saves also validate the edition, level, entity count and a gameplay-data
+fingerprint before restoring. They retain the random seed and journal state.
+Existing `.state` files (v2/v3/v4) remain readable as a fallback. V2/v3 produce a warning because
+those formats cannot identify their source assets. Keep legacy saves with their
+matching edition. A manual load clears the old rewind branch.
 
-After restarting, enter the matching level through the QoL **Levels** page, a
-menu, password or `--levelnum`, then choose the same slot on **Save / Load**.
-A password starts a level rather than recreating an exact saved position. Keep saves from different asset
-editions in separate directories.
+After restarting, open Save / Load, browse the saved level and select its slot;
+loading switches levels automatically. New `.r2m` bundles atomically include a
+preview, optional ASCII name and overwrite protection. A modern bundle takes
+precedence over a legacy file in the same level/slot. Manual milestones remain
+outside the three-file automatic rotation. A password starts a level rather
+than restoring a saved position. Keep editions in separate save directories.
 
 With `--autosave`, the engine records roughly one in-memory snapshot every five
 seconds while Conrad is alive, up to 120 entries. Ctrl+R restores an older one.
-History resets on a level change and disappears on exit. Continue after death
-can use available session history, a checkpoint, or a level restart according
-to the current state. Make a manual save before closing the game.
+History resets on a level change and disappears on exit. Recovery after death
+offers available rewind history, checkpoints, manual saves, autosaves and a level restart. Keep manual saves for milestones you want to preserve.
+
+### Autosaves and Continue
+
+Persistent autosaves are enabled by default. They keep **three generations** per
+asset edition in the save directory, named `reminiscence2-0-auto-0.r2s` through
+`reminiscence2-0-auto-2.r2s` for Amiga (other editions use their numeric ID).
+These files are independent of checkpoint slot 00 and manual slots 01–99.
+
+The engine saves the first living gameplay frame, then every **60 seconds of
+active play**, after a checkpoint/level change, and on clean exit when progress
+changed and the state can be saved. Pauses, inventory screens and cutscenes do
+not consume the interval. Dead or transitioning frames wait until gameplay is
+coherent. A living frame can still put Conrad near danger; manual saves remain
+useful. Forced termination can lose progress since the last successful write.
+
+On the next launch, the welcome screen offers **Continue latest autosave**,
+**New game** and **EXIT GAME**. Continue restores the newest compatible
+candidate, changing levels automatically; it skips a damaged file or a different
+asset revision and tries an older generation. The command-line `--continue`
+restores directly and skips opening/title screens. It reports failure if no
+candidate can be restored. New game opens the original title/level menu.
+
+During play, **Session → Continue latest autosave** asks before replacing the
+current game. **Save / Load → Persistent autosaves** has a generation selector,
+preview, level, room, health and UTC date; generation 0 is the newest retained
+candidate. Loading a selected generation checks its state and matching assets
+before changing the game. A checksum detects damaged files; atomic replacement
+keeps other generations available if a write fails. Failures are reported in the
+HUD and terminal and do not touch manual saves.
+
+Set **Session → Persistent autosaves / Autosave interval**, or launch with
+`--disk-autosave=SECONDS` (15–600). `--no-disk-autosave` disables writes while
+retained autosaves remain available to Continue. These command-line switches
+override the saved profile for this launch; choose **Save settings** to retain
+the new choice. The separate `--autosave` flag still enables in-memory rewind.
+
+### Preview a rewind point
+
+Enable **Session → Rewind history** or launch with `--autosave`. The **Rewind**
+page lists up to 120 moments, captured about every five seconds while alive.
+Select a point to see its captured frame, age in active seconds, room and health,
+then choose **Restore selected moment** and confirm. The engine restores the
+state, random seed and journal together. The selected moment and all newer
+snapshots are removed; earlier history remains. Ctrl+R immediately restores the
+latest available point. A manual/autosave load or level change clears history;
+rewind never survives an exit. Rewind intervals count active gameplay; inventory and dialogue pauses do not
+consume the five-second interval. Escape, F10 or Start can leave inventory for
+the QoL overlay. Original-resolution menus use a smaller preview
+and scrolling content, with the Resume/EXIT GAME footer always available.
+
+### Contextual control reminders
+
+Enable **Session → Contextual control hints** to see brief reminders about
+running, nearby objects, inventory and low shield. They are off by default,
+contain original project-written text and reveal no puzzle solutions. Key labels
+and pad button names (numbered buttons for raw joysticks) follow your bindings, including changes made during
+play. Each reminder appears once per new game, remains for eight active seconds,
+and has a ten-second gap before another reminder. Pauses stop those timers.
+Rewinding does not repeatedly show reminders already seen. Toggle hints off and
+on to reset the reminders in the current session.
 
 ## Picture and sound
 
@@ -464,6 +591,9 @@ and examples at any time, run `reminiscence2 -h`.
 | `--levelnum=NUM` | Initial level, 0–6; default 0. Menus can change it, and opening sequences still play. |
 | `--language=LANG` | `fr`, `en`, `de`, `sp`, `it`, `jp` or `ru`, ignoring case. Default: file detection, then English. |
 | `--autosave` | Enable session-only rewind; default off. |
+| `--continue` | Restore the latest compatible autosave directly, or report failure. |
+| `--disk-autosave=SECONDS` | Enable disk autosaves every 15–600 active seconds; default 60. |
+| `--no-disk-autosave` | Disable automatic disk writes; retained autosaves remain loadable. |
 | `--cheats=MASK` | Gameplay flags described below; default 0. |
 | `--outputrate=HZ` | Request 8,000–192,000 Hz audio; default 22050. |
 | `--mididriver=NAME` | `adlib`, `fluidsynth`, `mt32` or `none`; default `adlib`. |
@@ -555,7 +685,7 @@ variant; shape challenges use `false`.
 | Soundfont or MT-32 startup fails | Check backend selection and the external file requirements in [Picture and sound](#picture-and-sound). |
 | A cutscene seems to repeat | Some gameplay panels loop or wait for input. Try Enter/Space/directions, or Backspace/Tab/Escape in the mini player. |
 | Screenshot output fails | Alt+S writes to the working directory; it must be writable. |
-| Controller input differs | Try the keyboard bindings; physical-controller and remapping work is incomplete. |
+| Controller input differs | Try the keyboard bindings; adjust bindings/dead zones in QoL → Joypad; physical-device validation is pending. |
 
 For a useful bug report, include the executable's `--version` output, asset
 edition and language, launch command, relevant configuration, and a short

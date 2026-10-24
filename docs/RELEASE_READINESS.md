@@ -1,3 +1,8 @@
+> Historical audit against the pre-release tree. Its filesystem, atomic-save,
+> hotplug and packaging action items were implemented in versions 1.02–1.06.
+> See [the changelog](../CHANGELOG.md), [current roadmap](ROADMAP.md) and
+> [release recipes](RELEASES.md) for current status.
+
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
 # Release readiness and next fixes

@@ -96,11 +96,11 @@ enum Language {
 };
 
 enum ResourceType {
-	kResourceTypeAmiga,
-	kResourceTypeDOS,
-	kResourceTypeMac,
-	kResourceTypePC98,
-	kResourceTypeSega,
+	kResourceTypeAmiga = 0,
+	kResourceTypeDOS = 1,
+	kResourceTypeMac = 2,
+	kResourceTypePC98 = 3,
+	kResourceTypeSega = 4,
 };
 
 enum Skill {

@@ -78,6 +78,8 @@ void Game::pge_loadForCurrentLevel(uint16_t idx) {
 	live_pge->current_inventory_PGE = 0xFF;
 	live_pge->ref_inventory_PGE = 0xFF;
 	live_pge->anim_number = 0;
+	live_pge->flags = 0;
+	live_pge->first_obj_number = 0;
 	live_pge->index = idx;
 	live_pge->next_PGE_in_room = 0;
 

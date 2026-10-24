@@ -9,6 +9,8 @@ bool saveBMP(const char *filename, const uint8_t *bits, const uint8_t *pal, int 
 	if (!bits || w <= 0 || h <= 0 || w > 16384 || h > 16384) {
 		return false;
 	}
+	if (!filename || !bits || w <= 0 || h <= 0 || w > 16384 || h > 16384)
+		return false;
 	File f;
 	if (f.open(filename, "wb", ".")) {
 		const int paletteSize = pal ? 4 * 256 : 0;
@@ -59,7 +61,7 @@ bool saveBMP(const char *filename, const uint8_t *bits, const uint8_t *pal, int 
 				f.writeByte(0);
 			}
 		}
-		if (!f.ioErr()) {
+		if (f.close()) {
 			return true;
 		}
 	}

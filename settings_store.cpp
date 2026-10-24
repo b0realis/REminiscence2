@@ -67,6 +67,27 @@ std::vector<Field> fields(Preferences &p) {
 	boolean("extra_carte", p.extraCarte);
 	boolean("extra_metro", p.extraMetro);
 	boolean("extra_serrure", p.extraSerrure);
+	integer("stick_deadzone", p.stickDeadzone, 5, 50);
+	boolean("right_stick_movement", p.rightStickMovement);
+	boolean("story_journal", p.storyJournal);
+	boolean("journal_notifications", p.journalNotifications);
+	boolean("disk_autosave", p.diskAutosave);
+	integer("disk_autosave_seconds", p.diskAutosaveSeconds, 15, 600);
+	boolean("contextual_hints", p.contextualHints);
+	boolean("sticky_action", p.stickyAction);
+	boolean("reduce_shake", p.reduceShake);
+	boolean("reduce_blink", p.reduceBlink);
+	boolean("input_buffer", p.inputBuffer);
+	integer("game_speed", p.gameSpeed, 50, 100);
+	boolean("objectives_notebook", p.objectivesNotebook);
+	for (size_t i = 0; i < PadBindingCount; ++i) {
+		result.push_back({"pad_button_" + std::to_string(i), -1, 33,
+		                  [&p, i] { return p.padButtons[i]; },
+		                  [&p, i](int n) { p.padButtons[i] = n; }});
+		result.push_back({"joystick_button_" + std::to_string(i), -1, 31,
+		                  [&p, i] { return p.joystickButtons[i]; },
+		                  [&p, i](int n) { p.joystickButtons[i] = n; }});
+	}
 	static const char *const bindings[] = {"key_left",   "key_right",     "key_up",
 	                                       "key_down",   "key_action",    "key_use",
 	                                       "key_weapon", "key_inventory", "key_pause"};
@@ -120,7 +141,10 @@ bool load(const std::string &path, Preferences &preferences, std::string &diagno
 			continue;
 		}
 		uint32_t number;
-		if (parseUnsignedOption(found->second.c_str(), field.minimum, field.maximum, number)) {
+		if (field.minimum == -1 && found->second == "-1") {
+			field.put(-1);
+		} else if (parseUnsignedOption(found->second.c_str(), std::max(0, field.minimum),
+		                               field.maximum, number)) {
 			field.put(number);
 		} else {
 			diagnostic = "Ignored an out-of-range preferences value: " + field.name;
@@ -132,7 +156,9 @@ bool load(const std::string &path, Preferences &preferences, std::string &diagno
 	std::string reason;
 	if (!validate(parsed, reason)) {
 		parsed.keys = preferences.keys;
-		diagnostic = "Ignored invalid keyboard bindings: " + reason;
+		parsed.padButtons = preferences.padButtons;
+		parsed.joystickButtons = preferences.joystickButtons;
+		diagnostic = "Ignored invalid input bindings: " + reason;
 	}
 	preferences = parsed;
 	return true;

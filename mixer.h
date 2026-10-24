@@ -14,6 +14,7 @@
 #include "sfx_player.h"
 #include "music_options.h"
 #include <memory>
+#include <atomic>
 namespace music {
 class PrfPlayer;
 }
@@ -69,10 +70,10 @@ struct Mixer {
 	FileSystem *_fs;
 	SystemStub *_stub;
 	MixerChannel _channels[NUM_CHANNELS];
-	PremixHook _premixHook;
-	void *_premixHookData;
+	PremixHook _premixHook = nullptr;
+	void *_premixHookData = nullptr;
 	MusicType _backgroundMusicType;
-	MusicType _musicType;
+	std::atomic<MusicType> _musicType;
 	CpcPlayer _cpc;
 	ModPlayer _mod;
 	OggPlayer _ogg;
@@ -90,6 +91,7 @@ struct Mixer {
 	void free();
 	void setPremixHook(PremixHook premixHook, void *userData);
 	void clearPremixHook(void *owner);
+	bool hasPremixHook(void *owner) const;
 	void play(const uint8_t *data, uint32_t len, uint16_t freq, uint8_t volume);
 	bool isPlaying(const uint8_t *data) const;
 	uint32_t getSampleRate() const;

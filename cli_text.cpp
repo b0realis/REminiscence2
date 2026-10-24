@@ -146,13 +146,13 @@ DISPLAY
 
   --scaler=NAME@X                        Default: scale@3
       Select pixel scaling and the initial window size multiplier X.
-      Use a positive whole-number X; omitting @X keeps the default of 3.
+      Use a whole-number X from 1 to 64; omitting @X keeps the default of 3.
       Built-in names:
         point   Sharp nearest-neighbor sampling by the graphics renderer.
         linear  Smooth linear sampling by the graphics renderer.
         scale   ScaleNx edge-aware pixel scaling at 2x, 3x or 4x.
-      The scale factor is clamped to the scaler's supported range (2-4 for
-      scale). Fullscreen output is fitted to the display. Examples:
+      The scale factor is clamped to the scaler's supported range (1-6 for
+      point/linear, 2-4 for scale). Fullscreen output is fitted to the display. Examples:
       --scaler=point@3, --scaler=linear@2, --scaler=scale@4.
       Other names require a compiled-in scaler or a matching plugin in the
       working directory: scaler_NAME.so (scaler_NAME.dll on Windows).
@@ -188,8 +188,29 @@ GAMEPLAY
       up to 120 snapshots (about 10 minutes). Ctrl+R restores the previous
       snapshot; Continue after death can restore the latest one.
       Rewind history is cleared on level changes and lost when you quit.
-      It does not create a persistent autosave file. Use manual saves or
-      game checkpoints to retain progress between sessions.
+      This switch controls memory history; persistent autosaves are separate.
+
+  --continue
+      Restore the newest valid autosave for this edition, switching levels
+      and skipping the opening/title screens. Try older generations if a
+      file is damaged or its gameplay assets differ. Exit with an error if
+      none can be restored. Normal launches offer a welcome-back Continue
+      screen when valid autosave files exist; New game opens the title menu.
+
+  --disk-autosave=SECONDS                Default: enabled, 60 seconds
+      Enable persistent autosaves every 15-600 seconds of active gameplay.
+      Also save the first living frame, after a checkpoint/level change and
+      on clean exit when progress changed. Pauses do not consume the timer.
+      Three rotating, checksum-validated .r2s files are kept in --savepath,
+      separately for each edition and independently of manual slots 00-99.
+      Save / Load previews and restores any retained autosave across levels.
+      A living frame can still be hazardous; keep manual milestone saves.
+
+  --no-disk-autosave
+      Disable automatic disk saves for this launch. Retained autosaves stay
+      available for Continue. --disk-autosave overrides this if used later.
+      These switches override saved preferences. Save settings can retain
+      the chosen interval and enable/disable choice for future launches.
 
   --cheats=MASK                          Default: 0 (off)
       Enable any combination of these bit flags by adding their values:
@@ -254,7 +275,7 @@ DIAGNOSTICS
 
 IN-GAME SETTINGS
   Escape, F10, controller Start or the on-screen Menu [F10] button opens the
-  paused QoL overlay. Eight pages provide a save/load/checkpoint browser,
+  paused QoL overlay. Eleven pages provide a save/load/checkpoint browser,
   rewind, live display/audio, enhancements, keyboard rebinding, all engine
   cheats and level/difficulty selection. Enhancements includes Conrad's
   Original, Red/Pink or White T-shirt inside the jacket. The jacket, shoes and
@@ -267,12 +288,21 @@ IN-GAME SETTINGS
   Mouse, keyboard navigation and SDL gamepad navigation are supported.
   Tab/Shift+Tab changes focus; arrows adjust; Enter/Space activates.
   Controller shoulders switch tabs, A confirms and B closes.
+  Joypad remaps gameplay/raw joystick buttons, sets a 5-50% stick dead zone,
+  enables optional right-stick movement and assigns save/load/rewind buttons.
+  Start always opens settings. Journal contains optional original companion
+  passages for reached chapters and completed memory scenes, with a small
+  unread notice. Save/load and rewind restore journal progress and randomness.
+  Rewind previews captured frames, room, health and age; choose a moment to
+  restore, discarding newer history. Session offers optional contextual
+  control hints using your current keyboard/pad bindings, once per new game.
+  Hints expire after eight active seconds and contain no puzzle solutions.
   Rebinding captures one physical key. Escape cancels capture. F10 is fixed
   so settings remain reachable even after changing the Pause binding.
 
   Changes apply to the current session. Save settings writes preferences.cfg
   in --savepath using an atomic replacement. Startup reads fb.cfg, then saved
-  preferences, then applies explicit display/rewind command-line overrides.
+  preferences, then applies explicit display/rewind/autosave command-line overrides.
   --no-preferences skips the saved layer. Undo settings changes restores the
   opening preferences; Restore default settings resets built-in choices.
   Neither changes the saved file until Save settings is chosen.

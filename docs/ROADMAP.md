@@ -5,6 +5,43 @@ preserving its animation, collision, pacing, puzzles, music and atmosphere.
 The original experience remains the reference. Improvements that change play
 or presentation should be explicit options.
 
+## Current position (24 October 2026)
+
+Version 1.11 brings the 1.07–1.10 changes together for six platform targets and
+corresponding source, with a focused pass over save feedback, controller defaults,
+disconnect pause frames and shortcut rewind. Atomic
+saves, standard writable paths, indexed assets, hotplug, keyboard rebinding,
+compact/high-resolution QoL menus, and release recipes are implemented. The
+1.07 patch adds joypad remapping/dead zones, source-independent input, a story
+journal, edition-identified save states with random/journal restoration,
+fractional timing, audio corrections and bounded object/SEQ decoders.
+
+The sections below retain the original planning context; completed items there
+are not outstanding implementation requests.
+
+## Next gameplay and optimization candidates
+
+The 1.08 patch implements three rotating autosaves, Continue across
+sessions/levels, retained-generation previews, a rewind timeline, and optional
+contextual control reminders. The 1.09 campaign adds save/script validation, audio ownership/timing
+fixes, active-time rewind, inventory-to-QoL access, bounded foreground decoding
+and deterministic route stress.
+
+The [1.10 patch](QOL_1.10.md) implements unified recovery, a cross-level
+manual browser with protected milestones, HUD feedback/diagnostics, GUID pad
+profiles and triggers, accessibility assists, a chapter notebook and audio-loss
+recovery. Local disk timing is measured; background writing remains conditional
+on actual storage/device stalls.
+
+1. Optional practice modes and more granular puzzle progress, preserving original
+   movement/collision by default. Hold/toggle assistance is implemented in 1.10.
+2. In-game replay of discovered scenes and dialogue review from player assets.
+3. Profile room/sprite decoding, texture upload, audio and frame-time variance on
+   Deck/Quest before choosing caches or promising FPS/battery gains.
+4. Longer deterministic route replays/state hashes, real GOG DOS/Macintosh CD
+   data, and physical Deck/Quest/controller validation.
+
+
 ## Foundation
 
 The initial development pass imports the selected source snapshot with preserved provenance,
