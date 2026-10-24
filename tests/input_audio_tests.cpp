@@ -27,6 +27,57 @@ int main(int argc, char **argv) {
 	std::filesystem::create_directories(argv[1]);
 	settings::Preferences p;
 	PlayerInput pi{};
+	// Title controls are independent of frame cadence and OS key repeat.
+	MenuInput menu;
+	menu.buttons(MenuInput::Down, 100);
+	menu.buttons(0, 110);
+	menu.buttons(MenuInput::Up, 115);
+	menu.buttons(0, 120);
+	menu.buttons(MenuInput::Confirm, 125);
+	menu.buttons(0, 130);
+	check(menu.next().type == MenuInput::Down && menu.next().type == MenuInput::Up &&
+	          menu.next().type == MenuInput::Confirm && menu.next().type == MenuInput::None,
+	      "quick menu taps and confirmation retain their order between frames");
+	menu.buttons(MenuInput::Down, 200);
+	check(menu.next().type == MenuInput::Down, "first menu press moves immediately");
+	for (uint32_t now = 230; now < 600; now += 30) {
+		menu.buttons(MenuInput::Down, now);
+		menu.repeat(now);
+		check(menu.next().type == MenuInput::None, "short hold moves only one row");
+	}
+	menu.repeat(600);
+	check(menu.next().type == MenuInput::Down, "held menu arrow repeats after 400 ms");
+	menu.repeat(719);
+	check(menu.next().type == MenuInput::None, "menu repeat rate is limited");
+	menu.repeat(720);
+	check(menu.next().type == MenuInput::Down, "menu repeat interval is 120 ms");
+	menu.repeat(10000);
+	check(menu.next().type == MenuInput::Down && menu.next().type == MenuInput::None,
+	      "long frame does not cause a burst of menu navigation");
+	menu.buttons(0, 10001);
+	menu.repeat(20000);
+	check(menu.next().type == MenuInput::None, "release stops menu repetition");
+	menu.buttons(MenuInput::Confirm, 20001);
+	check(menu.next().type == MenuInput::Confirm, "confirmation starts on press");
+	menu.repeat(21000);
+	check(menu.next().type == MenuInput::None, "held confirmation never repeats");
+	menu = MenuInput{};
+	menu.buttons(MenuInput::Down, UINT32_MAX - 100);
+	menu.next();
+	menu.repeat(299);
+	check(menu.next().type == MenuInput::Down, "menu repeat handles timer wraparound");
+	menu = MenuInput{};
+	for (int i = 0; i < 3; ++i)
+		menu.wheel(0.25f);
+	check(menu.next().type == MenuInput::None,
+	      "fractional trackpad events do not race through rows");
+	menu.wheel(0.25f);
+	check(menu.next().type == MenuInput::Up,
+	      "fractional trackpad movement accumulates to one step");
+	menu.wheel(0.75f);
+	menu.wheel(-1.f);
+	check(menu.next().type == MenuInput::Down,
+	      "reversing the wheel discards previous fractional motion");
 	InputState input;
 	input.key(SDL_SCANCODE_RIGHT, SDLK_RIGHT, true);
 	input.publish(pi, p);

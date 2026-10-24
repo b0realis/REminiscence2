@@ -71,3 +71,6 @@ fb
 /packaging/android/app/src/main/assets/
 
 *.r2m
+
+# Private Sega CD disc image supplied for compatibility testing.
+/Flashback - The Quest for Identity (USA) (Adventure, Platform, Puzzle) (1992) (Sega CD, Mega CD)/

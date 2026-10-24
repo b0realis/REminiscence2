@@ -1,6 +1,48 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 # Changes
 
+## 1.24
+
+- Fix Sega CD movie timing after focus/background pauses: video waits for the
+  resumed audio instead of racing through the elapsed wall time.
+- Invalidate WAV streams after any failed open, reject Windows device filenames
+  in extracted disc paths, and bound CUE reads before allocation.
+- Add `play-movies-local.sh` for the private Sega CD movie browser. Refresh its
+  help and format documentation; retain the local Amiga/DOS/Sega CD play choices.
+- Package the title-input fixes and Sega CD gameplay, music, movies, dialogue,
+  extraction tools and asset-format reference from 1.22–1.23 for all six targets.
+
+## 1.23
+
+- Add a bounded Python CUE/BIN extractor for the supplied Sega CD disc: preserve
+  ISO files, remove audio pregaps, write lossless WAV tracks and SHA256 manifests,
+  and refuse existing output directories.
+- Add the US Sega CD resource adapter, including split-stream character sprites,
+  separate object/background banks, original title graphics and verified embedded
+  fonts/icons/text. Derive city room-bank selection from both LEV directories so
+  direct save restoration and adjacent-room previews use the right resources.
+- Play MCD movies with embedded PCM, original event variants and playback lengths;
+  add them to the Python cutscene browser. Preserve VCE dialogue and decode large
+  CD sound effects without treating valid sizes as missing entries.
+- Stream PCM16 WAV backgrounds through the existing music selector and resampler;
+  extracted CD music can accompany another game's asset edition. Add `--segacd`
+  to the local launcher. Original imported assets remain unchanged.
+- Document every supported asset family, file requirements, byte layouts,
+  compression, source entry points, validation limits and the full tested CD
+  inventory. Add synthetic extraction/media tests and private CD integration
+  and startup regressions. Build locally; release publication remains on hold.
+
+## 1.22
+
+- Fix over-sensitive Amiga title navigation and missed DOS title taps. Queue
+  menu presses and use a shared 400 ms hold delay / 120 ms repeat interval for
+  keyboard, D-pad and stick controls. Keep arrows/Enter/Esc available after remapping.
+- Add mouse hover/click and wheel navigation to original title, Skill and Level
+  menus, with native-resolution hit boxes and widescreen/HiDPI coordinate mapping.
+- Allow left-click to skip developer logos, intro and story cutscenes using the
+  existing separate skip settings. Consume the release so a skip cannot activate
+  the next menu or gameplay HUD. Update the manual and settings descriptions.
+
 ## 1.21
 
 - Fix stale background-music state when a custom pack omits the next level's

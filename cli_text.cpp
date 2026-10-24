@@ -48,13 +48,18 @@ GETTING STARTED
   Keep editions in separate subfolders. The engine detects them and offers
   a remembered choice when several are found. Change it in QoL / Session.
   DOS (including classic DOS data from GOG), Amiga, Macintosh and PC-98 data
-  have loaders. Sega Mega Drive extracted data is experimental, without Sega
-  audio playback from ROMs. Supplied GOG DOS-format data passes startup and
+  have loaders. Sega CD US extracted data includes movies, voices and CD music.
+  Sega Mega Drive cartridge data is experimental, without ROM audio playback.
+  Supplied GOG DOS-format data passes startup and
   level-rendering tests; Macintosh CD data still needs real-asset validation.
   Installers, LHA archives, WHDLoad slaves and disk/ROM images cannot be used
   directly. Amiga RNC-packed files must be unpacked before use.
   Prepare a WHDLoad LHA package with tools/extract_amiga.py; run
   python3 tools/extract_amiga.py --help for its setup and usage instructions.
+  Prepare Sega CD CUE/BIN with Python 3.9+ (no extra dependencies):
+  python3 tools/extract_segacd.py "Flashback.cue" --output assets/segacd
+  The output must be a new directory; files and lossless WAV music stay separate
+  from other editions. See docs/ASSETS.md and docs/formats/README.md for details.
 
   Paths may be absolute or relative to your current working directory,
   including the config, tune and save paths. Quote paths containing spaces.
@@ -92,22 +97,23 @@ ASSET AND SOUNDTRACK SELECTION
       assets/music/sega-cd folder. QoL / Audio offers the same selector.
       Missing/unsupported files fall back to native music where available.
       Changes apply immediately; Save settings remembers them.
-      Supply your own Ogg Vorbis recordings (mono/stereo, 8000-192000 Hz).
+      Supply Ogg Vorbis or PCM16 WAV backgrounds (mono/stereo, 8000-192000 Hz).
       Backgrounds loop: track02.ogg menu, 03 level 1, 04 level 2, 05 level 3,
       06 levels 4-5, 07 levels 6-7, 09 credits (all named trackNN.ogg).
+      WAV backgrounds use trackNN.wav; Ogg takes priority when both exist.
+      --music-source=sega:segacd selects the extracted CD set's soundtrack.
       Scene cues use these names plus .ogg and loop until the scene ends:
         intro options journal ceinture desinteg reunion voyage level4
         planetexplo fin ascenseur logo game_over holocube memoire chute
         debut missions taxi donneobj missions2 recharge generate pont rechagen
       options.ogg takes priority over the menu track02.ogg. Missing cues try
       selected-source MOD/PRF, then native music. This does not replace effects,
-      voices or embedded SEQ movie audio. Genesis/Sega CD recordings can be
-      used this way; raw ROM/VGM playback and disc extraction are not included.
+      voices or embedded SEQ/MCD movie audio. Raw ROM/VGM playback is not included.
 
 CUTSCENE PLAYER
   --list-cutscenes
       Inspect the selected game data and print a JSON catalog of available
-      polygon cutscene files, descriptive titles and part counts, then exit.
+      polygon cutscenes or Sega CD MCD movies, titles and part counts, then exit.
       No banner, graphics window, audio device or save/tune folders are
       created. Part numbers start at zero. An empty catalog is valid.
 

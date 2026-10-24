@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "cutscene_tool.h"
 #include "cutscene_assets.h"
+#include "mcd_player.h"
 #include "game.h"
+#include "systemstub.h"
 #include "util.h"
 #include <algorithm>
 #include <cctype>
@@ -134,6 +136,16 @@ bool parseSelection(const char *value, Selection &selection) {
 
 std::vector<Entry> catalog(Resource &res) {
 	std::vector<Entry> result;
+	if (res.isSegaCD()) {
+		for (const auto &name : mcd::names())
+			if (res.fileExists((name + ".MCD").c_str()))
+				result.push_back({lower(name),
+				                  name == "SC1"   ? "Opening (including logos)"
+				                  : name == "SC2" ? "Ending and credits"
+				                                  : name,
+				                  0, 1});
+		return result;
+	}
 	std::set<std::string> seen;
 	for (size_t index = 0; index < Cutscene::_namesCount; ++index) {
 		const char *stem = Cutscene::resourceName(index, res._type);
@@ -162,6 +174,7 @@ std::vector<Entry> catalog(Resource &res) {
 void printCatalog(FILE *stream, const std::vector<Entry> &entries, const Resource &res) {
 	const char *edition = res.isAmiga()                    ? "Amiga"
 	                      : res.isMac()                    ? "Macintosh"
+	                      : res.isSegaCD()                 ? "Sega CD (US)"
 	                      : res.isSega()                   ? "Sega"
 	                      : res._type == kResourceTypePC98 ? "PC-98"
 	                                                       : "DOS";
@@ -186,6 +199,15 @@ bool play(Game &game, const Selection &selection) {
 		        "and parts.\n",
 		        selection.name.c_str(), selection.part);
 		return false;
+	}
+	if (game._res.isSegaCD()) {
+		game._mix.init();
+		mcd::Player player(game._stub, &game._mix);
+		const bool ok = player.play((selection.name + ".MCD").c_str(), game._fs,
+		                            game._preferences.skipCutscenesWithKeyboard,
+		                            [&] { return game._stub->_pi.escape; });
+		game._mix.free();
+		return ok;
 	}
 	const int event = gameEvent(game._res, selection.name, selection.part);
 	game._cut._id = event >= 0 ? event : 0xFFFF;

@@ -51,7 +51,11 @@ Start with a window and keep your saves separate from the game files:
 
 Music defaults to the selected edition. For separate soundtracks, use
 **QoL → Audio → Soundtrack**; `--tunepath` remains available for a custom native music folder.
-Use the title menu to start a game. Arrow keys move through menus; Enter confirms.
+Use the title menu to start a game. Arrow keys move through menus; Enter confirms. A tap moves one item; holding an
+arrow starts a steady repeat after a short delay. Move the mouse over an item to
+select it, left-click to activate it, or use the mouse wheel to move up/down.
+These controls also work in the classic Skill and Level screens; clicking a
+level starts it, while clicking its difficulty changes the selection.
 
 > **First-session kit:** arrows to move, Shift for actions, Space for the gun,
 > Enter to use an item, Tab for inventory, Ctrl+S to save, Esc or F10 for settings.
@@ -70,6 +74,7 @@ assets/
   amiga/           # unpacked Amiga resources
   gog/             # original DOS resources, or the extracted installation tree
   mac/             # supported Macintosh resource file
+  segacd/          # extracted disc files, DATA/ and music/
   music/
     sega-cd/       # your mapped Ogg tracks
     genesis/       # another optional soundtrack pack
@@ -96,7 +101,8 @@ choice if several sets are available and none is remembered.
 | DOS / classic DOS files from GOG | The original data directory, with its resource files or supported archives. | Supplied GOG Windows data passes opening/title, seven-level background and pistol-effect regressions; a full playthrough remains. |
 | Macintosh / Macintosh CD target | A supported `FLASHBACK.BIN` or `FLASHBACK.RSRC` containing the resource fork. | Synthetic resource tests pass; original Macintosh CD data still needs validation. |
 | PC-98 | The edition's supported PAQ data. | Format support is present; real-data runtime checks remain. |
-| Sega Mega Drive | Extracted engine resources. | Experimental; ROM extraction and Sega audio are not implemented. |
+| Sega CD US | Complete extracted CUE/BIN output, including DATA/, movies and music. | Supplied disc passes all-frame movie decoding, dialogue, music, seven level starts and startup/save checks. Full playthrough remains. |
+| Sega Mega Drive | Extracted cartridge engine resources. | Experimental; ROM extraction and cartridge audio playback are not implemented. |
 | 3DO | No supported data path in this build. | Research target only. |
 
 An installer, WHDLoad slave, disk image, ROM image or original program executable
@@ -123,8 +129,24 @@ from Amiga or Macintosh resources. This path was verified with installer build
 
 The local development launcher scans `.local/assets`: `./play-local.sh`.
 Use `./play-local.sh --amiga` for the prepared Amiga files or
-`./play-local.sh --gog` for the extracted GOG folder above.
-Both use the current local Apple Silicon build and accept further engine options.
+`./play-local.sh --gog` for the extracted GOG folder above, or
+`./play-local.sh --segacd` for the prepared Sega CD files.
+These use the current local Apple Silicon build and accept further engine options.
+
+### Sega CD preparation
+
+Python 3.9+ can prepare your CUE/BIN disc without extra dependencies:
+
+```sh
+python3 tools/extract_segacd.py "/path/to/Flashback.cue" --list
+python3 tools/extract_segacd.py "/path/to/Flashback.cue" --output assets/segacd
+```
+
+Choose a new output directory. The tool preserves original data and movies,
+extracts CD music to lossless WAV, and writes an integrity manifest. The US
+edition includes movie sound and spoken dialogue. Keep each edition separate.
+See [Sega CD support](docs/SEGA_CD.md), [required assets](docs/ASSETS.md) and the
+[format reference for developers](docs/formats/README.md).
 
 ### Amiga WHDLoad preparation
 
@@ -342,12 +364,12 @@ settings. Explicit display/rewind command-line options override the saved
 profile. Use `--no-preferences` to ignore that profile for one launch. Paths,
 language, output rate and synthesizer selection remain startup options.
 
-To skip a cutscene, press **Space or any letter key (A–Z)**. Under
-**Enhancements → Cutscene presentation**, the separate **Space/A-Z skips developer
-logos** and **Space/A-Z skips other cutscenes** options are both on by default.
+To skip a cutscene, press **Space or any letter key (A–Z)**, or **left-click**. Under
+**Enhancements → Cutscene presentation**, the separate **Key/click skips developer
+logos** and **Key/click skips other cutscenes** options are both on by default.
 The second option covers the intro, story scenes and available movie replacements.
-Each scene requires a fresh press; holding the key will not skip the next scene
-or perform a gameplay action. **Save settings** remembers these choices.
+Each scene requires a fresh press or click; holding the key or mouse button will
+not skip the next scene or activate a menu/gameplay control. **Save settings** remembers these choices.
 Backspace remains available when the new shortcuts are off.
 
 The Controls page includes an illustrated keyboard: action keys are colored,
@@ -484,7 +506,7 @@ useful. Forced termination can lose progress since the last successful write.
 
 By default, launch plays the developer logos and introduction, then opens
 the title menu, including when saves already exist. **Space** or any **A–Z**
-key skips the current scene by default; **Backspace** always remains available.
+key or **left-click** skips the current scene by default; **Backspace** always remains available.
 **Esc**, **F10** or controller **Start** opens the full QoL menu immediately,
 even during the first logo. This leaves the opening sequence; closing settings
 returns to the title. **Levels** starts a chosen level, **Save / Load** restores
@@ -583,16 +605,22 @@ Amiga graphics with DOS PRF music. Changes apply immediately; **Save settings**
 remembers them. **This edition / supplied tunes** restores native music selection.
 Missing or unreadable tracks fall back to the selected game's music when available.
 Sound effects, voices and gameplay assets continue to come from the game edition.
-Embedded audio in SEQ movies is not replaced by this selector.
+Embedded audio in SEQ and Sega CD MCD movies is not replaced by this selector.
 
 For recordings from Genesis, Sega CD or another soundtrack you supply, put
-**Ogg Vorbis** files in `assets/music/<pack-name>/`. The engine discovers the pack;
+**Ogg Vorbis** files or **PCM16 WAV background tracks** in `assets/music/<pack-name>/`. The engine discovers the pack;
 choose it from Audio or use `--music-source=music:music/<pack-name>`. Run
 `--list-assets` to see exact IDs. `--music-source=amiga` or `dos` selects a discovered
 edition's music when unique; `--music-source=native` clears the override.
 These switches override saved choices for the current launch.
 
-Name background tracks as follows; each loops:
+Name background tracks as follows; each loops. The same names with `.wav` are
+also accepted; `.ogg` takes priority when both exist. For the extracted CD set,
+choose **Sega CD** in Audio or `--music-source=sega:segacd` (use `--list-assets`
+for the exact ID). Track08 is preserved but has no default background mapping.
+
+Sega CD includes its logos inside the opening SC1 movie and credits inside SC2.
+Name background tracks as follows:
 
 | Filename | Where it plays |
 | --- | --- |
@@ -616,8 +644,9 @@ A cue loops until the scene stops it. `options.ogg` takes priority over the
 menu's `track02.ogg`. An omitted cue uses an available MOD/PRF cue from the
 chosen source, then native fallback. Mono and stereo Ogg files at 8–192 kHz
 are adapted to the output rate. Keep each pack in its own folder; no music files
-are bundled or downloaded. This supports already prepared recordings, **not raw
-Genesis ROM/VGM playback or extraction from Sega CD disc images**.
+are bundled or downloaded. PCM16 WAV backgrounds also support mono/stereo at
+8–192 kHz. Use `tools/extract_segacd.py` to prepare CUE/BIN discs; raw Genesis
+ROM/VGM playback remains unsupported.
 
 `--tunepath` still selects the native optional MOD/OGG/CPC music folder. DOS
 PRF/MIDI/INS files are searched in the game-data folder first. Avoid pointing
@@ -659,7 +688,7 @@ renderer, subtitles and audio. Select a number or name, then a part if asked.
 Part numbering begins at zero. A finished part returns to the menu; `--play`
 plays once and exits. Type `q` at the terminal menu to quit.
 
-Backspace, Tab or Escape skips playback. Space and letter keys also skip by
+Backspace, Tab or Escape skips playback. Space, letter keys and left-click also skip by
 default, controlled by the saved Enhancements options above. Enter and directions
 advance interactive panels. Closing the playback window also returns to the menu.
 Short or static selections are normal: the catalog includes original gameplay

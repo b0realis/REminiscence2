@@ -1,6 +1,6 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Launch the local Apple Silicon build with private Amiga or extracted GOG assets.
+# Launch the local Apple Silicon build with private Amiga, GOG or Sega CD assets.
 set -eu
 
 project_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
@@ -13,6 +13,7 @@ case "${1-}" in
         shift
         ;;
     --amiga) asset_choice="--asset-set=amiga:amiga-unpacked"; shift ;;
+    --segacd) asset_choice="--asset-set=sega:segacd"; shift ;;
 esac
 
 if [ ! -x "$engine" ]; then

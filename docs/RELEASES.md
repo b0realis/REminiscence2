@@ -81,6 +81,9 @@ external files folder. You can import a prepared ZIP through Android's document
 picker without broad storage permissions. ZIP imports validate paths, sizes and
 a supported-data marker before replacing the old assets. WHDLoad LHA/RNC
 preparation still runs on the computer with `tools/extract_amiga.py`.
+Sega CD preparation also runs on the computer: `tools/extract_segacd.py` writes
+a new asset folder with lossless WAV music. Copy that complete folder to the
+device, keeping its files separate from other editions; see [SEGA_CD.md](SEGA_CD.md).
 
 ### Push from Linux using adb
 

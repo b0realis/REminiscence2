@@ -6,6 +6,7 @@
 
 #include "game.h"
 #include "decode_mac.h"
+#include "file.h"
 #include <vector>
 #include "menu.h"
 #include "resource.h"
@@ -93,6 +94,37 @@ void Menu::drawString2(const char *str, int16_t y, int16_t x) {
 
 void Menu::loadPicture(const char *prefix) {
 	debug(DBG_MENU, "Menu::loadPicture('%s')", prefix);
+	if (_res->isSegaCD()) {
+		_res->clearLevelRes();
+		_res->load("PRESENT", Resource::OT_MBK);
+		_res->load("PRESENT", Resource::OT_PAL);
+		_res->load("PRESENT", Resource::OT_LEV);
+		_res->clearBankData();
+		_vid->AMIGA_decodeLev(0, 0);
+		File title;
+		std::array<uint8_t, 32 + 28 * 6 * 32> logo{};
+		if (title.open("TITLE.BIN", "rb", _res->_fs) &&
+		    title.read(logo.data(), logo.size()) == logo.size()) {
+			for (unsigned i = 0; i < 16; ++i) {
+				const Color c =
+				    Video::AMIGA_convertColor(READ_BE_UINT16(logo.data() + i * 2), true);
+				_stub->setPaletteEntry(0xC0 + i, &c);
+			}
+			for (unsigned y = 0; y < 48; ++y)
+				for (unsigned x = 0; x < 224; ++x) {
+					const unsigned index = (y / 8 * 28 + x / 8) * 64 + y % 8 * 8 + x % 8;
+					const unsigned pixel = (logo[32 + index / 2] >> (index % 2 ? 0 : 4)) & 15;
+					if (pixel)
+						_vid->_frontLayer[(y + 16) * 256 + x + 16] = 0xC0 + pixel;
+				}
+		}
+		const Color white{255, 255, 255}, turquoise{0, 230, 215};
+		_stub->setPaletteEntry(0xE1, &white);
+		_stub->setPaletteEntry(0xE2, &turquoise);
+		memcpy(_vid->_backLayer, _vid->_frontLayer, _vid->_layerSize);
+		_vid->updateWidescreen();
+		return;
+	}
 	if (_res->isMac()) {
 		int title = kMacTitleScreen_Flashback;
 		if (!strcmp(prefix, "menu2")) {
@@ -139,6 +171,7 @@ void Menu::loadPicture(const char *prefix) {
 }
 
 void Menu::handleInfoScreen() {
+	MenuInputScope input(_stub);
 	debug(DBG_MENU, "Menu::handleInfoScreen()");
 	_vid->fadeOut();
 	if (_res->_lang == LANG_FR) {
@@ -146,23 +179,29 @@ void Menu::handleInfoScreen() {
 	} else {
 		loadPicture("instru_e");
 	}
+	if (_res->isSegaCD()) {
+		drawString("REMINISCENCE2 CONTROLS", 11, 3, 3);
+		drawString("ESC: OPEN THE QOL MENU", 14, 3, 2);
+		drawString("CONTROLS: YOUR KEY BINDINGS", 16, 3, 2);
+		drawString("HELP: KEYBOARD AND MANUAL", 18, 3, 2);
+		drawString("ENTER OR CLICK TO RETURN", 22, 3, 3);
+	}
 	_vid->fullRefresh();
 	_vid->updateScreen();
 	do {
 		_stub->sleep(EVENTS_DELAY);
 		_stub->processEvents();
-		if (_stub->_pi.escape) {
-			_stub->_pi.escape = false;
-			break;
-		}
-		if (_stub->_pi.enter) {
-			_stub->_pi.enter = false;
-			break;
+		for (auto event = _stub->_menuInput.next(); event.type != MenuInput::None;
+		     event = _stub->_menuInput.next()) {
+			if (event.type == MenuInput::Confirm || event.type == MenuInput::Cancel ||
+			    event.type == MenuInput::Click)
+				return;
 		}
 	} while (!_stub->_pi.quit);
 }
 
 void Menu::handleSkillScreen() {
+	MenuInputScope input(_stub);
 	debug(DBG_MENU, "Menu::handleSkillScreen()");
 	static const uint8_t colors[3][3] = {
 		{ 2, 3, 3 }, // easy
@@ -183,42 +222,34 @@ void Menu::handleSkillScreen() {
 		_stub->sleep(EVENTS_DELAY);
 		_stub->processEvents();
 
-		if (_stub->_pi.dirMask & PlayerInput::DIR_UP) {
-			_stub->_pi.dirMask &= ~PlayerInput::DIR_UP;
-			switch (currentSkill) {
-			case kSkillNormal:
-				currentSkill = kSkillEasy;
-				break;
-			case kSkillExpert:
-				currentSkill = kSkillNormal;
-				break;
+		for (auto event = _stub->_menuInput.next(); event.type != MenuInput::None;
+		     event = _stub->_menuInput.next()) {
+			bool confirm = event.type == MenuInput::Confirm;
+			if (event.type == MenuInput::Up && currentSkill > kSkillEasy)
+				--currentSkill;
+			if (event.type == MenuInput::Down && currentSkill < kSkillExpert)
+				++currentSkill;
+			const int scale = _vid->_layerScale;
+			for (int i = 0; i < 3; ++i) {
+				if (event.inside(108 * scale, (116 + i * 16) * scale, 64 * scale, 16 * scale)) {
+					currentSkill = i;
+					confirm = event.type == MenuInput::Click;
+					break;
+				}
 			}
-		}
-		if (_stub->_pi.dirMask & PlayerInput::DIR_DOWN) {
-			_stub->_pi.dirMask &= ~PlayerInput::DIR_DOWN;
-			switch (currentSkill) {
-			case kSkillEasy:
-				currentSkill = kSkillNormal;
-				break;
-			case kSkillNormal:
-				currentSkill = kSkillExpert;
-				break;
+			if (event.type == MenuInput::Cancel)
+				return;
+			if (confirm) {
+				_skill = currentSkill;
+				return;
 			}
-		}
-		if (_stub->_pi.escape) {
-			_stub->_pi.escape = false;
-			break;
-		}
-		if (_stub->_pi.enter) {
-			_stub->_pi.enter = false;
-			_skill = currentSkill;
-			return;
 		}
 	} while (!_stub->_pi.quit);
 	_skill = 1;
 }
 
 bool Menu::handlePasswordScreen() {
+	MenuInputScope input(_stub);
 	debug(DBG_MENU, "Menu::handlePasswordScreen()");
 	_vid->fadeOut();
 	_vid->_charShadowColor = _charVar1;
@@ -252,35 +283,36 @@ bool Menu::handlePasswordScreen() {
 				}
 			}
 		}
-		if (_stub->_pi.backspace) {
-			_stub->_pi.backspace = false;
-			if (len > 0) {
-				--len;
-			}
-		}
-		if (_stub->_pi.escape) {
-			_stub->_pi.escape = false;
-			break;
-		}
-		if (_stub->_pi.enter) {
-			_stub->_pi.enter = false;
-			password[len] = '\0';
-			for (int level = 0; level < 8; ++level) {
-				for (int skill = 0; skill < 3; ++skill) {
-					if (strcmp(getLevelPassword(level, skill), password) == 0) {
-						_level = level;
-						_skill = skill;
-						return true;
-					}
+		for (auto event = _stub->_menuInput.next(); event.type != MenuInput::None;
+		     event = _stub->_menuInput.next()) {
+			if (event.type == MenuInput::Erase) {
+				if (len > 0) {
+					--len;
 				}
 			}
-			return false;
+			if (event.type == MenuInput::Cancel) {
+				return false;
+			}
+			if (event.type == MenuInput::Confirm) {
+				password[len] = '\0';
+				for (int level = 0; level < 8; ++level) {
+					for (int skill = 0; skill < 3; ++skill) {
+						if (strcmp(getLevelPassword(level, skill), password) == 0) {
+							_level = level;
+							_skill = skill;
+							return true;
+						}
+					}
+				}
+				return false;
+			}
 		}
 	} while (!_stub->_pi.quit);
 	return false;
 }
 
 bool Menu::handleLevelScreen() {
+	MenuInputScope input(_stub);
 	debug(DBG_MENU, "Menu::handleLevelScreen()");
 	_vid->fadeOut();
 	loadPicture("menu2");
@@ -302,59 +334,42 @@ bool Menu::handleLevelScreen() {
 		_stub->sleep(EVENTS_DELAY);
 		_stub->processEvents();
 
-		if (_stub->_pi.dirMask & PlayerInput::DIR_UP) {
-			_stub->_pi.dirMask &= ~PlayerInput::DIR_UP;
-			if (currentLevel != 0) {
-				--currentLevel;
-			} else {
-				currentLevel = 7;
+		for (auto event = _stub->_menuInput.next(); event.type != MenuInput::None;
+		     event = _stub->_menuInput.next()) {
+			bool confirm = event.type == MenuInput::Confirm;
+			if (event.type == MenuInput::Up || event.type == MenuInput::Down)
+				currentLevel = (currentLevel + (event.type == MenuInput::Up ? 7 : 1)) % 8;
+			if (event.type == MenuInput::Left && currentSkill > kSkillEasy)
+				--currentSkill;
+			if (event.type == MenuInput::Right && currentSkill < kSkillExpert)
+				++currentSkill;
+			const int scale = _vid->_layerScale;
+			for (int i = 0; i < 8; ++i) {
+				if (event.inside(28 * scale, (52 + i * 16) * scale, 200 * scale, 16 * scale)) {
+					currentLevel = i;
+					confirm = event.type == MenuInput::Click;
+					break;
+				}
 			}
-		}
-		if (_stub->_pi.dirMask & PlayerInput::DIR_DOWN) {
-			_stub->_pi.dirMask &= ~PlayerInput::DIR_DOWN;
-			if (currentLevel != 7) {
-				++currentLevel;
-			} else {
-				currentLevel = 0;
+			if (event.type == MenuInput::Click) {
+				for (int i = 0; i < 3; ++i)
+					if (event.inside((28 + i * 80) * scale, 180 * scale, 64 * scale, 16 * scale))
+						currentSkill = i;
 			}
-		}
-		if (_stub->_pi.dirMask & PlayerInput::DIR_LEFT) {
-			_stub->_pi.dirMask &= ~PlayerInput::DIR_LEFT;
-			switch (currentSkill) {
-			case kSkillNormal:
-				currentSkill = kSkillEasy;
-				break;
-			case kSkillExpert:
-				currentSkill = kSkillNormal;
-				break;
+			if (event.type == MenuInput::Cancel)
+				return false;
+			if (confirm) {
+				_skill = currentSkill;
+				_level = currentLevel;
+				return true;
 			}
-		}
-		if (_stub->_pi.dirMask & PlayerInput::DIR_RIGHT) {
-			_stub->_pi.dirMask &= ~PlayerInput::DIR_RIGHT;
-			switch (currentSkill) {
-			case kSkillEasy:
-				currentSkill = kSkillNormal;
-				break;
-			case kSkillNormal:
-				currentSkill = kSkillExpert;
-				break;
-			}
-		}
-		if (_stub->_pi.escape) {
-			_stub->_pi.escape = false;
-			break;
-		}
-		if (_stub->_pi.enter) {
-			_stub->_pi.enter = false;
-			_skill = currentSkill;
-			_level = currentLevel;
-			return true;
 		}
 	} while (!_stub->_pi.quit);
 	return false;
 }
 
 void Menu::handleTitleScreen() {
+	MenuInputScope input(_stub);
 	debug(DBG_MENU, "Menu::handleTitleScreen()");
 
 	_charVar1 = 0;
@@ -436,47 +451,47 @@ void Menu::handleTitleScreen() {
 			_charVar1 = _res->isMac() ? 0xE0 : 0;
 			_charVar3 = _res->isMac() ? 0xE4 : 1;
 			_charVar4 = _res->isMac() ? 0xE8 : 2;
+			if (_res->isSegaCD()) {
+				_charVar3 = 0xE1;
+				_charVar4 = 0xE2;
+			}
 			currentEntry = 0;
 			_nextScreen = -1;
 		}
 
-		if (g_options.enable_language_selection) {
-			if (_stub->_pi.dirMask & PlayerInput::DIR_LEFT) {
-				_stub->_pi.dirMask &= ~PlayerInput::DIR_LEFT;
-				if (currentLanguage != 0) {
-					--currentLanguage;
-				} else {
-					currentLanguage = ARRAYSIZE(languages) - 1;
+		_stub->processEvents();
+		for (auto event = _stub->_menuInput.next(); event.type != MenuInput::None;
+		     event = _stub->_menuInput.next()) {
+			if (event.type == MenuInput::Cancel) {
+				_selectedOption = MENU_OPTION_ITEM_SETTINGS;
+				return;
+			}
+			if (g_options.enable_language_selection) {
+				if (event.type == MenuInput::Left || event.type == MenuInput::Right)
+					currentLanguage =
+					    (currentLanguage +
+						 (event.type == MenuInput::Left ? ARRAYSIZE(languages) - 1 : 1)) %
+					    ARRAYSIZE(languages);
+			}
+			if (event.type == MenuInput::Up || event.type == MenuInput::Down)
+				currentEntry =
+				    (currentEntry + (event.type == MenuInput::Up ? menuItemsCount - 1 : 1)) %
+				    menuItemsCount;
+			const int scale = _vid->_layerScale;
+			for (int i = 0; i < menuItemsCount; ++i) {
+				if (event.inside(156 * scale,
+				                 ((26 - menuItemsCount * 2 + i * 2) * Video::CHAR_H - 4) * scale,
+				                 100 * scale, 16 * scale)) {
+					currentEntry = i;
+					if (event.type == MenuInput::Click)
+						selectedItem = i;
+					break;
 				}
 			}
-			if (_stub->_pi.dirMask & PlayerInput::DIR_RIGHT) {
-				_stub->_pi.dirMask &= ~PlayerInput::DIR_RIGHT;
-				if (currentLanguage != ARRAYSIZE(languages) - 1) {
-					++currentLanguage;
-				} else {
-					currentLanguage = 0;
-				}
-			}
-		}
-		if (_stub->_pi.dirMask & PlayerInput::DIR_UP) {
-			_stub->_pi.dirMask &= ~PlayerInput::DIR_UP;
-			if (currentEntry != 0) {
-				--currentEntry;
-			} else {
-				currentEntry = menuItemsCount - 1;
-			}
-		}
-		if (_stub->_pi.dirMask & PlayerInput::DIR_DOWN) {
-			_stub->_pi.dirMask &= ~PlayerInput::DIR_DOWN;
-			if (currentEntry != menuItemsCount - 1) {
-				++currentEntry;
-			} else {
-				currentEntry = 0;
-			}
-		}
-		if (_stub->_pi.enter) {
-			_stub->_pi.enter = false;
-			selectedItem = currentEntry;
+			if (event.type == MenuInput::Confirm)
+				selectedItem = currentEntry;
+			if (selectedItem != -1)
+				break;
 		}
 		if (selectedItem != -1) {
 			_selectedOption = menuItems[selectedItem].opt;
@@ -531,7 +546,6 @@ void Menu::handleTitleScreen() {
 		}
 		_vid->updateScreen();
 		_stub->sleep(EVENTS_DELAY);
-		_stub->processEvents();
 	}
 }
 

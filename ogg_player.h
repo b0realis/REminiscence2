@@ -9,6 +9,7 @@
 
 #include "intern.h"
 #include <array>
+#include "wav_stream.h"
 
 struct FileSystem;
 struct Mixer;
@@ -31,6 +32,9 @@ struct OggPlayer {
 	Mixer *_mix;
 	FileSystem *_fs;
 	OggDecoder_impl *_impl;
+	WavStream _wave;
+	bool _useWave = false, _loaded = false;
+	int readSamples(int16_t *buffer, int frames);
 	std::array<int16_t, 1024> _input{};
 	int _inputCount = 0, _inputOffset = 0;
 	int16_t _left[2]{}, _right[2]{};

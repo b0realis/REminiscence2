@@ -127,7 +127,7 @@ static Bytes fixture() {
 	return file;
 }
 struct Scripted final : HeadlessSystem {
-	enum { Down = 1, Enter, Character };
+	enum { Down = 1, Enter, Character, ClickQuit, ClickBorder };
 	std::vector<std::pair<int, char>> actions;
 	size_t next = 0;
 	void queue(std::vector<std::pair<int, char>> script) {
@@ -146,8 +146,16 @@ struct Scripted final : HeadlessSystem {
 		const auto action = actions[next++];
 		if (action.first == Down) {
 			_pi.dirMask = PlayerInput::DIR_DOWN;
+			if (_menuInputEnabled)
+				_menuInput.push(MenuInput::Down);
 		} else if (action.first == Enter) {
 			_pi.enter = true;
+			if (_menuInputEnabled)
+				_menuInput.push(MenuInput::Confirm);
+		} else if (action.first == ClickQuit) {
+			_menuInput.push(MenuInput::Click, 360, 392);
+		} else if (action.first == ClickBorder) {
+			_menuInput.push(MenuInput::Click, -1, 392);
 		} else {
 			_pi.lastChar = action.second;
 		}
@@ -230,6 +238,11 @@ int main(int argc, char **argv) {
 	menu.handleTitleScreen();
 	check(!system._pi.quit && menu._selectedOption == Menu::MENU_OPTION_ITEM_DEMO,
 	      "Mac Demo menu action");
+	system.queue({{S::ClickBorder, 0}, {S::ClickQuit, 0}});
+	menu.handleTitleScreen();
+	check(!system._pi.quit && menu._selectedOption == Menu::MENU_OPTION_ITEM_QUIT &&
+	          system.next == 2,
+	      "Mac title mouse hit boxes use native 2x resolution and exclude borders");
 	std::cout << (failures ? "Mac menu checks failed\n" : "Mac menu checks passed\n");
 	return failures ? 1 : 0;
 }

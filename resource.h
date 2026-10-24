@@ -205,6 +205,15 @@ struct Resource {
 	bool isAmiga() const { return _type == kResourceTypeAmiga; }
 	bool isMac()   const { return _type == kResourceTypeMac; }
 	bool isSega() const { return _type == kResourceTypeSega; }
+	bool _isSegaCD = false;
+	bool isSegaCD() const { return _isSegaCD; }
+	uint8_t *_objectMbk = nullptr;
+	uint32_t _objectMbkSize = 0;
+	bool _usingObjectBank = false;
+	uint8_t _segaCDRoomBank[64] = {};
+	void selectObjectBank(bool objects);
+	void loadSegaCDGlobals();
+	void loadSegaCDLevel(int level);
 	bool isPC98()  const { return _type == kResourceTypePC98; }
 
 	bool fileExists(const char *filename);

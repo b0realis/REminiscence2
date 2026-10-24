@@ -36,7 +36,7 @@ int marker(const std::string &name) {
 bool musicFile(const std::string &name) {
 	const auto dot = name.rfind('.');
 	const auto ext = dot == std::string::npos ? "" : name.substr(dot);
-	return ext == ".ogg" || ext == ".mod" || ext == ".prf" || name == "intro" ||
+	return ext == ".ogg" || ext == ".wav" || ext == ".mod" || ext == ".prf" || name == "intro" ||
 	       name == "options" || name == "logo";
 }
 const char *label(int edition) {
@@ -158,9 +158,10 @@ Library discover(const std::string &directory) {
 			selected = parent;
 		}
 		const int type = *types.begin();
+		const bool segaCD = type == kResourceTypeSega && fs::exists(selected / "SC1.MCD", ec);
 		const auto relative = selected.lexically_relative(root).generic_u8string();
 		Source source{std::string(editionId(type)) + ":" + relative,
-		              std::string(label(type)) + " / " + relative,
+		              std::string(segaCD ? "Sega CD (US)" : label(type)) + " / " + relative,
 		              selected.u8string(),
 		              type,
 		              {}};
@@ -180,7 +181,8 @@ Library discover(const std::string &directory) {
 		for (const auto &[anchor, types] : anchors)
 			if (types.size() > 1 && within(anchor, fs::u8path(game.root)))
 				game.excludedRoots.push_back(anchor.u8string());
-		if ((game.edition == kResourceTypeAmiga || game.edition == kResourceTypeDOS) &&
+		if ((game.edition == kResourceTypeAmiga || game.edition == kResourceTypeDOS ||
+		     game.edition == kResourceTypeSega) &&
 		    std::any_of(musicDirs.begin(), musicDirs.end(), [&](const auto &p) {
 			    return within(p, fs::u8path(game.root)) &&
 				       std::none_of(

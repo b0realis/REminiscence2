@@ -62,7 +62,10 @@ int main(int argc, char **argv) {
 	if (argc != 4)
 		return 1;
 	try {
-		const auto type = std::string(argv[3]) == "dos" ? kResourceTypeDOS : kResourceTypeAmiga;
+		const bool segaCD = std::string(argv[3]) == "segacd";
+		const auto type = segaCD                          ? kResourceTypeSega
+		                  : std::string(argv[3]) == "dos" ? kResourceTypeDOS
+		                                                  : kResourceTypeAmiga;
 		const std::filesystem::path output(argv[2]);
 		std::filesystem::create_directories(output);
 		FileSystem files(argv[1]);
@@ -70,7 +73,7 @@ int main(int argc, char **argv) {
 		g_options.bypass_protection = true;
 		// First create real progress via immediate Esc -> Levels. A following
 		// normal launch must still show both openings, even with that autosave.
-		for (int scenario = 0; scenario < 11; ++scenario) {
+		for (int scenario = 0; scenario < 16; ++scenario) {
 			StartupSystem platform;
 			const auto saveDirectory = scenario == 9 ? output / "empty-startup" : output;
 			std::filesystem::create_directories(saveDirectory);
@@ -111,6 +114,33 @@ int main(int argc, char **argv) {
 			platform.poll = [&] {
 				if (game->_startupMenu) {
 					++titlePolls;
+					if (scenario >= 11 && platform._menuInputEnabled) {
+						const bool amiga = type == kResourceTypeAmiga;
+						if (scenario == 11) {
+							platform._menuInput.buttons(MenuInput::Up, platform.clock);
+							platform._menuInput.repeat(platform.clock);
+							if (titlePolls == 5)
+								platform._menuInput.push(MenuInput::Confirm);
+						} else if (titlePolls == 1) {
+							if (scenario == 12) {
+								platform._menuInput.buttons(MenuInput::Up, platform.clock);
+								platform._menuInput.buttons(0, platform.clock);
+								platform._menuInput.buttons(MenuInput::Down, platform.clock);
+								platform._menuInput.buttons(0, platform.clock);
+							} else if (scenario == 13 || scenario == 14) {
+								platform._menuInput.push(scenario == 13 ? MenuInput::Click
+								                                        : MenuInput::Hover,
+								                         amiga ? 210 : 180, amiga ? 180 : 196);
+								if (scenario == 14)
+									platform._menuInput.push(MenuInput::Down);
+							} else {
+								platform._menuInput.push(MenuInput::Click, -1, 180);
+								platform._menuInput.push(MenuInput::Up);
+							}
+							if (scenario != 13)
+								platform._menuInput.push(MenuInput::Confirm);
+						}
+					}
 					if (scenario == 4 && !requested) {
 						platform._pi.escape = true;
 						requested = true;
@@ -150,7 +180,15 @@ int main(int argc, char **argv) {
 			};
 			game->run();
 			check(!game->_continueFailed, "Explicit Continue failed");
-			if (scenario == 10) {
+			if (scenario >= 11) {
+				const bool starts = scenario == 12 || scenario == 14;
+				check(titlePolls > 0 && titlePolls < 10 && menus == 0,
+				      "Title navigation failed to select its requested item");
+				check(starts ? gameplayPolls > 0
+				             : game->_menu._selectedOption == Menu::MENU_OPTION_ITEM_QUIT,
+				      "Held/tapped/pointer title navigation chose the wrong item");
+				check(!platform._menuInputEnabled, "Menu controls leaked into gameplay");
+			} else if (scenario == 10) {
 				check(game->_requestedAsset == 1 && !titlePolls && !gameplayPolls && menus == 1,
 				      "Edition switch failed to unwind the opening at a safe boundary");
 			} else if (scenario == 0 || scenario == 5 || (scenario >= 6 && scenario <= 8)) {
@@ -163,10 +201,12 @@ int main(int argc, char **argv) {
 				if (scenario == 7)
 					check(game->_score == 4242, "Quick resume ignored newest manual save");
 				if (scenario < 6)
-					check(scenes == std::vector<int>{0x40}, "Immediate menu did not stop logos");
+					check(scenes == std::vector<int>{segaCD ? 0x0D : 0x40},
+					      "Immediate menu did not stop logos");
 			} else {
 				check(titlePolls && !gameplayPolls, "Normal launch did not end at title");
-				check(scenes.size() >= 2 && scenes[0] == 0x40 && scenes[1] == 0x0D,
+				check(segaCD ? scenes == std::vector<int>{0x0D}
+				             : scenes.size() >= 2 && scenes[0] == 0x40 && scenes[1] == 0x0D,
 				      "Saved progress bypassed the opening sequence");
 				check(menus == ((scenario == 3 || scenario == 4) ? 1 : 0),
 				      "Startup opened an unrequested overlay");
@@ -177,7 +217,7 @@ int main(int argc, char **argv) {
 		}
 		std::cout << "Startup passed: full/skip openings with saved progress, immediate Esc, "
 		             "intro/title Esc, pause shortcut, level selection, edition switch, explicit "
-					 "Continue and latest-compatible-save resume.\n";
+		             "Continue, latest-compatible-save resume and title key/mouse navigation.\n";
 	} catch (const std::exception &e) {
 		std::cerr << e.what() << '\n';
 		return 2;

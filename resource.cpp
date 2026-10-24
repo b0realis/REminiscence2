@@ -23,6 +23,7 @@ Resource::Resource(FileSystem *fs, ResourceType ver, Language lang) {
 	memset(this, 0, sizeof(Resource));
 	_fs = fs;
 	_type = ver;
+	_isSegaCD = isSega() && fs->exists("SC1.MCD") && fs->exists("SUB.BIN");
 	_lang = lang;
 	_isDemo = false;
 	_archive = 0;
@@ -152,6 +153,10 @@ bool Resource::fileExists(const char *filename) {
 }
 
 void Resource::clearLevelRes() {
+	selectObjectBank(false);
+	free(_objectMbk);
+	_objectMbk = nullptr;
+	_objectMbkSize = 0;
 	free(_tbn); _tbn = 0;
 	free(_mbk); _mbk = 0;
 	free(_pal); _pal = 0;
@@ -164,7 +169,7 @@ void Resource::clearLevelRes() {
 	_sgd = 0;
 	_sgdSize = 0;
 	free(_bnq); _bnq = 0;
-	if (!isSega()) {
+	if (!isSega() || isSegaCD()) {
 		free(_ani);
 		_ani = 0;
 		_aniSize = 0;
@@ -979,7 +984,11 @@ void Resource::load_SPRM(File *f) {
 
 void Resource::load_RP(File *f) {
 	debug(DBG_RES, "Resource::load_RP()");
-	f->read(_rp, sizeof(_rp));
+	const unsigned size = isSegaCD() ? f->size() : sizeof(_rp);
+	if (!size || size > sizeof(_rp))
+		error("Invalid object bank directory");
+	memset(_rp, 0xff, sizeof(_rp));
+	f->read(_rp, size);
 }
 
 void Resource::load_SPC(File *f) {
@@ -1236,46 +1245,50 @@ void Resource::load_CMP(File *pf) {
 }
 
 void Resource::load_VCE(int num, int segment, uint8_t **buf, uint32_t *bufSize) {
-	*buf = 0;
-	int offset = _voicesOffsetsTable[num];
-	if (offset != 0xFFFF) {
-		const uint16_t *p = _voicesOffsetsTable + offset / 2;
-		offset = (*p++) * 2048;
-		int count = *p++;
-		if (segment < count) {
-			File f;
-			if (f.open("VOICE.VCE", "rb", _fs)) {
-				int voiceSize = p[segment] * 2048 / 5;
-				uint8_t *voiceBuf = (uint8_t *)malloc(voiceSize);
-				if (voiceBuf) {
-					uint8_t *dst = voiceBuf;
-					offset += 0x2000;
-					for (int s = 0; s < count; ++s) {
-						int len = p[s] * 2048;
-						for (int i = 0; i < len / (0x2000 + 2048); ++i) {
-							if (s == segment) {
-								f.seek(offset);
-								int n = 2048;
-								while (n--) {
-									int v = f.readByte();
-									if (v & 0x80) {
-										v = -(v & 0x7F);
-									}
-									*dst++ = (uint8_t)(v & 0xFF);
-								}
-							}
-							offset += 0x2000 + 2048;
-						}
-						if (s == segment) {
-							break;
-						}
-					}
-					*buf = voiceBuf;
-					*bufSize = voiceSize;
-				}
-			}
+	*buf = nullptr;
+	*bufSize = 0;
+	// The first 50 words index the trusted dialogue directory. Asset-supplied
+	// story IDs and segment requests must never index past that directory.
+	if (num < 0 || num >= 50 || segment < 0)
+		return;
+	const unsigned entry = _voicesOffsetsTable[num];
+	if (entry == 0xffff)
+		return;
+	const uint16_t *p = _voicesOffsetsTable + entry / 2;
+	const unsigned count = p[1];
+	if (unsigned(segment) >= count)
+		return;
+	uint32_t sector = p[0];
+	for (int s = 0; s < segment; ++s)
+		sector += p[2 + s];
+	const uint32_t sectors = p[2 + segment];
+	if (!sectors || sectors % 5)
+		return;
+	File f;
+	if (!f.open("VOICE.VCE", "rb", _fs) || uint64_t(sector + sectors) * 2048 > f.size())
+		return;
+	const uint32_t size = sectors / 5 * 2048;
+	auto *voice = static_cast<uint8_t *>(malloc(size));
+	if (!voice)
+		return;
+	for (uint32_t block = 0; block < sectors / 5; ++block) {
+		f.seek((sector + block * 5 + 4) * 2048);
+		auto *out = voice + block * 2048;
+		if (f.read(out, 2048) != 2048) {
+			free(voice);
+			return;
+		}
+		for (unsigned i = 0; i < 2048; ++i) {
+			const unsigned v = out[i];
+			out[i] = uint8_t(v & 128 ? -(v & 127) : v);
 		}
 	}
+	if (f.ioErr()) {
+		free(voice);
+		return;
+	}
+	*buf = voice;
+	*bufSize = size;
 }
 
 void Resource::load_SPL(File *f) {
@@ -1291,20 +1304,27 @@ void Resource::load_SPL(File *f) {
 	int offset = 0;
 	for (int i = 0; i < _numSfx; ++i) {
 		const int size = f->readUint16BE(); offset += 2;
-		if ((size & 0x8000) != 0) {
+		if (isSegaCD() ? size == 0xffff : (size & 0x8000) != 0) {
 			continue;
 		}
 		debug(DBG_RES, "sfx=%d size=%d", i, size);
-		assert(size != 0 && (size & 1) == 0);
-		if (i == 64) {
+		if (!size || (size & 1) || unsigned(offset) > f->size() ||
+		    unsigned(size) > f->size() - offset)
+			error("Truncated or invalid sound bank");
+		if (i == 64 && !isSegaCD()) {
 			warning("Skipping sound #%d (%s) size %d", i, _splNames[i], size);
 			f->seek(offset + size);
-		}  else {
+		} else {
 			_sfxList[i].offset = offset;
 			_sfxList[i].freq = kPaulaFreq / 650;
 			_sfxList[i].data = (uint8_t *)malloc(size);
 			if (_sfxList[i].data) {
 				f->read(_sfxList[i].data, size);
+				if (isSegaCD())
+					for (int n = 0; n < size; ++n) {
+						const unsigned v = _sfxList[i].data[n];
+						_sfxList[i].data[n] = uint8_t(v & 128 ? -(v & 127) : v);
+					}
 				_sfxList[i].len = size;
 				normalizeSPL(&_sfxList[i]);
 			}
@@ -1443,7 +1463,10 @@ int Resource::getBankDataSize(uint16_t num) {
 		break;
 	case kResourceTypeSega:
 		if (len & 0x8000) {
-			error("Invalid Sega graphics bank length");
+			if (isSegaCD())
+				len = -(int16_t)len;
+			else
+				error("Invalid Sega graphics bank length");
 		}
 		break;
 	case kResourceTypeMac:

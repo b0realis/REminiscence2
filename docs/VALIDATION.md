@@ -1,5 +1,58 @@
 # REminiscence2 validation
 
+## Patch 1.24 — Sega CD bug pass and release preparation
+
+Focused review fixed movie video racing ahead after focus/background pauses and
+WAV readers retaining partially parsed state after a failed reopen. Synthetic
+regressions cover a four-second audio/video pause, a subsequent unaffected movie,
+and a malformed duplicate WAV format chunk. Disc paths now reject Windows device
+names; CUE reads enforce the size bound before loading the entire input.
+
+All 26 suites passed in Release and Debug/UBSan with the supplied Sega CD, Amiga
+and DOS assets. The local movie launcher lists all 70 CD movies. The full movie,
+level-start, save/load, city-bank and 95-dialogue-segment regressions from 1.23
+remain part of this pass. All 11 packaging tests and documentation checks passed.
+The Apple Silicon app/ZIP was built, ad-hoc signed, dependency-checked and tested
+after relocation. All 386 Amiga/GOG and 171 extracted CD file hashes are unchanged.
+Six-target CI artifacts are verified before publication; full playthrough and
+hardware limits below remain.
+
+## Patch 1.23 — Sega CD US assets and format reference (local)
+
+The supplied CUE/BIN extracted to a new ignored directory: 163 ISO files, eight
+lossless stereo PCM WAV tracks and a SHA256 manifest. The US adapter checks
+SUB.BIN length 96400 and CRC32 80cee8d8 before reading embedded data. Original
+disc/Amiga/GOG files are not edited. No release is published in this pass.
+
+Private tests decode 17754 indexed movie frames, all sprites in seven level-start
+banks, eight music tracks and 95 nonempty dialogue segments. They simulate 100
+ticks in each level, round-trip saves, and restore a city interior directly into
+the correct graphics/sprite bank with adjacent-room previews. Movie playback
+separately honors event lengths (not all trailing indexed frames are presented).
+Startup covers combined CD opening/title, skip, immediate settings, edition
+switch, latest-save resume and physical/pointer menu input. Title, gameplay and
+movie frames were visually inspected from headless captures.
+
+Synthetic tests cover CUE separate/shared BIN and cooked sectors, ISO bounds and
+path rejection, output atomicity, audio byte order, three MCD LZSS variants,
+split-stream sprites, PCM WAV looping/resampling/source selection and movie hook
+lifetime. Format references distinguish implemented subsets from untested variants.
+All 26 CTest suites pass in both pinned-SDL Release and Debug/UBSan. All 11
+release-tool tests and the documentation-boundary check pass. The 171 extracted
+Sega CD files/audio tracks match their manifest, and the 386 original Amiga/GOG
+files retain their earlier hashes. The local executable reports version 1.23.
+
+Real Macintosh assets, other Sega CD pressings, complete game playthroughs and
+comparison of CD audio/video timing against original hardware remain outstanding.
+
+## Patch 1.22 — original-menu input and mouse skipping (local)
+
+Amiga/DOS title input now uses queued press edges and shared hold/repeat timing.
+Regression tests cover brief taps, held controls, mouse wheel/hover/click hit boxes,
+and click-to-skip release consumption. The existing 22 CTest suites passed in
+Release and Debug/UBSan before the Sega CD extension. This patch is retained in
+the current worktree while release publication is on hold.
+
 ## Patch 1.21 — new-feature bug pass and release
 
 Focused source review found and fixed stale Ogg/CPC background state after a

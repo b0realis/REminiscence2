@@ -315,16 +315,23 @@ static const char *kMenuThemeRemix = "deadly_cookie_-_flashback.ogg";
 bool OggPlayer::playTrack(int num) {
 	char buf[16];
 	snprintf(buf, sizeof(buf), "track%02d.ogg", num);
+	if (playFile(buf))
+		return true;
+	snprintf(buf, sizeof(buf), "track%02d.wav", num);
 	return playFile(buf) || (num == 2 && playFile(kMenuThemeRemix));
 }
 
 bool OggPlayer::playFile(const char *name) {
 	stopTrack();
-	if (_impl->load(name, _fs, _mix->getSampleRate())) {
+	_loaded = false;
+	const auto length = strlen(name);
+	_useWave = length >= 4 && !strcmp(name + length - 4, ".wav");
+	if (_useWave ? _wave.open(name, _fs) : _impl->load(name, _fs, _mix->getSampleRate())) {
+		_loaded = true;
 		_inputCount = _inputOffset = 0;
 		_phase = 0;
 		_primed = false;
-		_step = double(_impl->_sampleRate) / _mix->getSampleRate();
+		_step = double(_useWave ? _wave.rate : _impl->_sampleRate) / _mix->getSampleRate();
 		_mix->setPremixHook(mixCallback, this);
 		return true;
 	}
@@ -344,7 +351,7 @@ void OggPlayer::pauseTrack() {
 }
 
 void OggPlayer::resumeTrack() {
-	if (_impl) {
+	if (_loaded) {
 		_mix->setPremixHook(mixCallback, this);
 	}
 }
@@ -352,7 +359,7 @@ void OggPlayer::resumeTrack() {
 bool OggPlayer::nextFrame(int16_t *frame) {
 	if (_inputOffset == _inputCount) {
 		_input.fill(0); // Decoder adds to the destination, like the mixer.
-		_inputCount = _impl->read(_input.data(), _input.size() / 2);
+		_inputCount = readSamples(_input.data(), _input.size() / 2);
 		_inputOffset = 0;
 		if (_inputCount <= 0)
 			return false;
@@ -364,10 +371,10 @@ bool OggPlayer::nextFrame(int16_t *frame) {
 }
 
 bool OggPlayer::mix(int16_t *buf, int len) {
-	if (!_impl)
+	if (!_loaded)
 		return false;
 	if (_step == 1.0)
-		return _impl->read(buf, len) != 0;
+		return readSamples(buf, len) != 0;
 	// Stream at the device rate without changing pitch or loading an entire
 	// soundtrack into RAM. Keep interpolation state across callback boundaries.
 	if (!_primed) {
@@ -395,4 +402,8 @@ bool OggPlayer::mix(int16_t *buf, int len) {
 
 bool OggPlayer::mixCallback(void *param, int16_t *buf, int len) {
 	return ((OggPlayer *)param)->mix(buf, len);
+}
+
+int OggPlayer::readSamples(int16_t *buffer, int frames) {
+	return _useWave ? _wave.read(buffer, frames) : _impl->read(buffer, frames);
 }

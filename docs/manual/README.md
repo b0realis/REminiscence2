@@ -44,3 +44,9 @@ paths and the removed asset locations from `git archive` output. These are
 checks for known material, not a legal determination about every project file.
 See [licensing and provenance](../LICENSING.md) for the separate engine and
 third-party notices and unresolved inherited-license questions.
+
+## Asset and format documentation
+
+- [Supported assets and required files](../ASSETS.md)
+- [Developer format reference](../formats/README.md)
+- [Sega CD extraction, movies, music and dialogue](../SEGA_CD.md)

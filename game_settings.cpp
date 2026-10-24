@@ -103,7 +103,7 @@ bool Game::settingsLevelAvailable(int level) {
 		return _res._mac && _res._mac->findEntry(name.c_str());
 	}
 	const auto &data = _gameLevels[level];
-	const std::string name = _res.isAmiga() ? data.nameAmiga : data.name2;
+	const std::string name = (_res.isAmiga() || _res.isSegaCD()) ? data.nameAmiga : data.name2;
 	return _res.fileExists((name + ".pge").c_str());
 }
 
@@ -164,11 +164,12 @@ bool Game::handleConfigPanel(bool recovery) {
 		_preferencePath = (std::filesystem::u8path(_savePath) / "preferences.cfg").u8string();
 	}
 	session.preferencePath = _preferencePath;
-	session.edition = _res.isAmiga()  ? "Amiga"
-	                  : _res.isMac()  ? "Macintosh"
-	                  : _res.isSega() ? "Sega"
-	                  : _res.isPC98() ? "PC-98"
-	                                  : "DOS";
+	session.edition = _res.isSegaCD()  ? "Sega CD (US)"
+	                  : _res.isAmiga() ? "Amiga"
+	                  : _res.isMac()   ? "Macintosh"
+	                  : _res.isSega()  ? "Sega"
+	                  : _res.isPC98()  ? "PC-98"
+	                                   : "DOS";
 	static const char *const languages[] = {"French",  "English",  "German", "Spanish",
 	                                        "Italian", "Japanese", "Russian"};
 	session.language = languages[_res._lang];

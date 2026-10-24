@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Browse original Flashback polygon cutscenes with REminiscence2 (Python 3.9+).
+"""Browse original Flashback polygon cutscenes and Sega CD movies with REminiscence2 (Python 3.9+).
 
 Python supplies the terminal interface; the local engine supplies the catalog,
 edition decoding, graphics, subtitles and audio. No assets or JS are downloaded.
@@ -122,7 +122,7 @@ def print_menu(edition: str, scenes: Sequence[Cutscene]) -> None:
 
 def play(command: Sequence[str], scene: Cutscene, part: int) -> int:
     print(f"\nPlaying {scene.name}:{part} — {scene.title}", flush=True)
-    print("Backspace / Tab / Escape: return to menu. Space / A-Z: skip (enabled by default). Enter / arrows: advance panels.", flush=True)
+    print("Backspace / Tab / Escape: return to menu. Space / A-Z / left click: skip (enabled by default). Enter / arrows: advance panels.", flush=True)
     try:
         # An argument vector deliberately avoids shell interpolation of paths.
         result = subprocess.run([*command, f"--play-cutscene={scene.name}:{part}"], check=False)
@@ -135,11 +135,12 @@ def play(command: Sequence[str], scene: Cutscene, part: int) -> int:
 
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(
-        description="List and play original Flashback polygon cutscenes in a terminal menu.",
+        description="List and play Flashback polygon cutscenes and Sega CD movies in a terminal menu.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
   python3 tools/play_cutscenes.py /path/to/prepared-amiga
   python3 tools/play_cutscenes.py /path/to/DOS/DATA --list
+  python3 tools/play_cutscenes.py /path/to/segacd --play sc1
   python3 tools/play_cutscenes.py /path/to/assets --play intro
   python3 tools/play_cutscenes.py /path/to/assets --play chute:1 --fullscreen
 
@@ -148,13 +149,15 @@ REminiscence2 executable. Game files stay local and are read without modificatio
 For Amiga WHDLoad LHA archives, first run tools/extract_amiga.py. DOS assets use
 CMD/POL pairs; Macintosh assets need a FLASHBACK.BIN or FLASHBACK.RSRC resource
 fork. Uses the engine's archive support and edition detection. Supplied GOG DOS data has
-regression coverage; Macintosh CD assets still need real-asset validation. SEQ movies, SET animations, 3DO videos,
-disk images and installers are outside this polygon player's scope.
+regression coverage; Macintosh CD assets still need real-asset validation. For Sega
+CD, first extract your CUE/BIN using tools/extract_segacd.py. US MCD movies include
+their own audio; sc1 is the opening and sc2 the ending. SEQ movies, SET animations,
+3DO videos, unextracted disk images and installers are outside this browser's scope.
 
 Interactive use: choose a number or name, optionally followed by :PART; part
 numbers start at zero. A multi-part file prompts for its part if omitted.
 After each part you return to the menu. Type q or press Ctrl+C to quit.
-During playback Backspace, Tab or Escape skips the part. Space or A-Z also skips
+During playback Backspace, Tab or Escape skips the part. Space, A-Z or left click skips
 by default; saved Enhancements options control logos and other scenes separately.
 Closing the playback window also returns to the menu. Enter and arrow keys advance
 interactive panels such as the journal. --play runs once and exits instead.
@@ -206,7 +209,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(json.dumps({"schema": 1, "edition": edition, "cutscenes": [scene.__dict__ for scene in scenes]}, ensure_ascii=True))
             return 0
         if not scenes:
-            raise PlayerError("No matching polygon cutscenes found. Check the asset folder and --filter.")
+            raise PlayerError("No matching cutscenes found. Check the asset folder and --filter.")
         if args.list:
             print_menu(edition, scenes)
             return 0

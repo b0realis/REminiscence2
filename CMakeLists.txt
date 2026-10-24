@@ -29,6 +29,7 @@ set(REMINISCENCE2_SANITIZER_SET "address,undefined" CACHE STRING "Sanitizers to 
 set(REMINISCENCE2_TEST_SOUNDFONT "" CACHE FILEPATH "Optional local soundfont for synthesis tests")
 set(REMINISCENCE2_AMIGA_DATA "" CACHE PATH "Optional private Amiga data for integration tests")
 set(REMINISCENCE2_DOS_DATA "" CACHE PATH "Optional private DOS/GOG data for integration tests")
+set(REMINISCENCE2_SEGACD_DATA "" CACHE PATH "Optional private extracted Sega CD data for integration tests")
 
 option(REMINISCENCE2_BUNDLED_DEPS "Build pinned SDL/zlib sources for distributable packages" OFF)
 if(REMINISCENCE2_BUNDLED_DEPS)
@@ -69,9 +70,9 @@ add_library(reminiscence2_engine STATIC
     collision.cpp config.cpp cpc_player.cpp cutscene.cpp cutscene_assets.cpp cutscene_tool.cpp decode_mac.cpp decode_sega.cpp decode_seq.cpp decode_sgd.cpp file.cpp
     atomic_file.cpp asset_library.cpp fs.cpp game.cpp game_settings.cpp game_progress.cpp progress_store.cpp controller_profile.cpp context_hints.cpp graphics.cpp menu.cpp mixer.cpp mod_player.cpp ogg_player.cpp
     settings.cpp settings_store.cpp settings_overlay.cpp keyboard_diagram.cpp save_catalog.cpp appearance.cpp weapon_fx.cpp game_weapon.cpp
-    music_midi.cpp music_prf.cpp music_synth.cpp object_data.cpp journal.cpp
+    music_midi.cpp music_prf.cpp music_synth.cpp object_data.cpp journal.cpp wav_stream.cpp mcd_player.cpp
     piege.cpp protection.cpp resource.cpp resource_aba.cpp resource_mac.cpp
-    resource_paq.cpp scaler.cpp screenshot.cpp seq_player.cpp sfx_player.cpp
+    resource_paq.cpp resource_segacd.cpp scaler.cpp screenshot.cpp seq_player.cpp sfx_player.cpp
     staticres.cpp staticres_controllers.cpp systemstub_sdl.cpp unpack.cpp util.cpp video.cpp)
 target_include_directories(reminiscence2_engine PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 target_compile_definitions(reminiscence2_engine PRIVATE USE_STB_VORBIS USE_ZLIB)
@@ -127,6 +128,14 @@ configure_file(fb.cfg fb.cfg COPYONLY)
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(segacd_media_tests tests/segacd_media_tests.cpp)
+    target_link_libraries(segacd_media_tests PRIVATE reminiscence2_engine)
+    add_test(NAME segacd_media COMMAND segacd_media_tests "${CMAKE_CURRENT_BINARY_DIR}/segacd-media-fixtures")
+    add_executable(segacd_assets tests/segacd_assets.cpp)
+    target_link_libraries(segacd_assets PRIVATE reminiscence2_engine)
+    if(REMINISCENCE2_SEGACD_DATA)
+        add_test(NAME segacd_assets COMMAND segacd_assets "${REMINISCENCE2_SEGACD_DATA}" "${CMAKE_CURRENT_BINARY_DIR}/segacd-validation")
+    endif()
     add_executable(asset_library_tests tests/asset_library_tests.cpp)
     target_link_libraries(asset_library_tests PRIVATE reminiscence2_engine)
     add_test(NAME asset_library COMMAND asset_library_tests "${CMAKE_CURRENT_BINARY_DIR}/library-fixtures")
@@ -141,7 +150,7 @@ if(BUILD_TESTING)
     endif()
     add_executable(startup_tests tests/startup_assets.cpp)
     target_link_libraries(startup_tests PRIVATE reminiscence2_engine)
-    foreach(edition AMIGA DOS)
+    foreach(edition AMIGA DOS SEGACD)
         if(REMINISCENCE2_${edition}_DATA)
             string(TOLOWER "${edition}" edition_name)
             add_test(NAME startup_${edition_name} COMMAND startup_tests
@@ -205,6 +214,8 @@ if(BUILD_TESTING)
     set_tests_properties(cutscenes PROPERTIES TIMEOUT 20)
     find_package(Python3 3.9 COMPONENTS Interpreter QUIET)
     if(Python3_Interpreter_FOUND)
+        add_test(NAME segacd_extractor COMMAND "${Python3_EXECUTABLE}" tests/test_extract_segacd.py)
+        set_tests_properties(segacd_extractor PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" TIMEOUT 30)
         add_test(NAME cutscene_frontend COMMAND "${Python3_EXECUTABLE}" -m unittest
             discover -s tests -p test_play_cutscenes.py -v)
         set_tests_properties(cutscene_frontend PROPERTIES

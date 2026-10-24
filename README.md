@@ -32,8 +32,15 @@ Macintosh rendering retains its native 512×448 resolution. The supplied Amiga
 files pass a seven-level headless regression. The supplied GOG Windows installer's
 DOS-format data passes startup, seven-level room rendering and pistol-effect
 regressions. Synthetic Mac resources exercise menus and decoding; real Macintosh
-CD validation and full playthroughs remain outstanding. Experimental Sega support expects extracted engine data;
-ROM extraction and Sega audio are not implemented.
+CD validation and full playthroughs remain outstanding. The supplied Sega CD US
+disc now supports independent gameplay assets, MCD movies with audio, spoken
+dialogue and extracted CD music. Its tests cover all indexed movie frames and
+seven level starts, not a full playthrough. Cartridge Mega Drive support remains
+experimental; raw ROM/VGM playback is not implemented.
+
+See [supported assets and required files](docs/ASSETS.md), the
+[developer format reference](docs/formats/README.md), and
+[Sega CD extraction instructions](docs/SEGA_CD.md).
 
 See the [0.5.6 integration ledger](docs/UPSTREAM_056.md),
 [validation record](docs/VALIDATION.md), and [roadmap](docs/ROADMAP.md).
@@ -67,7 +74,8 @@ optional save/load/rewind shortcuts, and a raw-joystick profile. Start always
 opens settings. The optional Journal page adds short original passages for
 reached story chapters, with save/rewind-aware reading progress.
 
-By default, launches play both opening sequences and end at the title menu. Space or
+By default, launches play the opening sequences and end at the title menu.
+Sega CD combines its logos and introduction in one movie. Space or
 A–Z skips the current scene by default; Backspace is always available. Esc, F10
 or controller Start opens QoL settings immediately, including Levels and Save /
 Load. Closing settings returns to the title; `--continue` explicitly resumes an
@@ -77,8 +85,8 @@ or autosave automatically. With no compatible save, the opening plays normally.
 
 Keep editions in separate subfolders of `assets`. A picker remembers which to
 play; **Session → Game edition** changes it later. **Audio → Soundtrack** selects
-Amiga MOD, DOS PRF or a separate Ogg soundtrack independently. For recordings
-from Genesis or Sega CD, supply mapped files under `assets/music/<pack>/`; see
+Amiga MOD, DOS PRF, extracted Sega CD music or a separate Ogg/WAV soundtrack
+independently. For other supplied recordings, use `assets/music/<pack>/`; see
 [the music guide](manual.md#music-sources). `--list-assets` prints source IDs.
 
 ## Screenshots
@@ -150,13 +158,13 @@ Their soundfonts and ROMs are supplied separately by the player.
 ## Run
 
 For the local Apple Silicon build and prepared assets, run
-`./play-local.sh` from the repository root. It opens a game window and accepts
-an edition picker when needed. Use `--amiga` or `--gog` for a direct choice, plus
-extra engine options, for example `./play-local.sh --help`. The launcher resolves
+`./play-local.sh` from the repository root. Use `--segacd`, `--gog` or `--amiga`
+to select the corresponding prepared private data, or omit the selector to use
+the edition picker when needed. It accepts extra engine options, for example `./play-local.sh --help`. The launcher resolves
 its build, configuration and asset paths relative to itself, so it also works
 when invoked by absolute path from another directory.
 
-Supply your own original DOS, Amiga, Macintosh, or PC-98 game data. Game data
+Supply your own original DOS, Amiga, Macintosh, Sega CD, or PC-98 game data. Game data
 is separate from the engine and is not included in this repository.
 
 From the repository root:

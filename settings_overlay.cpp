@@ -530,11 +530,13 @@ void enhancementsPage(settings::Session &s, const char *query) {
 	hint("100% preserves original timing. Slower speed gives more time to react without changing "
 	     "movement steps or scripts. Music and cutscenes keep their normal speed.");
 	ImGui::SeparatorText("Cutscene presentation");
-	toggle(s, query, "Space/A-Z skips developer logos", s.values.skipLogosWithKeyboard,
-	       "Press Space or any letter to skip an opening developer/publisher scene. Save settings "
+	toggle(s, query, "Key/click skips developer logos", s.values.skipLogosWithKeyboard,
+	       "Press Space, any letter or left-click to skip an opening developer/publisher scene. "
+	       "Save settings "
 	       "to remember this choice at startup. Backspace remains available.");
-	toggle(s, query, "Space/A-Z skips other cutscenes", s.values.skipCutscenesWithKeyboard,
-	       "Press Space or any letter to skip the intro or a story scene, including SEQ movies "
+	toggle(s, query, "Key/click skips other cutscenes", s.values.skipCutscenesWithKeyboard,
+	       "Press Space, any letter or left-click to skip the intro or a story scene, including "
+	       "SEQ movies "
 	       "and text summaries. Each scene needs a fresh press; gameplay bindings are unaffected.");
 	hint("These choices take effect on the next applicable scene and need the corresponding "
 	     "edition resources.");

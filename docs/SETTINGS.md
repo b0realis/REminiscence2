@@ -126,18 +126,19 @@ unsaved progress. Escape/B cancels a confirmation; Escape/F10/Start otherwise
 resumes gameplay. The preferences file contains settings, not a game save,
 cheats, selected level or rewind history.
 
-## Cutscene skip keys
+## Cutscene skip controls
 
 Under **Enhancements → Cutscene presentation**, two options are enabled by default:
 
-- **Space/A-Z skips developer logos** covers opening developer/publisher scenes,
+- **Key/click skips developer logos** covers opening developer/publisher scenes,
   including the Macintosh title cards.
-- **Space/A-Z skips other cutscenes** covers the intro and subsequent polygon,
+- **Key/click skips other cutscenes** covers the intro and subsequent polygon,
   SET, text-summary and PC CD SEQ scenes.
 
-Press Space or any letter once to skip. A held key skips only the current scene;
-release and press again for the next scene. These keys are independent of gameplay
-bindings and are consumed before returning to play. Enter and arrows retain
+Press Space, any letter or the left mouse button once to skip. A held key or
+mouse button skips only the current scene; release and press again for the next
+scene. These shortcuts are independent of gameplay bindings and are consumed
+before returning to play. A skip click cannot activate the next menu or HUD. Enter and arrows retain
 their interactive-panel functions. Backspace remains available when the options
 are off. **Save settings** persists `skip_logos_with_keyboard` and
 `skip_cutscenes_with_keyboard` for subsequent launches. The standalone cutscene
@@ -404,9 +405,10 @@ the session with the chosen assets. Save first; modern save compatibility checks
 still apply. `--list-assets` prints IDs for `--asset-set=ID` and `--music-source=ID`.
 
 **Audio → Soundtrack** switches immediately and **Save settings** remembers it.
-Choose discovered Amiga MOD, DOS PRF or a user-provided Ogg pack under
+Choose discovered Amiga MOD, DOS PRF, extracted Sega CD audio or an Ogg/WAV pack under
 `assets/music/<pack>/`; **This edition / supplied tunes** restores native music.
 Missing tracks fall back to native music. The override does not change sound
-effects, voices or embedded SEQ audio. See the [music mapping](../manual.md#music-sources)
+effects, voices or embedded SEQ/MCD audio. See the [music mapping](../manual.md#music-sources)
 for names, looping and preparation of Genesis/Sega CD recordings. Raw ROM/VGM
-playback and Sega CD disc extraction are not implemented.
+playback is not implemented. [The Sega CD tool](SEGA_CD.md) extracts supported
+CUE/BIN files and preserves CD audio as lossless PCM WAV.

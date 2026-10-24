@@ -13,6 +13,7 @@
 #include "file.h"
 #include "fs.h"
 #include "game.h"
+#include "mcd_player.h"
 #include "save_catalog.h"
 #include "gameplay_identity.h"
 #include "screenshot.h"
@@ -50,7 +51,10 @@ void Game::initCutsceneResources() {
 
 	switch (_res._type) {
 	case kResourceTypeSega:
-		_res.load("FONT8", Resource::OT_FNT);
+		if (_res.isSegaCD())
+			_res.loadSegaCDGlobals();
+		else
+			_res.load("FONT8", Resource::OT_FNT);
 		break;
 	case kResourceTypeAmiga:
 		_res.load("FONT8", Resource::OT_FNT, "SPR");
@@ -109,6 +113,8 @@ void Game::run() {
 		_res.load_SPR_OFF("PERSO", _res._spr1);
 		break;
 	case kResourceTypeSega:
+		if (_res.isSegaCD())
+			break; // Per-level resources are loaded on entry.
 		_res.load("GLOBAL", Resource::OT_ANI);
 		_res.load("GLOBAL", Resource::OT_ICN);
 		_res.load("GLOBAL", Resource::OT_OBJ);
@@ -193,8 +199,8 @@ void Game::run() {
 		resumeLoaded = _continued;
 	}
 
-	bool presentMenu =
-	    !_res.isSega() && ((_res._type != kResourceTypeDOS) || _res.fileExists("MENU1.MAP"));
+	bool presentMenu = (!_res.isSega() || _res.isSegaCD()) &&
+	                   ((_res._type != kResourceTypeDOS) || _res.fileExists("MENU1.MAP"));
 	while (!_stub->_pi.quit && _requestedAsset < 0) {
 		if (!resumeLoaded && _stub->hasWidescreen()) {
 			_stub->clearWidescreen();
@@ -331,6 +337,7 @@ void Game::displayTitleScreenAmiga() {
 	_menu._selectedOption = -1;
 	int selected = 0;
 	int h = 0;
+	MenuInputScope input(_stub);
 	while (!_stub->_pi.quit) {
 		_stub->processEvents();
 		if (_stub->_pi.escape || _stub->consumePauseRequest()) {
@@ -338,26 +345,34 @@ void Game::displayTitleScreenAmiga() {
 			_menu._selectedOption = Menu::MENU_OPTION_ITEM_SETTINGS;
 			break;
 		}
-		if (_stub->_pi.dirMask & (PlayerInput::DIR_UP | PlayerInput::DIR_DOWN)) {
-			selected = (selected + ((_stub->_pi.dirMask & PlayerInput::DIR_UP) ? 3 : 1)) % 4;
-			_stub->_pi.dirMask &= ~(PlayerInput::DIR_UP | PlayerInput::DIR_DOWN);
+		for (auto event = _stub->_menuInput.next(); event.type != MenuInput::None;
+		     event = _stub->_menuInput.next()) {
+			bool confirm = event.type == MenuInput::Confirm;
+			if (event.type == MenuInput::Up || event.type == MenuInput::Down)
+				selected = (selected + (event.type == MenuInput::Up ? 3 : 1)) % 4;
+			if (event.type == MenuInput::Cancel) {
+				_menu._selectedOption = Menu::MENU_OPTION_ITEM_SETTINGS;
+				break;
+			}
+			for (int i = 0; i < 4; ++i) {
+				if (event.inside(196, 100 + i * 24, 116, 16)) {
+					selected = i;
+					confirm = event.type == MenuInput::Click;
+					break;
+				}
+			}
+			if (selected == 1 &&
+			    (confirm || event.type == MenuInput::Left || event.type == MenuInput::Right)) {
+				_menu._skill = (_menu._skill + (event.type == MenuInput::Left ? 2 : 1)) % 3;
+			} else if (confirm) {
+				_menu._selectedOption = selected == 0   ? Menu::MENU_OPTION_ITEM_START
+				                        : selected == 2 ? Menu::MENU_OPTION_ITEM_SETTINGS
+				                                        : Menu::MENU_OPTION_ITEM_QUIT;
+				break;
+			}
 		}
-		const bool changeSkill =
-		    selected == 1 &&
-		    (_stub->_pi.enter ||
-			 (_stub->_pi.dirMask & (PlayerInput::DIR_LEFT | PlayerInput::DIR_RIGHT)));
-		if (changeSkill) {
-			_menu._skill =
-			    (_menu._skill + ((_stub->_pi.dirMask & PlayerInput::DIR_LEFT) ? 2 : 1)) % 3;
-			_stub->_pi.enter = false;
-			_stub->_pi.dirMask &= ~(PlayerInput::DIR_LEFT | PlayerInput::DIR_RIGHT);
-		} else if (_stub->_pi.enter) {
-			_stub->_pi.enter = false;
-			_menu._selectedOption = selected == 0   ? Menu::MENU_OPTION_ITEM_START
-			                        : selected == 2 ? Menu::MENU_OPTION_ITEM_SETTINGS
-			                                        : Menu::MENU_OPTION_ITEM_QUIT;
+		if (_menu._selectedOption != -1)
 			break;
-		}
 		std::copy(background.begin(), background.end(), buf);
 		static const char *skills[] = {"EASY", "NORMAL", "EXPERT"};
 		const std::string skill = std::string("SKILL: ") + skills[_menu._skill];
@@ -565,6 +580,26 @@ void Game::playCutscene(int id) {
 		_cut._skipWithKeyboard = _seq._skipWithKeyboard = skipWithKeyboard;
 		ToggleWidescreenStack tws(_stub, false);
 		_mix.stopMusic();
+		if (_res.isSegaCD()) {
+			const auto playedId = _cut._id;
+			_cut._completed = _cut._interrupted = false;
+			if (const char *stem = mcd::eventName(playedId, _currentLevel)) {
+				mcd::Player player(_stub, &_mix);
+				const std::string name = std::string(stem) + ".MCD";
+				if (!player.play(name.c_str(), _fs, skipWithKeyboard, _cut._interruptForMenu))
+					warning("Unable to play Sega CD movie %s", name.c_str());
+				_cut._completed = player.completed;
+				_cut._interrupted = !player.completed;
+				if (_demoBin == -1 && playedId == Cutscene::kCineMemo && player.completed)
+					_journal.memory();
+			}
+			// SC1 already includes its publisher/developer opening. SC2 includes
+			// the ending and credits. No CMD/POL fallback exists on this disc.
+			_cut._id = playedId == 0x3D ? 0x3D : 0xFFFF;
+			_vid.fullRefresh();
+			_mix.stopMusic();
+			return;
+		}
 		if (_res._hasSeqData && _cut._id != 0x40) {
 			int num = 0;
 			switch (_cut._id) {
@@ -1180,8 +1215,9 @@ void Game::drawAnimBuffer(uint8_t stateNum, AnimBufferState *state) {
 					}
 					break;
 				case kResourceTypeSega:
-					if (decodeSegaCharacter(state->dataPtr, _res._sprDataSizes[pge->anim_number],
-					                        _res._scratchBuffer, Resource::kScratchBufferSize)) {
+					if ((_res.isSegaCD() ? decodeSegaCDCharacter : decodeSegaCharacter)(
+					        state->dataPtr, _res._sprDataSizes[pge->anim_number],
+					        _res._scratchBuffer, Resource::kScratchBufferSize)) {
 						drawCharacter(_res._scratchBuffer, state->x, state->y, state->h, state->w,
 						              displayFlags, pge == &_pgeLive[0]);
 					} else {
@@ -1228,6 +1264,7 @@ void Game::drawPiege(AnimBufferState *state) {
 }
 
 void Game::drawObject(const uint8_t *dataPtr, int16_t x, int16_t y, uint8_t flags) {
+	_res.selectObjectBank(true);
 	debug(DBG_GAME, "Game::drawObject() dataPtr[]=0x%X dx=%d dy=%d",  dataPtr[0], (int8_t)dataPtr[1], (int8_t)dataPtr[2]);
 	assert(dataPtr[0] < 0x4A);
 	uint8_t slot = _res._rp[dataPtr[0]];
@@ -1552,6 +1589,8 @@ bool Game::hasLevelMap(int level, int room) const {
 	if (_res._type == kResourceTypeMac) {
 		return _res.MAC_hasLevelMap(level, room);
 	}
+	if (_res.isSegaCD() && level == 1)
+		return _res._segaCDRoomBank[room] != 0;
 	if (_res._map) {
 		return READ_LE_UINT32(_res._map + room * 6) != 0;
 	} else if (_res._lev) {
@@ -1565,6 +1604,19 @@ static bool isMetro(int level, int room) {
 }
 
 void Game::decodeLevelRoom(int room) {
+	_res.selectObjectBank(false);
+	if (_res.isSegaCD() && _currentLevel == 1) {
+		const int bank = room >= 0 && room < 64 ? _res._segaCDRoomBank[room] : 0;
+		if (!bank)
+			return;
+		if (bank != _res._levNum) {
+			const char *name = bank == 1 ? "level2_1" : "level2_2";
+			free(_res._lev);
+			_res._lev = nullptr;
+			_res.load(name, Resource::OT_LEV);
+			_res._levNum = bank;
+		}
+	}
 	switch (_res._type) {
 	case kResourceTypeAmiga:
 		if (_currentLevel == 1) {
@@ -1586,6 +1638,8 @@ void Game::decodeLevelRoom(int room) {
 			if (num != 0 && _res._levNum != num) {
 				char name[9];
 				snprintf(name, sizeof(name), "level2_%d", num);
+				free(_res._lev);
+				_res._lev = nullptr;
 				_res.load(name, Resource::OT_LEV);
 				_res._levNum = num;
 			}
@@ -1635,13 +1689,22 @@ void Game::loadLevelMap() {
 	}
 	// Restore current room pixels, palette and Amiga resource-bank selection
 	// after decoding neighbors, which deliberately use the same adapter.
-	if (_res.isAmiga() && _currentLevel == 1 && originalBank != _res._levNum) {
+	if ((_res.isAmiga() || _res.isSegaCD()) && _currentLevel == 1 && originalBank != _res._levNum) {
 		char name[16];
 		snprintf(name, sizeof(name), "level2_%d", originalBank);
+		free(_res._lev);
+		_res._lev = nullptr;
 		_res.load(name, Resource::OT_LEV);
 		_res._levNum = originalBank;
 	}
 	decodeLevelRoom(_currentRoom);
+	if (_res.isSegaCD() && _currentLevel == 1 && originalBank != _res._levNum) {
+		const char *name = _res._levNum == 1 ? "level2_1" : "level2_2";
+		free(_res._spr1);
+		_res._spr1 = nullptr;
+		_res.load(name, Resource::OT_SPR);
+		_res.load_SPR_OFF(name, _res._spr1, "TAB");
+	}
 	if (!adjacent) {
 		_vid.updateWidescreen();
 	}
@@ -1711,6 +1774,10 @@ void Game::loadLevelData() {
 	case kResourceTypeDOS:
 	case kResourceTypeSega:
 	case kResourceTypePC98:
+		if (_res.isSegaCD()) {
+			_res.loadSegaCDLevel(_currentLevel);
+			break;
+		}
 		_res.load(lvl->name, Resource::OT_MBK);
 		_res.load(lvl->name, Resource::OT_CT);
 		_res.load(lvl->name, Resource::OT_PAL);

@@ -40,9 +40,7 @@ struct Menu {
 		kMacTitleScreen_Controls = 6
 	};
 
-	enum {
-		EVENTS_DELAY = 80
-	};
+	enum { EVENTS_DELAY = 20 };
 
 	struct Item {
 		int str;

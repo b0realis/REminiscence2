@@ -39,6 +39,8 @@ struct SystemStub_SDL : SystemStub {
 	SDL_AudioDeviceID _audioDevice = 0;
 	int _outputSampleRate = 22050;
 	uint32_t _silentStamp = 0;
+	uint32_t _pausedTime = 0;
+	uint32_t getPausedTime() const override { return _pausedTime; }
 	uint64_t _silentRemainder = 0;
 	void openAudioOutput(bool initial);
 	void pumpSilentAudio();
@@ -77,6 +79,7 @@ struct SystemStub_SDL : SystemStub {
 	unsigned _inputGeneration = 0;
 	InputState _input;
 	std::array<bool, SDL_NUM_SCANCODES> _cutsceneSkipKeys{};
+	bool _cutsceneSkipMouse = false;
 	std::unique_ptr<SettingsOverlay> _overlay;
 	settings::Session *_settingsSession = nullptr;
 	int _logicalW = 0, _logicalH = 0;
@@ -99,6 +102,22 @@ struct SystemStub_SDL : SystemStub {
 	bool applyPreferences(const settings::Preferences &preferences, std::string &reason) override;
 	void showSettings(settings::Session &session) override;
 	void setGameplayActive(bool active) override { _gameplayActive = active; }
+	void setMenuInputEnabled(bool enabled) override {
+		SystemStub::setMenuInputEnabled(enabled);
+		_input.clear(_pi);
+		_pi.lastChar = 0;
+		_pointerVisible = enabled;
+		SDL_ShowCursor(enabled ? SDL_ENABLE : SDL_DISABLE);
+	}
+	void publishInput() {
+		const uint32_t now = SDL_GetTicks();
+		_input.publish(_pi, _preferences, _gameplayActive, now);
+		if (_menuInputEnabled)
+			_menuInput.buttons(_pi.dirMask | (_pi.enter ? MenuInput::Confirm : 0) |
+			                       (_pi.escape ? MenuInput::Cancel : 0) |
+			                       (_pi.backspace ? MenuInput::Erase : 0),
+			                   now);
+	}
 	void setCutsceneSkipEnabled(bool enabled) override {
 		if (_cutsceneSkipEnabled != enabled) {
 			_input.clear(_pi);
@@ -766,7 +785,8 @@ void SystemStub_SDL::updateScreen(int shakeOffset) {
 	}
 	SDL_RenderPresent(_renderer);
 	SDL_RenderSetLogicalSize(_renderer, _logicalW, _logicalH);
-	if (!_settingsSession && _pointerVisible && SDL_GetTicks() - _lastPointer > 2000) {
+	if (!_settingsSession && !_menuInputEnabled && _pointerVisible &&
+	    SDL_GetTicks() - _lastPointer > 2000) {
 		SDL_ShowCursor(SDL_DISABLE);
 		_pointerVisible = false;
 	}
@@ -787,13 +807,18 @@ void SystemStub_SDL::processEvents() {
 			break;
 		}
 		SDL_Event waiting;
-		if (SDL_WaitEventTimeout(&waiting, 100)) {
+		const uint32_t pauseStart = SDL_GetTicks();
+		const bool received = SDL_WaitEventTimeout(&waiting, 100);
+		_pausedTime += SDL_GetTicks() - pauseStart;
+		if (received) {
 			processEvent(waiting, paused);
 			if (_pi.quit)
 				return;
 		}
 	}
-	_input.publish(_pi, _preferences, _gameplayActive, SDL_GetTicks());
+	publishInput();
+	if (_menuInputEnabled)
+		_menuInput.repeat(SDL_GetTicks());
 }
 
 // only used for the protection codes and level passwords
@@ -852,6 +877,8 @@ void SystemStub_SDL::processEvent(const SDL_Event &raw, bool &paused) {
 		_silentRemainder = 0;
 		paused = _backgrounded || (_focusLost && _preferences.pauseOnFocusLoss);
 		_input.clear(_pi);
+		_menuInput = MenuInput{};
+		_cutsceneSkipMouse = false;
 		if (_audioDevice) SDL_PauseAudioDevice(_audioDevice, paused);
 		return;
 	}
@@ -871,6 +898,44 @@ void SystemStub_SDL::processEvent(const SDL_Event &raw, bool &paused) {
 		// Window/focus/quit events still belong to the platform. Every gameplay
 		// input is otherwise consumed by the overlay, including Ctrl+S/L.
 		if (raw.type != SDL_QUIT && raw.type != SDL_WINDOWEVENT) return;
+	}
+	// Consume the matching release even if the click already ended playback.
+	// This also prevents the same click from opening the HUD after a cutscene.
+	if ((raw.type == SDL_MOUSEBUTTONDOWN || raw.type == SDL_MOUSEBUTTONUP) &&
+	    raw.button.button == SDL_BUTTON_LEFT) {
+		if (_cutsceneSkipMouse) {
+			if (raw.type == SDL_MOUSEBUTTONUP)
+				_cutsceneSkipMouse = false;
+			return;
+		}
+		if (_cutsceneSkipEnabled && raw.type == SDL_MOUSEBUTTONDOWN) {
+			_cutsceneSkipMouse = true;
+			_pi.cutsceneSkip = true;
+			return;
+		}
+	}
+	if (_menuInputEnabled && (raw.type == SDL_MOUSEMOTION || raw.type == SDL_MOUSEBUTTONDOWN ||
+	                          raw.type == SDL_MOUSEBUTTONUP)) {
+		if (raw.type == SDL_MOUSEMOTION ||
+		    (raw.type == SDL_MOUSEBUTTONDOWN && raw.button.button == SDL_BUTTON_LEFT)) {
+			const int x = raw.type == SDL_MOUSEMOTION ? raw.motion.x : raw.button.x;
+			const int y = raw.type == SDL_MOUSEMOTION ? raw.motion.y : raw.button.y;
+			// SDL has already removed window letterboxing/HiDPI scaling. Remove
+			// renderer scaling and the centred widescreen borders exactly once.
+			const int gameWidth =
+			    _widescreenMode == kWidescreenNone ? _logicalW : _screenW * _scaleFactor;
+			const int left = (_logicalW - gameWidth) / 2;
+			const int px = x < left ? -1 : (x - left) * _screenW / gameWidth;
+			const int py = y < 0 ? -1 : y * _screenH / _logicalH;
+			_menuInput.push(raw.type == SDL_MOUSEMOTION ? MenuInput::Hover : MenuInput::Click, px,
+			                py);
+		}
+		return;
+	}
+	if (_menuInputEnabled && raw.type == SDL_MOUSEWHEEL) {
+		const float delta = raw.wheel.preciseY != 0 ? raw.wheel.preciseY : float(raw.wheel.y);
+		_menuInput.wheel(raw.wheel.direction == SDL_MOUSEWHEEL_FLIPPED ? -delta : delta);
+		return;
 	}
 	if (!_settingsSession && _gameplayActive && _preferences.showMenuButton && _overlay &&
 	    (raw.type == SDL_MOUSEMOTION || raw.type == SDL_MOUSEBUTTONDOWN || raw.type == SDL_MOUSEBUTTONUP)) {
@@ -941,6 +1006,8 @@ void SystemStub_SDL::processEvent(const SDL_Event &raw, bool &paused) {
 				// Lost key-up events must not leave Conrad running on return.
 				_input.clear(_pi);
 				_cutsceneSkipKeys.fill(false);
+				_cutsceneSkipMouse = false;
+				_menuInput = MenuInput{};
 			}
 			break;
 		}
@@ -948,39 +1015,39 @@ void SystemStub_SDL::processEvent(const SDL_Event &raw, bool &paused) {
 	case SDL_JOYHATMOTION:
 		if (_joystick && ev.jhat.which == _inputDevice) {
 			_input.hat(ev.jhat.value);
-			_input.publish(_pi, _preferences, _gameplayActive, SDL_GetTicks());
+			publishInput();
 		}
 		break;
 	case SDL_JOYAXISMOTION:
 		if (_joystick && ev.jaxis.which == _inputDevice && ev.jaxis.axis < 4) {
 			_input.axis(ev.jaxis.axis, ev.jaxis.value);
-			_input.publish(_pi, _preferences, _gameplayActive, SDL_GetTicks());
+			publishInput();
 		}
 		break;
 	case SDL_CONTROLLERAXISMOTION:
 		if (_controller && ev.caxis.which == _inputDevice &&
 		    ev.caxis.axis < SDL_CONTROLLER_AXIS_MAX) {
 			_input.axis(ev.caxis.axis, ev.caxis.value);
-			_input.publish(_pi, _preferences, _gameplayActive, SDL_GetTicks());
+			publishInput();
 		}
 		break;
 	case SDL_JOYBUTTONDOWN:
 	case SDL_JOYBUTTONUP:
 		if (_joystick && ev.jbutton.which == _inputDevice) {
 			_input.button(ev.jbutton.button, ev.jbutton.state == SDL_PRESSED, true);
-			_input.publish(_pi, _preferences, _gameplayActive, SDL_GetTicks());
+			publishInput();
 		}
 		break;
 	case SDL_CONTROLLERBUTTONDOWN:
 	case SDL_CONTROLLERBUTTONUP:
 		if (_controller && ev.cbutton.which == _inputDevice) {
 			_input.button(ev.cbutton.button, ev.cbutton.state == SDL_PRESSED, false);
-			_input.publish(_pi, _preferences, _gameplayActive, SDL_GetTicks());
+			publishInput();
 		}
 		break;
 	case SDL_KEYUP:
 		_input.key(raw.key.keysym.scancode, SDLK_UNKNOWN, false);
-		_input.publish(_pi, _preferences, _gameplayActive, SDL_GetTicks());
+		publishInput();
 		if (ev.key.keysym.mod & KMOD_ALT) {
 			switch (ev.key.keysym.sym) {
 			case SDLK_RETURN:
@@ -1065,11 +1132,13 @@ void SystemStub_SDL::processEvent(const SDL_Event &raw, bool &paused) {
 		}
 		break;
 	case SDL_KEYDOWN:
+		if (_menuInputEnabled && ev.key.repeat)
+			break;
 		if (ev.key.keysym.mod & (KMOD_ALT | KMOD_CTRL)) {
 			break;
 		}
 		_input.key(raw.key.keysym.scancode, ev.key.keysym.sym, true);
-		_input.publish(_pi, _preferences, _gameplayActive, SDL_GetTicks());
+		publishInput();
 		break;
 	default:
 		break;
@@ -1389,9 +1458,30 @@ bool SystemStub_SDL::applyPreferences(const settings::Preferences &p, std::strin
 SDL_Keycode SystemStub_SDL::remapKey(const SDL_KeyboardEvent &event) const {
     const int key = event.keysym.scancode ? int(event.keysym.scancode) : int(SDL_GetScancodeFromKey(event.keysym.sym));
     if (key == SDL_SCANCODE_F10) return SDLK_ESCAPE;
-    static const SDL_Keycode canonical[] = {SDLK_LEFT, SDLK_RIGHT, SDLK_UP, SDLK_DOWN,
-        SDLK_LSHIFT, SDLK_RETURN, SDLK_SPACE, SDLK_TAB, SDLK_ESCAPE};
-    for (size_t i = 0; i < settings::BindingCount; ++i) {
+	// Original menus always retain their standard keys after gameplay remapping.
+	if (_menuInputEnabled) {
+		switch (key) {
+		case SDL_SCANCODE_UP:
+			return SDLK_UP;
+		case SDL_SCANCODE_DOWN:
+			return SDLK_DOWN;
+		case SDL_SCANCODE_LEFT:
+			return SDLK_LEFT;
+		case SDL_SCANCODE_RIGHT:
+			return SDLK_RIGHT;
+		case SDL_SCANCODE_RETURN:
+		case SDL_SCANCODE_KP_ENTER:
+			return SDLK_RETURN;
+		case SDL_SCANCODE_ESCAPE:
+			return SDLK_ESCAPE;
+		case SDL_SCANCODE_BACKSPACE:
+			return SDLK_BACKSPACE;
+		}
+	}
+	static const SDL_Keycode canonical[] = {SDLK_LEFT,  SDLK_RIGHT,  SDLK_UP,
+	                                        SDLK_DOWN,  SDLK_LSHIFT, SDLK_RETURN,
+	                                        SDLK_SPACE, SDLK_TAB,    SDLK_ESCAPE};
+	for (size_t i = 0; i < settings::BindingCount; ++i) {
         if (_preferences.keys[i] == key) return canonical[i];
     }
     const settings::Preferences defaults;

@@ -37,6 +37,7 @@ Comparison snapshots:
 | File/screenshot diagnostics | Bounded memory stream operations, file size checks, absolute output paths and screenshot failure reporting. |
 | PRF/MIDI music | Implemented bounded parser, fractional sequencer and owned backends. AdLib and FluidSynth synthesis pass; MT-32 missing-ROM handling passes. Real DOS songs and MT-32 playback pending assets. |
 | Sega Mega Drive extracted data | Experimental extracted-data path implemented, with bounded RLE/tile modules and corrected destination tile placement. Synthetic tests pass; actual Sega data, ROM extraction and Sega sound are not validated/implemented. |
+| Sega CD US extension (1.23) | Separate disc adapter, CUE/BIN extraction, MCD movies/audio, VCE dialogue, per-level sprites and WAV soundtrack. Actual supplied disc integration checks pass; see [the format specification](SEGA_CD.md) for scope and remaining validation. |
 | External CREDITS.CRD | Implemented bounded loader and display-buffer validation with embedded fallback. |
 | Credits menu entry | Common level selector now exposes the existing credits sequence separately from seven playable levels. |
 | Edition traits | Implemented immutable `editionTraits(ResourceType)` for byte order, resolution, introduction and protection behavior. |

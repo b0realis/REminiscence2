@@ -11,6 +11,7 @@
 #include "scaler.h"
 #include "runtime_options.h"
 #include "settings.h"
+#include "menu_input.h"
 
 struct PlayerInput {
 	enum {
@@ -32,7 +33,7 @@ struct PlayerInput {
 	bool shift;
 	bool backspace;
 	bool escape;
-	bool cutsceneSkip; // One fresh Space/letter press, independent of gameplay bindings.
+	bool cutsceneSkip; // One fresh Space/letter press or mouse click.
 
 	char lastChar;
 
@@ -57,6 +58,12 @@ struct SystemStub {
 	typedef void (*AudioCallback)(void *param, int16_t *stream, int len);
 
 	PlayerInput _pi;
+	MenuInput _menuInput;
+	bool _menuInputEnabled = false;
+	virtual void setMenuInputEnabled(bool enabled) {
+		_menuInputEnabled = enabled;
+		_menuInput = MenuInput{};
+	}
 	bool _cutsceneSkipEnabled = false;
 	virtual void setCutsceneSkipEnabled(bool enabled) {
 		_cutsceneSkipEnabled = enabled;
@@ -110,6 +117,9 @@ struct SystemStub {
 	virtual void processEvents() = 0;
 	virtual void sleep(int duration) = 0;
 	virtual uint32_t getTimeStamp() = 0;
+	// Cumulative time spent waiting while focus/background policy pauses audio.
+	// Media clocks subtract this from wall time to preserve A/V synchronization.
+	virtual uint32_t getPausedTime() const { return 0; }
 
 	virtual void startAudio(AudioCallback callback, void *param) = 0;
 	virtual void stopAudio() = 0;
@@ -127,6 +137,16 @@ struct CutsceneInputScope {
 		stub->setCutsceneSkipEnabled(enabled);
 	}
 	~CutsceneInputScope() { stub->setCutsceneSkipEnabled(previous); }
+};
+
+// Nested title submenus start with fresh input and discard their exit gesture.
+struct MenuInputScope {
+	SystemStub *stub;
+	bool previous;
+	explicit MenuInputScope(SystemStub *s) : stub(s), previous(s->_menuInputEnabled) {
+		stub->setMenuInputEnabled(true);
+	}
+	~MenuInputScope() { stub->setMenuInputEnabled(previous); }
 };
 
 struct LockAudioStack {

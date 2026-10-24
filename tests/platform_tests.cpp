@@ -217,6 +217,110 @@ static int checkRate(int rate) {
 	key.type = SDL_KEYUP;
 	SDL_PushEvent(&key);
 	platform->processEvents();
+	// Real SDL down/up pairs in one poll must survive, including with remapped
+	// gameplay controls. OS-generated repeats cannot race the menu timer.
+	platform->setMenuInputEnabled(true);
+	auto tap = [&](SDL_Scancode code, SDL_Keycode symbol) {
+		SDL_Event event{};
+		event.type = SDL_KEYDOWN;
+		event.key.keysym.scancode = code;
+		event.key.keysym.sym = symbol;
+		SDL_PushEvent(&event);
+		event.type = SDL_KEYUP;
+		SDL_PushEvent(&event);
+	};
+	tap(SDL_SCANCODE_LEFT, SDLK_LEFT);
+	tap(SDL_SCANCODE_DOWN, SDLK_DOWN);
+	tap(SDL_SCANCODE_RETURN, SDLK_RETURN);
+	platform->processEvents();
+	if (platform->_menuInput.next().type != MenuInput::Left ||
+	    platform->_menuInput.next().type != MenuInput::Down ||
+	    platform->_menuInput.next().type != MenuInput::Confirm ||
+	    platform->_menuInput.next().type != MenuInput::None)
+		return 80;
+	key.type = SDL_KEYDOWN;
+	key.key.keysym.scancode = SDL_SCANCODE_UP;
+	key.key.keysym.sym = SDLK_UP;
+	key.key.repeat = 0;
+	SDL_PushEvent(&key);
+	platform->processEvents();
+	if (platform->_menuInput.next().type != MenuInput::Up)
+		return 81;
+	key.key.repeat = 1;
+	SDL_PushEvent(&key);
+	platform->processEvents();
+	if (platform->_menuInput.next().type != MenuInput::None)
+		return 82;
+	key.type = SDL_KEYUP;
+	key.key.repeat = 0;
+	SDL_PushEvent(&key);
+	platform->processEvents();
+	// Widescreen + 2x: game centre x=200 maps to logical x=542.
+	SDL_Event pointer{};
+	pointer.type = SDL_MOUSEMOTION;
+	pointer.motion.x = 542;
+	pointer.motion.y = 208;
+	SDL_PushEvent(&pointer);
+	pointer.type = SDL_MOUSEBUTTONDOWN;
+	pointer.button.button = SDL_BUTTON_LEFT;
+	pointer.button.x = 542;
+	pointer.button.y = 208;
+	SDL_PushEvent(&pointer);
+	pointer.type = SDL_MOUSEBUTTONUP;
+	SDL_PushEvent(&pointer);
+	SDL_Event wheel{};
+	wheel.type = SDL_MOUSEWHEEL;
+	for (Uint32 id = 1; id < 1024; ++id) {
+		if (SDL_GetWindowFromID(id)) {
+			wheel.wheel.windowID = id;
+			break;
+		}
+	}
+	wheel.wheel.y = -1;
+	wheel.wheel.preciseY = -1.f; // Match a real event, including high-resolution data.
+	SDL_PushEvent(&wheel);
+	wheel.wheel.direction = SDL_MOUSEWHEEL_FLIPPED;
+	SDL_PushEvent(&wheel);
+	platform->processEvents();
+	const auto hover = platform->_menuInput.next();
+	const auto clicked = platform->_menuInput.next();
+	const auto wheelDown = platform->_menuInput.next();
+	const auto wheelUp = platform->_menuInput.next();
+	const auto afterWheel = platform->_menuInput.next();
+	if (hover.type != MenuInput::Hover || hover.x != 200 || hover.y != 104 ||
+	    clicked.type != MenuInput::Click || clicked.x != 200 || clicked.y != 104 ||
+	    wheelDown.type != MenuInput::Down || wheelUp.type != MenuInput::Up ||
+	    afterWheel.type != MenuInput::None)
+		return 83;
+	platform->setMenuInputEnabled(false);
+	platform->setGameplayActive(true);
+	platform->setCutsceneSkipEnabled(true);
+	pointer.type = SDL_MOUSEBUTTONDOWN;
+	SDL_PushEvent(&pointer);
+	platform->processEvents();
+	if (!platform->consumeCutsceneSkip() || platform->consumeCutsceneSkip() || platform->_pi.escape)
+		return 84;
+	platform->setCutsceneSkipEnabled(false);
+	platform->setMenuInputEnabled(true);
+	pointer.type = SDL_MOUSEBUTTONUP;
+	SDL_PushEvent(&pointer);
+	platform->processEvents();
+	if (platform->_menuInput.next().type != MenuInput::None || platform->_pi.escape)
+		return 85;
+	platform->setMenuInputEnabled(false);
+	platform->setCutsceneSkipEnabled(true);
+	platform->processEvents();
+	if (platform->consumeCutsceneSkip())
+		return 86;
+	pointer.type = SDL_MOUSEBUTTONDOWN;
+	SDL_PushEvent(&pointer);
+	pointer.type = SDL_MOUSEBUTTONUP;
+	SDL_PushEvent(&pointer);
+	platform->processEvents();
+	if (!platform->consumeCutsceneSkip())
+		return 87;
+	platform->setCutsceneSkipEnabled(false);
+	platform->setGameplayActive(false);
 	preferences.scale = 1;
 	preferences.widescreen = kWidescreenNone;
 	preferences.menuLayout = 1;

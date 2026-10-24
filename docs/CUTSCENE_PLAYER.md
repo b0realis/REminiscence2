@@ -1,6 +1,6 @@
 # Flashback cutscene player
 
-Browse and play the polygon cutscenes from your original Flashback files:
+Browse and play polygon cutscenes or Sega CD MCD movies from your original Flashback files:
 
 ```sh
 python3 tools/play_cutscenes.py "/path/to/Flashback/assets"
@@ -15,7 +15,7 @@ part ends. Type `q` at the menu or press Ctrl+C to exit the tool.
 During playback:
 
 - **Backspace, Tab or Escape** skips the part and returns to the menu.
-- **Space or any letter (A–Z)** also skips by default. The two saved Enhancements
+- **Space, any letter (A–Z), or left mouse click** also skips by default. The two saved Enhancements
   options control logo scenes and other cutscenes independently. Release the key
   before skipping another scene; holding it cannot skip successive parts.
 - **Enter and arrow keys** operate interactive panels, including the
@@ -34,7 +34,7 @@ The supplied Amiga WHDLoad package provides **27 files and 68 selectable parts**
 Use **Python 3.9 or newer** and a compiled **REminiscence2 from this tree**.
 Python uses only its standard library; no `pip` installation is needed.
 Build the engine as described in the [project README](../README.md#build).
-The tool searches `build/release`, `build` and the repository root for the
+The tool searches `build/package-arm64`, `build/release`, `build` and the repository root for the
 executable, then searches `PATH`. Override this with `--engine=PATH`.
 
 Supply one edition's extracted game folder. The engine searches its subfolders
@@ -43,9 +43,10 @@ and handles its own filename case matching and supported archives:
 | Edition | Cutscene resources | Validation |
 | --- | --- | --- |
 | Amiga | Bytekiller-compressed or raw blocks in `.CMP` files | All 27 supplied files and 68 parts rendered with strict UBSan and the MOD mixer |
-| DOS / classic GOG DOS data | Matching `.CMD` and `.POL` files, including the engine's ABA support | Synthetic catalog and launch fixtures; actual GOG files remain to be supplied |
+| DOS / classic GOG DOS data | Matching `.CMD` and `.POL` files, including the engine's ABA support | Synthetic catalog and actual supplied GOG startup/level checks; full movie playthrough remains |
 | Macintosh | Named `PMOV` and `POLY` resources in a supported `FLASHBACK.BIN` or `FLASHBACK.RSRC` resource fork | Synthetic resource/offset checks; real Macintosh CD validation remains outstanding |
-| PC-98 / experimental extracted Sega data | Engine-supported command/polygon resources | No edition-specific real-asset playback validation yet |
+| Sega CD US | `.MCD` movies with embedded PCM | All 17754 indexed frames decoded from the supplied disc; each file is one selectable movie |
+| PC-98 / experimental extracted Sega cartridge data | Engine-supported command/polygon resources | No edition-specific real-asset playback validation yet |
 
 First prepare Amiga WHDLoad archives using [the extraction tool](../tools/extract_amiga.py):
 
@@ -61,7 +62,12 @@ engine's language detection unless `--language` is specified. Available
 translations and music depend on the files in your edition. Some raw parts
 have no game-event music association and play silently.
 
-This is a polygon player. It does not list PC CD `.SEQ` replacements, standalone
+Sega CD `sc1` is the opening including logos; `sc2` is the ending and credits.
+Prepare CUE/BIN with [the Sega CD extractor](SEGA_CD.md). For this local checkout, `./play-movies-local.sh` opens the Sega CD browser;
+add `--list` to inspect or `--play sc1` to play the opening immediately.
+The MCD browser honors the saved cutscene skip setting; Escape or Backspace returns to the browser.
+
+The browser does not list PC CD `.SEQ` replacements, standalone
 `.SET` animations, 3DO videos, disk images or installers. The engine plays the
 selected polygon part directly, regardless of text-summary or SEQ preferences
 in the configuration. A named part does not automatically chain into other

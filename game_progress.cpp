@@ -114,9 +114,14 @@ bool identity(Resource &r, int level) {
 			type = Resource::OT_OBJ;
 			ext = ".obj";
 		}
+	} else if (r.isSegaCD()) {
+		static const char *graphics[] = {"level1", "level2", "dt",    "level3",
+		                                 "level3", "level4", "level4"};
+		ct = graphics[level];
+		pge = obj = data.nameAmiga;
 	} else if (r.isSega())
 		obj = "GLOBAL";
-	const char *ani = r.isSega() ? "GLOBAL" : pge;
+	const char *ani = r.isSega() && !r.isSegaCD() ? "GLOBAL" : pge;
 	if (!r.fileExists((std::string(ani) + ".ani").c_str()) ||
 	    !r.fileExists((std::string(ct) + ".ct").c_str()) ||
 	    !r.fileExists((std::string(pge) + ".pge").c_str()) ||
