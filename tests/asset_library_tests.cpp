@@ -7,6 +7,8 @@
 #include <iostream>
 #include <stdexcept>
 
+const char *g_caption = "asset library tests";
+
 static void check(bool condition, const char *message) {
 	if (!condition)
 		throw std::runtime_error(message);
