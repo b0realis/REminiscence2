@@ -42,6 +42,29 @@ int main() {
 		if (platform->_pi.dirMask || platform->_pi.shift) {
 			return 2;
 		}
+		// Virtual devices exercise hotplug/instance filtering without hardware.
+		const int virtualIndex = SDL_JoystickAttachVirtual(SDL_JOYSTICK_TYPE_UNKNOWN, 2, 10, 1);
+		if (virtualIndex >= 0) {
+			platform->processEvents();
+			auto *device = SDL_JoystickOpen(virtualIndex);
+			SDL_Event button = {};
+			button.type = SDL_JOYBUTTONDOWN; button.jbutton.button = 1; button.jbutton.state = SDL_PRESSED;
+			button.jbutton.which = SDL_JoystickInstanceID(device);
+			SDL_PushEvent(&button); platform->processEvents();
+			if (!platform->_pi.shift) return 20;
+			button.type = SDL_JOYBUTTONUP; button.jbutton.state = SDL_RELEASED;
+			button.jbutton.which += 10000;
+			SDL_PushEvent(&button); platform->processEvents();
+			if (!platform->_pi.shift) return 21;
+			SDL_JoystickClose(device);
+			SDL_JoystickDetachVirtual(virtualIndex); platform->processEvents();
+			if (platform->_pi.shift || platform->_pi.dirMask) return 22;
+			const int reconnect = SDL_JoystickAttachVirtual(SDL_JOYSTICK_TYPE_UNKNOWN, 2, 10, 1);
+			if (reconnect < 0) return 23;
+			platform->processEvents(); SDL_JoystickDetachVirtual(reconnect); platform->processEvents();
+		}
+		SDL_Event reset = {}; reset.type = SDL_RENDER_DEVICE_RESET;
+		SDL_PushEvent(&reset); platform->processEvents(); platform->updateScreen(0);
 		settings::Preferences preferences;
 		platform->readPreferences(preferences);
 		preferences.fullscreen = false;

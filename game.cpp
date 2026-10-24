@@ -1,3 +1,5 @@
+#include "atomic_file.h"
+#include <filesystem>
 
 /*
  * REminiscence - Flashback interpreter
@@ -2031,29 +2033,20 @@ bool Game::saveGameState(uint8_t slot) {
 	if (slot == kAutoSaveSlot) {
 		return saveStateRewind();
 	}
-	bool success = false;
 	char stateFile[32];
 	makeGameStateName(slot, stateFile, sizeof(stateFile));
-	File f;
-	if (!f.open(stateFile, "zwb", _savePath)) {
-		warning("Unable to save state file '%s'", stateFile);
-	} else {
-		// header
+	std::string reason;
+	const bool success = writeAtomicFile((std::filesystem::u8path(_savePath) / stateFile).u8string(), true,
+	    [&](File &f) {
 		f.writeUint32BE(TAG_FBSV);
 		f.writeUint16BE(kSaveVersion);
-		char buf[32];
-		memset(buf, 0, sizeof(buf));
-		snprintf(buf, sizeof(buf), "level=%d room=%d", _currentLevel + 1, _currentRoom);
-		f.write(buf, sizeof(buf));
-		// contents
+		char header[32] = {};
+		snprintf(header, sizeof(header), "level=%d room=%d", _currentLevel + 1, _currentRoom);
+		f.write(header, sizeof(header));
 		saveState(&f);
-		if (f.ioErr()) {
-			warning("I/O error when saving game state");
-		} else {
-			info("Saved state to slot %d", slot);
-			success = true;
-		}
-	}
+	    }, reason);
+	if (success) info("Saved state to slot %d", slot);
+	else warning("%s", reason.c_str());
 	return success;
 }
 

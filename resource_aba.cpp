@@ -1,93 +1,68 @@
-
 #include "resource_aba.h"
 #include "unpack.h"
 #include "util.h"
+#include <algorithm>
+#include <vector>
 
-ResourceAba::ResourceAba(FileSystem *fs)
-	: _fs(fs) {
-	_filesCount = 0;
-	_entries = 0;
-	_entriesCount = 0;
-}
-
-ResourceAba::~ResourceAba() {
-	free(_entries);
-}
-
+ResourceAba::ResourceAba(FileSystem *fs) : _fs(fs), _filesCount(0), _entries(nullptr), _entriesCount(0) {}
+ResourceAba::~ResourceAba() { free(_entries); }
 static int compareAbaEntry(const void *a, const void *b) {
-	return strcasecmp(((const ResourceAbaEntry *)a)->name, ((const ResourceAbaEntry *)b)->name);
+	return strcasecmp(static_cast<const ResourceAbaEntry *>(a)->name,
+	                  static_cast<const ResourceAbaEntry *>(b)->name);
 }
-
 void ResourceAba::readEntries(const char *aba) {
-	assert(_filesCount < 3);
-	if (_f[_filesCount].open(aba, "rb", _fs)) {
-		File &f = _f[_filesCount];
-		const int currentCount = _entriesCount;
-		const int entriesCount = f.readUint16BE();
-		_entries = (ResourceAbaEntry *)realloc(_entries, (currentCount + entriesCount) * sizeof(ResourceAbaEntry));
-		if (!_entries) {
-			error("Failed to allocate %d _entries", currentCount + entriesCount);
-			return;
-		}
-		_entriesCount = currentCount + entriesCount;
-		const int entrySize = f.readUint16BE();
-		assert(entrySize == 30);
-		uint32_t nextOffset = 0;
-		for (int i = 0; i < entriesCount; ++i) {
-			const int j = currentCount + i;
-			f.read(_entries[j].name, sizeof(_entries[j].name));
-			_entries[j].offset = f.readUint32BE();
-			_entries[j].compressedSize = f.readUint32BE();
-			_entries[j].size = f.readUint32BE();
-			_entries[j].fileIndex = _filesCount;
-			const uint32_t tag = f.readUint32BE();
-			assert(tag == TAG);
-			debug(DBG_RES, "'%s' offset 0x%X size %d/%d", _entries[j].name,  _entries[j].offset, _entries[j].compressedSize, _entries[j].size);
-			if (i != 0) {
-				assert(nextOffset == _entries[j].offset);
-			}
-			nextOffset = _entries[j].offset + _entries[j].compressedSize;
-		}
-		qsort(_entries, _entriesCount, sizeof(ResourceAbaEntry), compareAbaEntry);
-		++_filesCount;
+	if (_filesCount >= ARRAYSIZE(_f) || !_f[_filesCount].open(aba, "rb", _fs)) return;
+	File &f = _f[_filesCount];
+	const uint32_t length = f.size();
+	const unsigned count = f.readUint16BE(), recordSize = f.readUint16BE();
+	std::vector<ResourceAbaEntry> pending;
+	bool valid = !f.ioErr() && recordSize == 30 && length >= 4 && count <= (length - 4) / 30;
+	uint64_t nextOffset = 4 + uint64_t(count) * 30;
+	for (unsigned i = 0; valid && i < count; ++i) {
+		ResourceAbaEntry e = {};
+		f.read(e.name, sizeof(e.name));
+		e.offset = f.readUint32BE(); e.compressedSize = f.readUint32BE(); e.size = f.readUint32BE();
+		e.fileIndex = _filesCount;
+		const uint32_t tag = f.readUint32BE();
+		// Original resources are small. Cap expansion before allocation, and
+		// require a bounded, terminated name before sorting or logging it.
+		valid = !f.ioErr() && memchr(e.name, 0, sizeof(e.name)) && e.name[0] && tag == TAG &&
+		        e.offset >= nextOffset && uint64_t(e.offset) + e.compressedSize <= length &&
+		        e.size <= 64 * 1024 * 1024 && e.compressedSize <= 64 * 1024 * 1024 &&
+		        (e.compressedSize == e.size || e.compressedSize >= 12);
+		nextOffset = uint64_t(e.offset) + e.compressedSize;
+		pending.push_back(e);
 	}
+	if (!valid) { warning("Invalid or truncated ABA archive '%s'", aba); f.close(); return; }
+	void *grown = realloc(_entries, (_entriesCount + pending.size()) * sizeof(ResourceAbaEntry));
+	if (!grown && !pending.empty()) { warning("Cannot allocate ABA index"); f.close(); return; }
+	_entries = static_cast<ResourceAbaEntry *>(grown);
+	if (!pending.empty()) memcpy(_entries + _entriesCount, pending.data(), pending.size() * sizeof(ResourceAbaEntry));
+	_entriesCount += pending.size();
+	if (_entriesCount > 1) std::stable_sort(_entries, _entries + _entriesCount,
+	    [](const ResourceAbaEntry &a, const ResourceAbaEntry &b) { return strcasecmp(a.name, b.name) < 0; });
+	++_filesCount;
 }
-
 const ResourceAbaEntry *ResourceAba::findEntry(const char *name) const {
-	ResourceAbaEntry tmp;
-	strcpy(tmp.name, name);
-	return (const ResourceAbaEntry *)bsearch(&tmp, _entries, _entriesCount, sizeof(ResourceAbaEntry), compareAbaEntry);
+	if (!name || strlen(name) >= sizeof(ResourceAbaEntry::name) || !_entriesCount) return nullptr;
+	ResourceAbaEntry key = {};
+	memcpy(key.name, name, strlen(name));
+	return static_cast<const ResourceAbaEntry *>(bsearch(&key, _entries, _entriesCount, sizeof(key), compareAbaEntry));
 }
-
 uint8_t *ResourceAba::loadEntry(const char *name, uint32_t *size) {
-	uint8_t *dst = 0;
-	const ResourceAbaEntry *e = findEntry(name);
-	if (e) {
-		if (size) {
-			*size = e->size;
-		}
-		uint8_t *tmp = (uint8_t *)malloc(e->compressedSize);
-		if (!tmp) {
-			error("Failed to allocate %d bytes", e->compressedSize);
-			return 0;
-		}
-		_f[e->fileIndex].seek(e->offset);
-		_f[e->fileIndex].read(tmp, e->compressedSize);
-		if (e->compressedSize == e->size) {
-			dst = tmp;
-		} else {
-			dst = (uint8_t *)malloc(e->size);
-			if (!dst) {
-				error("Failed to allocate %d bytes", e->size);
-				free(tmp);
-				return 0;
-			}
-			const bool ret = bytekiller_unpack(dst, e->size, tmp, e->compressedSize);
-			if (!ret) {
-				error("Bad CRC for '%s'", name);
-			}
-			free(tmp);
-		}
+	if (size) *size = 0;
+	const auto *e = findEntry(name);
+	if (!e) return nullptr;
+	std::vector<uint8_t> source(std::max(1u, e->compressedSize));
+	File &f = _f[e->fileIndex];
+	f.seek(e->offset);
+	if (f.read(source.data(), e->compressedSize) != e->compressedSize || f.ioErr()) return nullptr;
+	auto *dst = static_cast<uint8_t *>(malloc(std::max(1u, e->size)));
+	if (!dst) return nullptr;
+	if (e->size == e->compressedSize) memcpy(dst, source.data(), e->size);
+	else if (!bytekiller_unpack(dst, e->size, source.data(), e->compressedSize)) {
+		warning("Invalid ABA compressed entry '%s'", name); free(dst); return nullptr;
 	}
+	if (size) *size = e->size;
 	return dst;
 }

@@ -3,8 +3,10 @@
 # Release readiness and next fixes
 
 Reviewed on 24 October 2026 against implementation commit `9f3e0d1`.
-Patch **1.01** establishes versioning and records this review; the fixes below
-are recommendations, not changes already implemented by this audit.
+Patch **1.01** established versioning and recorded this review. **1.02** implements
+the filesystem, atomic-save, archive, controller, footer and allocation changes
+below. Release packaging and device validation are tracked in RELEASES.md.
+The table retains the original findings to explain the changes.
 
 The review covers startup, filesystem and archive access, save writing, SDL
 rendering/input, the keyboard diagram and existing build/CI configuration.

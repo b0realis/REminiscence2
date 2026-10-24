@@ -120,17 +120,22 @@ spaces. Normal game launches use these defaults:
 
 | Purpose | Default | Change it with |
 | --- | --- | --- |
-| Game resources | `DATA` | `--datapath=PATH` |
+| Game resources | `assets` beside the executable (legacy `DATA` fallback) | `--datapath=PATH` |
 | Music resources | `TUNES` | `--tunepath=PATH` |
-| Persistent saves | `SAVE` | `--savepath=PATH` |
-| Compatibility settings | `fb.cfg` | `--config=PATH` |
+| Persistent saves | User-data `REminiscence2/SAVE` | `--savepath=PATH` |
+| Compatibility settings | `fb.cfg` | `--portable` | Keep default assets/music/saves beside the executable. |
+| `--config=PATH` |
 
-The game creates missing tune/save directories when their parents already
-exist. Those locations must be writable. The default `fb.cfg` is optional;
+The game creates the save directory and its missing parents. Optional tune
+folders are read-only. Saves default to `%APPDATA%/REminiscence2/SAVE` on Windows,
+`~/Library/Application Support/REminiscence2/SAVE` on macOS, and
+`$XDG_DATA_HOME/REminiscence2/SAVE` (or `~/.local/share/REminiscence2/SAVE`) on Linux.
+Use `--portable` for `assets`, `TUNES` and `SAVE` beside the executable; explicit
+path switches take priority. Keep saves writable. The default `fb.cfg` is optional;
 an explicitly requested configuration file must exist and be readable.
 
 A single existing folder passed as the **only argument** is a convenience mode
-that uses the folder for data, music and saves. Use the named switches when you
+that uses the folder for data and music, retaining the normal save location. Use the named switches when you
 want to separate these locations. A launch from outside the project might be:
 
 ```sh
@@ -446,9 +451,10 @@ and examples at any time, run `reminiscence2 -h`.
 | --- | --- |
 | `-h`, `--help` | Print the full guide and exit without requiring assets. |
 | `--version` | Print version, credits and enabled PRF backends, then exit. |
-| `--datapath=PATH` | Game folder; default `DATA`. |
+| `--datapath=PATH` | Game folder; default `assets` beside the executable. |
 | `--tunepath=PATH` | Music folder; default `TUNES`. |
-| `--savepath=PATH` | Persistent save folder; default `SAVE`. |
+| `--savepath=PATH` | Persistent save folder; default platform user-data location. |
+| `--portable` | Keep default assets/music/saves beside the executable. |
 | `--config=PATH` | Compatibility configuration; default working-directory `fb.cfg`. |
 | `--no-preferences` | Ignore the saved menu profile for this launch; retain it on disk. |
 | `--window` | Start in a resizable window; default launch is fullscreen. |

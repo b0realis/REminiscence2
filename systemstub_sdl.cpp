@@ -8,7 +8,8 @@
 #error REminiscence2 requires SDL 2.0.18 or newer for the settings renderer.
 #endif
 #include "resource.h"
-#include <sys/time.h>
+#include <chrono>
+#include <vector>
 #include "scaler.h"
 #include "screenshot.h"
 #include "systemstub.h"
@@ -18,7 +19,6 @@
 
 static const char *kIconBmp = "icon.bmp";
 
-static const int kJoystickIndex = 0;
 static const int kJoystickCommitValue = 3200;
 
 static const uint32_t kPixelFormat = SDL_PIXELFORMAT_RGB888;
@@ -69,6 +69,10 @@ struct SystemStub_SDL : SystemStub {
 	int _logicalW = 0, _logicalH = 0;
 	bool _gameplayActive = false, _pointerVisible = false;
 	uint32_t _lastPointer = 0;
+	SDL_JoystickID _inputDevice = -1;
+	bool _frameDirty = true;
+	std::vector<uint32_t> _rgbScratch, _blurScratch, _widePixels;
+	int _wideWidth = 0;
 
 	virtual ~SystemStub_SDL() {}
 	void configure(const RuntimeOptions &options) override { _options = options; }
@@ -109,6 +113,10 @@ struct SystemStub_SDL : SystemStub {
 
 	void setPaletteColor(int color, int r, int g, int b);
 	void processEvent(const SDL_Event &ev, bool &paused);
+	void openInputDevice();
+	void closeInputDevice();
+	void restoreTextures();
+	void updateWide(const SDL_Rect *area, const uint32_t *pixels, int pitch);
 	void prepareGraphics();
 	void cleanupGraphics();
 	void changeGraphics(bool fullscreen, int scaleFactor);
@@ -157,12 +165,30 @@ void SystemStub_SDL::init(const char *title, int w, int h, bool fullscreen, int 
 	setScreenSize(w, h);
 	_joystick = 0;
 	_controller = 0;
-	if (SDL_NumJoysticks() > 0) {
-		SDL_GameControllerAddMapping(Resource::_controllerMapping);
-		_joystick = SDL_JoystickOpen(kJoystickIndex);
-		if (SDL_IsGameController(kJoystickIndex)) {
-			_controller = SDL_GameControllerOpen(kJoystickIndex);
+	SDL_GameControllerAddMapping(Resource::_controllerMapping);
+	openInputDevice();
+}
+
+void SystemStub_SDL::closeInputDevice() {
+	if (_controller) SDL_GameControllerClose(_controller);
+	if (_joystick) SDL_JoystickClose(_joystick);
+	_controller = nullptr; _joystick = nullptr; _inputDevice = -1;
+	_pi.dirMask = 0;
+	_pi.enter = _pi.space = _pi.shift = _pi.backspace = _pi.escape = false;
+}
+void SystemStub_SDL::openInputDevice() {
+	if (_inputDevice >= 0) return;
+	// Prefer SDL-mapped controllers; do not process their duplicate raw events.
+	for (int pass = 0; pass < 2; ++pass) for (int i = 0; i < SDL_NumJoysticks(); ++i) {
+		if ((SDL_IsGameController(i) == SDL_TRUE) != (pass == 0)) continue;
+		if (pass == 0) {
+			_controller = SDL_GameControllerOpen(i);
+			if (_controller) _inputDevice = SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(_controller));
+		} else {
+			_joystick = SDL_JoystickOpen(i);
+			if (_joystick) _inputDevice = SDL_JoystickInstanceID(_joystick);
 		}
+		if (_inputDevice >= 0) return;
 	}
 }
 
@@ -182,14 +208,7 @@ void SystemStub_SDL::destroy() {
 		SDL_UnloadObject(_scalerSo);
 		_scalerSo = 0;
 	}
-	if (_controller) {
-		SDL_GameControllerClose(_controller);
-		_controller = 0;
-	}
-	if (_joystick) {
-		SDL_JoystickClose(_joystick);
-		_joystick = 0;
-	}
+	closeInputDevice();
 	SDL_Quit();
 }
 
@@ -251,6 +270,7 @@ void SystemStub_SDL::setOverscanColor(int i) {
 }
 
 void SystemStub_SDL::copyRect(int x, int y, int w, int h, const uint8_t *buf, int pitch) {
+	_frameDirty = true;
 	if (x < 0) {
 		x = 0;
 	} else if (x >= _screenW) {
@@ -285,6 +305,7 @@ void SystemStub_SDL::copyRect(int x, int y, int w, int h, const uint8_t *buf, in
 }
 
 void SystemStub_SDL::copyRectRgb24(int x, int y, int w, int h, const uint8_t *rgb) {
+	_frameDirty = true;
 	assert(x >= 0 && x + w <= _screenW && y >= 0 && y + h <= _screenH);
 	uint32_t *p = _screenBuffer + y * _screenW + x;
 
@@ -403,7 +424,8 @@ static void blur_v(int radius, const uint32_t *src, int srcPitch, int w, int h, 
 
 void SystemStub_SDL::copyWidescreenLeft(int w, int h, const uint8_t *buf, bool dark) {
 	assert(w >= _wideMargin);
-	uint32_t *rgb = (uint32_t *)malloc(w * h * sizeof(uint32_t));
+	_rgbScratch.resize(size_t(w) * h);
+	uint32_t *rgb = _rgbScratch.data();
 	if (rgb) {
 		if (buf) {
 			for (int i = 0; i < w * h; ++i) {
@@ -417,7 +439,8 @@ void SystemStub_SDL::copyWidescreenLeft(int w, int h, const uint8_t *buf, bool d
 		}
 
 		if (!dark) {
-			uint32_t *tmp = (uint32_t *)malloc(w * h * sizeof(uint32_t));
+			_blurScratch.resize(size_t(w) * h);
+			uint32_t *tmp = _blurScratch.data();
 
 			if (rgb && tmp) {
 				static const int radius = 2;
@@ -425,7 +448,6 @@ void SystemStub_SDL::copyWidescreenLeft(int w, int h, const uint8_t *buf, bool d
 				blur_v(radius, tmp, w, w, h, _fmt, rgb, w);
 			}
 
-			free(tmp);
 		}
 
 		const int xOffset = w - _wideMargin;
@@ -434,14 +456,14 @@ void SystemStub_SDL::copyWidescreenLeft(int w, int h, const uint8_t *buf, bool d
 		r.y = 0;
 		r.w = _wideMargin;
 		r.h = h;
-		SDL_UpdateTexture(_widescreenTexture, &r, rgb + xOffset, w * sizeof(uint32_t));
-		free(rgb);
+		updateWide(&r, rgb + xOffset, w * sizeof(uint32_t));
 	}
 }
 
 void SystemStub_SDL::copyWidescreenRight(int w, int h, const uint8_t *buf, bool dark) {
 	assert(w >= _wideMargin);
-	uint32_t *rgb = (uint32_t *)malloc(w * h * sizeof(uint32_t));
+	_rgbScratch.resize(size_t(w) * h);
+	uint32_t *rgb = _rgbScratch.data();
 	if (rgb) {
 		if (buf) {
 			for (int i = 0; i < w * h; ++i) {
@@ -455,7 +477,8 @@ void SystemStub_SDL::copyWidescreenRight(int w, int h, const uint8_t *buf, bool 
 		}
 
 		if (!dark) {
-			uint32_t *tmp = (uint32_t *)malloc(w * h * sizeof(uint32_t));
+			_blurScratch.resize(size_t(w) * h);
+			uint32_t *tmp = _blurScratch.data();
 
 			if (rgb && tmp) {
 				static const int radius = 2;
@@ -463,7 +486,6 @@ void SystemStub_SDL::copyWidescreenRight(int w, int h, const uint8_t *buf, bool 
 				blur_v(radius, tmp, w, w, h, _fmt, rgb, w);
 			}
 
-			free(tmp);
 		}
 
 		const int xOffset = 0;
@@ -472,14 +494,14 @@ void SystemStub_SDL::copyWidescreenRight(int w, int h, const uint8_t *buf, bool 
 		r.y = 0;
 		r.w = _wideMargin;
 		r.h = h;
-		SDL_UpdateTexture(_widescreenTexture, &r, rgb + xOffset, w * sizeof(uint32_t));
-		free(rgb);
+		updateWide(&r, rgb + xOffset, w * sizeof(uint32_t));
 	}
 }
 
 void SystemStub_SDL::copyWidescreenMirror(int w, int h, const uint8_t *buf) {
 	assert(w >= _wideMargin);
-	uint32_t *rgb = (uint32_t *)malloc(w * h * sizeof(uint32_t));
+	_rgbScratch.resize(size_t(w) * h);
+	uint32_t *rgb = _rgbScratch.data();
 	if (rgb) {
 		for (int i = 0; i < w * h; ++i) {
 			rgb[i] = _darkPalette[buf[i]];
@@ -500,9 +522,9 @@ void SystemStub_SDL::copyWidescreenMirror(int w, int h, const uint8_t *buf) {
 				}
 				p += pitch / sizeof(uint32_t);
 			}
+			updateWide(nullptr, static_cast<uint32_t *>(dst), pitch);
 			SDL_UnlockTexture(_widescreenTexture);
 		}
-		free(rgb);
 	}
 }
 
@@ -513,8 +535,10 @@ void SystemStub_SDL::copyWidescreenBlur(int w, int h, const uint8_t *buf) {
 	if (SDL_LockTexture(_widescreenTexture, 0, &ptr, &pitch) == 0) {
 		assert((pitch & 3) == 0);
 
-		uint32_t *src = (uint32_t *)malloc(w * h * sizeof(uint32_t));
-		uint32_t *tmp = (uint32_t *)malloc(w * h * sizeof(uint32_t));
+		_rgbScratch.resize(size_t(w) * h);
+		uint32_t *src = _rgbScratch.data();
+		_blurScratch.resize(size_t(w) * h);
+			uint32_t *tmp = _blurScratch.data();
 		uint32_t *dst = (uint32_t *)ptr;
 
 		if (src && tmp) {
@@ -526,15 +550,15 @@ void SystemStub_SDL::copyWidescreenBlur(int w, int h, const uint8_t *buf) {
 			blur_v(radius, tmp, w, w, h, _fmt, dst, pitch / sizeof(uint32_t));
 		}
 
-		free(src);
-		free(tmp);
 
+		updateWide(nullptr, static_cast<uint32_t *>(ptr), pitch);
 		SDL_UnlockTexture(_widescreenTexture);
 	}
 }
 
 void SystemStub_SDL::copyWidescreenCDi(int w, int h, const uint8_t *buf, const uint8_t *pal) {
-	uint32_t *rgb = (uint32_t *)malloc(w * h * sizeof(uint32_t));
+	_rgbScratch.resize(size_t(w) * h);
+	uint32_t *rgb = _rgbScratch.data();
 	if (rgb) {
 		for (int i = 0; i < w * h; ++i) {
 			const uint8_t *p = pal + buf[i] * 3;
@@ -547,15 +571,40 @@ void SystemStub_SDL::copyWidescreenCDi(int w, int h, const uint8_t *buf, const u
 		r.h = h;
 		// left border
 		r.x = 0;
-		SDL_UpdateTexture(_widescreenTexture, &r, rgb, w * sizeof(uint32_t));
+		updateWide(&r, rgb, w * sizeof(uint32_t));
 		// right border
 		r.x = _screenW + w;
-		SDL_UpdateTexture(_widescreenTexture, &r, rgb, w * sizeof(uint32_t));
-		free(rgb);
+		updateWide(&r, rgb, w * sizeof(uint32_t));
+	}
+}
+
+void SystemStub_SDL::updateWide(const SDL_Rect *area, const uint32_t *pixels, int pitch) {
+	if (!_widescreenTexture) return;
+	int width, height;
+	SDL_QueryTexture(_widescreenTexture, nullptr, nullptr, &width, &height);
+	_wideWidth = width;
+	_widePixels.resize(size_t(width) * height);
+	const SDL_Rect r = area ? *area : SDL_Rect{0, 0, width, height};
+	for (int y = 0; y < r.h; ++y)
+		memcpy(_widePixels.data() + (r.y + y) * width + r.x,
+		       reinterpret_cast<const uint8_t *>(pixels) + size_t(y) * pitch, r.w * sizeof(uint32_t));
+	if (area) SDL_UpdateTexture(_widescreenTexture, area, pixels, pitch);
+}
+void SystemStub_SDL::restoreTextures() {
+	SDL_DestroyTexture(_texture);
+	_texture = SDL_CreateTexture(_renderer, kPixelFormat, SDL_TEXTUREACCESS_STREAMING, _texW, _texH);
+	if (!_texture) error("Cannot restore game texture: %s", SDL_GetError());
+	_frameDirty = true;
+	if (_widescreenTexture) {
+		SDL_DestroyTexture(_widescreenTexture);
+		_widescreenTexture = SDL_CreateTexture(_renderer, kPixelFormat, SDL_TEXTUREACCESS_STREAMING, _wideWidth, _screenH);
+		if (!_widescreenTexture) error("Cannot restore side texture: %s", SDL_GetError());
+		if (!_widePixels.empty()) SDL_UpdateTexture(_widescreenTexture, nullptr, _widePixels.data(), _wideWidth * sizeof(uint32_t));
 	}
 }
 
 void SystemStub_SDL::clearWidescreen() {
+	std::fill(_widePixels.begin(), _widePixels.end(), 0);
 	clearTexture(_widescreenTexture, _screenH, _fmt);
 }
 
@@ -568,6 +617,7 @@ void SystemStub_SDL::fadeScreen() {
 }
 
 bool SystemStub_SDL::drawGameFrame(int shakeOffset) {
+	if (_frameDirty) {
 	if (_texW != _screenW || _texH != _screenH) {
 		void *dst = 0;
 		int pitch = 0;
@@ -578,6 +628,8 @@ bool SystemStub_SDL::drawGameFrame(int shakeOffset) {
 		}
 	} else {
 		SDL_UpdateTexture(_texture, 0, _screenBuffer, _screenW * sizeof(uint32_t));
+	}
+	_frameDirty = false;
 	}
 	SDL_RenderClear(_renderer);
 	if (_widescreenMode != kWidescreenNone) {
@@ -678,6 +730,19 @@ static void setAsciiChar(PlayerInput &pi, const SDL_Keysym *key) {
 }
 
 void SystemStub_SDL::processEvent(const SDL_Event &raw, bool &paused) {
+	if (raw.type == SDL_JOYDEVICEADDED || raw.type == SDL_CONTROLLERDEVICEADDED) { openInputDevice(); return; }
+	if (raw.type == SDL_JOYDEVICEREMOVED || raw.type == SDL_CONTROLLERDEVICEREMOVED) {
+		if (raw.jdevice.which == _inputDevice) { closeInputDevice(); openInputDevice(); }
+		return;
+	}
+	if (raw.type == SDL_RENDER_DEVICE_RESET || raw.type == SDL_RENDER_TARGETS_RESET) { restoreTextures(); return; }
+	if (raw.type == SDL_APP_WILLENTERBACKGROUND || raw.type == SDL_APP_DIDENTERFOREGROUND) {
+		paused = raw.type == SDL_APP_WILLENTERBACKGROUND;
+		_pi.dirMask = 0; _pi.enter = _pi.shift = _pi.space = _pi.backspace = false;
+		if (_audioDevice) SDL_PauseAudioDevice(_audioDevice, paused);
+		return;
+	}
+
 	if (_settingsSession && _overlay) {
 		_overlay->processEvent(raw, _settingsSession);
 		// Window/focus/quit events still belong to the platform. Every gameplay
@@ -731,7 +796,7 @@ void SystemStub_SDL::processEvent(const SDL_Event &raw, bool &paused) {
 		}
 		break;
 	case SDL_JOYHATMOTION:
-		if (_joystick) {
+		if (_joystick && ev.jhat.which == _inputDevice) {
 			_pi.dirMask = 0;
 			if (ev.jhat.value & SDL_HAT_UP) {
 				_pi.dirMask |= PlayerInput::DIR_UP;
@@ -748,7 +813,7 @@ void SystemStub_SDL::processEvent(const SDL_Event &raw, bool &paused) {
 		}
 		break;
 	case SDL_JOYAXISMOTION:
-		if (_joystick) {
+		if (_joystick && ev.jaxis.which == _inputDevice) {
 			switch (ev.jaxis.axis) {
 			case 0:
 				_pi.dirMask &= ~(PlayerInput::DIR_RIGHT | PlayerInput::DIR_LEFT);
@@ -771,7 +836,7 @@ void SystemStub_SDL::processEvent(const SDL_Event &raw, bool &paused) {
 		break;
 	case SDL_JOYBUTTONDOWN:
 	case SDL_JOYBUTTONUP:
-		if (_joystick) {
+		if (_joystick && ev.jbutton.which == _inputDevice) {
 			const bool pressed = (ev.jbutton.state == SDL_PRESSED);
 			switch (ev.jbutton.button) {
 			case 0:
@@ -792,7 +857,7 @@ void SystemStub_SDL::processEvent(const SDL_Event &raw, bool &paused) {
 		}
 		break;
 	case SDL_CONTROLLERAXISMOTION:
-		if (_controller) {
+		if (_controller && ev.caxis.which == _inputDevice) {
 			switch (ev.caxis.axis) {
 			case SDL_CONTROLLER_AXIS_LEFTX:
 			case SDL_CONTROLLER_AXIS_RIGHTX:
@@ -825,7 +890,7 @@ void SystemStub_SDL::processEvent(const SDL_Event &raw, bool &paused) {
 		break;
 	case SDL_CONTROLLERBUTTONDOWN:
 	case SDL_CONTROLLERBUTTONUP:
-		if (_controller) {
+		if (_controller && ev.cbutton.which == _inputDevice) {
 			const bool pressed = (ev.cbutton.state == SDL_PRESSED);
 			switch (ev.cbutton.button) {
 			case SDL_CONTROLLER_BUTTON_A:
@@ -894,11 +959,10 @@ void SystemStub_SDL::processEvent(const SDL_Event &raw, bool &paused) {
 				}
 				break;
 			case SDLK_s: {
-					struct timeval tv;
-					gettimeofday(&tv, 0);
-					const long timestamp = tv.tv_sec * 1000 + tv.tv_usec / 1000;
+					const auto timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
+					    std::chrono::system_clock::now().time_since_epoch()).count();
 					char name[64];
-					snprintf(name, sizeof(name), "screenshot-%ld.bmp", timestamp);
+					snprintf(name, sizeof(name), "screenshot-%lld.bmp", static_cast<long long>(timestamp));
 					saveBMP(name, (const uint8_t *)_screenBuffer, 0, _screenW, _screenH);
 				    info("Written '%s'", name);
 			    }
@@ -1106,6 +1170,7 @@ void SystemStub_SDL::unlockAudio() {
 
 
 void SystemStub_SDL::prepareGraphics() {
+	_frameDirty = true;
 	_texW = _screenW;
 	_texH = _screenH;
 	switch (_scalerType) {
@@ -1172,6 +1237,8 @@ void SystemStub_SDL::prepareGraphics() {
 		}
 		_widescreenTexture = SDL_CreateTexture(_renderer, kPixelFormat, SDL_TEXTUREACCESS_STREAMING, w, _screenH);
 		clearTexture(_widescreenTexture, _screenH, _fmt);
+		_wideWidth = w;
+		_widePixels.assign(size_t(w) * _screenH, 0);
 
 		// left and right borders
 		_wideMargin = (w - _screenW) / 2;
@@ -1261,7 +1328,10 @@ bool SystemStub_SDL::applyPreferences(const settings::Preferences &p, std::strin
         SDL_DestroyTexture(_texture);
         if (_widescreenTexture) SDL_DestroyTexture(_widescreenTexture);
         _texture = gameTexture;
+        _frameDirty = true;
         _widescreenTexture = wideTexture;
+        _wideWidth = wideW;
+        _widePixels.assign(size_t(wideW) * _screenH, 0);
         _fullscreen = p.fullscreen;
         _scalerType = type;
         _scaler = type == kScalerTypeInternal ? &_internalScaler : nullptr;

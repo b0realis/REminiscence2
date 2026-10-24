@@ -110,112 +110,40 @@ bool bytekiller_unpack(uint8_t *dst, int capacity, const uint8_t *src, int encod
 	return context.good && !context.size && !context.crc;
 }
 
-struct bitstream_t {
-	uint16_t mask;
-	int size;
-	const uint8_t *src;
-};
-
-static uint8_t read_byte(struct bitstream_t *bs) {
-	const uint8_t b = *(bs->src);
-	++bs->src;
-	return b;
-}
-
-static void fill(struct bitstream_t *bs) {
-	if (bs->size < 9) {
-		const uint8_t b = read_byte(bs);
-		bs->mask |= b << (8 - bs->size);
-		bs->size += 8;
-	}
-}
-
-static int get_bit(struct bitstream_t *bs) {
-	fill(bs);
-	assert(bs->size > 0);
-	const int val = (bs->mask & 0x8000) != 0;
-	bs->mask <<= 1;
-	--bs->size;
-	return val;
-}
-
-static int get_bits(struct bitstream_t *bs, int count) {
-	if (count > bs->size) {
-		const int val = bs->mask >> (16 - bs->size);
-		count -= bs->size;
-		bs->size = 0;
-		bs->mask = 0;
-		fill(bs);
-		return (val << count) | get_bits(bs, count);
-	} else {
-		assert(count <= bs->size);
-		const int val = bs->mask >> (16 - count);
-		bs->mask <<= count;
-		bs->size -= count;
-		return val;
-	}
-}
-
-static uint8_t rol1(uint8_t r) {
-	return (r << 1) | (r >> 7);
-}
-
-struct UnpackCtx {
-	struct bitstream_t bs;
-	uint8_t *dst;
-	uint32_t dstSize, dstOffset;
-};
-
-static void outputb(UnpackCtx *ctx, uint8_t b) {
-	assert(ctx->dstOffset < ctx->dstSize);
-	ctx->dst[ctx->dstOffset++] = b;
-}
-
-static void outputs(UnpackCtx *ctx, int offset, int count) {
-	assert(ctx->dstOffset + count <= ctx->dstSize);
-	for (int i = 0; i < count; ++i) {
-		ctx->dst[ctx->dstOffset + i] = ctx->dst[ctx->dstOffset + offset + i];
-	}
-	ctx->dstOffset += count;
-}
-
-static int decode_bs(UnpackCtx *ctx, const uint8_t *src, int size) {
-	struct bitstream_t *bs = &ctx->bs;
-	bs->mask = 0;
-	bs->size = 0;
-	bs->src = src;
-
-	uint8_t key = read_byte(bs);
-	while (size != 0) {
-		if (get_bit(bs) == 0) {
-			const uint8_t val = get_bits(bs, 8);
-			outputb(ctx, val ^ key);
-			--size;
-			if (size == 0) {
-				break;
-			}
-			key = rol1(val);
-			continue;
-		}
-		int count = 1;
-		while (count <= 8 && get_bit(bs)) {
-			++count;
-		}
-		const int count2 = get_bits(bs, count) + 3;
-		const int offset = get_bits(bs, 13);
-		outputs(ctx, -offset - 1, count2);
-		size -= count2;
-	}
-	const int read = bs->src - src;
-	debug(DBG_UNPACK, "end %d bytes, out %d", read, ctx->dstOffset);
-	return read;
-}
-
+// PC-98 stream: rolling-key literals and overlapping backward references.
+// Consume bits MSB-first without speculative reads beyond the supplied span.
 bool pc98_unpack(uint8_t *dst, int dstSize, const uint8_t *src, int srcSize) {
-	UnpackCtx ctx;
-	memset(&ctx, 0, sizeof(ctx));
-	ctx.dst = dst;
-	ctx.dstSize = dstSize;
-	ctx.dstOffset = 0;
-	return decode_bs(&ctx, src, dstSize);
+	if (!dst || !src || dstSize <= 0 || srcSize < 2) return false;
+	size_t bit = 8;
+	bool valid = true;
+	auto bits = [&](int count) {
+		unsigned value = 0;
+		for (int i = 0; i < count; ++i) {
+			if (bit >= size_t(srcSize) * 8) { valid = false; return 0u; }
+			value = (value << 1) | ((src[bit / 8] >> (7 - bit % 8)) & 1);
+			++bit;
+		}
+		return value;
+	};
+	uint8_t key = src[0];
+	int written = 0;
+	while (written < dstSize) {
+		if (bits(1) == 0) {
+			const uint8_t value = bits(8);
+			if (!valid) return false;
+			dst[written++] = value ^ key;
+			key = uint8_t((value << 1) | (value >> 7));
+		} else {
+			int countBits = 1;
+			while (countBits <= 8 && bits(1)) ++countBits;
+			const int count = int(bits(countBits)) + 3;
+			const int distance = int(bits(13)) + 1;
+			if (!valid || distance > written || count > dstSize - written) return false;
+			for (int i = 0; i < count; ++i) {
+				dst[written] = dst[written - distance];
+				++written;
+			}
+		}
+	}
+	return valid;
 }

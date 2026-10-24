@@ -223,3 +223,21 @@ The Linux CI job retains both sanitizers.
   inherited simulation and archive loaders.
 
 No bug-free or release-ready certification follows from these checks.
+
+## Patch 1.02 reliability and allocation pass (24 October 2026)
+
+Local Release passes 10 suites; UBSan Debug passes 12, including all private
+Amiga and cutscene checks. New synthetic tests cover deterministic duplicate
+asset lookup, missing directories, a symlink cycle, atomic compressed-save
+replacement and failure cleanup, buffered close errors where `/dev/full` is
+available, rolling-key PC-98 decoding and every input truncation, malformed
+backreferences, short PAQ wrappers/ranges, and ABA tables truncated at every
+byte. SDL virtual joystick checks cover hotplug, unrelated instance rejection,
+disconnect clearing, reconnect and texture-reset recovery. Enlarged-text menu
+captures were inspected: Resume and turquoise EXIT GAME remain visible.
+
+The changes reuse widescreen/blur and bounded T-shirt workspaces, cache keyboard
+geometry until bindings change, and upload the main texture only when composed
+pixels or texture dimensions change. These are allocation/work reductions; no
+hardware speedup or battery-runtime claim has been measured. Original game
+simulation and the existing T-shirt/jacket regression remain unchanged.

@@ -22,8 +22,6 @@ struct ResourcePaq: ResourceArchive {
 	FileSystem *_fs;
 	File _f[16];
 	int _filesCount;
-	uint8_t *_readBuffer;
-	uint32_t _readBufferSize;
 
 	ResourcePaq(FileSystem *fs);
 	virtual ~ResourcePaq();

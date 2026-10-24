@@ -72,7 +72,7 @@ int bindingForKey(const settings::Preferences &preferences, int scancode) {
 			return static_cast<int>(i);
 	return -1;
 }
-std::vector<Key> layout(const settings::Preferences &preferences) {
+static std::vector<Key> buildLayout(const settings::Preferences &preferences) {
 	std::vector<Key> keys;
 	auto add = [&](int code, float x, float y, float width = 1, float height = 1,
 	               const char *legend = nullptr) {
@@ -179,6 +179,16 @@ std::vector<Key> layout(const settings::Preferences &preferences) {
 	}
 	return keys;
 }
+const std::vector<Key> &layout(const settings::Preferences &preferences) {
+	thread_local std::array<int, settings::BindingCount> bindings{};
+	thread_local std::vector<Key> cached;
+	if (cached.empty() || bindings != preferences.keys) {
+		cached = buildLayout(preferences);
+		bindings = preferences.keys;
+	}
+	return cached;
+}
+
 
 int draw(const settings::Preferences &preferences, int capturing, bool compact) {
 	ImGui::PushID("Keyboard diagram");
@@ -213,7 +223,7 @@ int draw(const settings::Preferences &preferences, int capturing, bool compact) 
 		ImGui::PopID();
 		return selected;
 	}
-	const auto keys = layout(preferences);
+	const auto &keys = layout(preferences);
 	const float unit = (width - 16) / KeyboardWidth;
 	float rows = 6.3f;
 	for (const auto &key : keys)

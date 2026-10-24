@@ -71,3 +71,22 @@ jobs:
           python3 -m venv build/tool-venv
           build/tool-venv/bin/python -m pip install -r tools/requirements-amiga.txt
           build/tool-venv/bin/python -m unittest discover -s tests -p 'test_extract_amiga.py' -v
+
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja mingw-w64-ucrt-x86_64-SDL2
+            mingw-w64-ucrt-x86_64-zlib mingw-w64-ucrt-x86_64-python
+      - run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DREMINISCENCE2_USE_MODPLUG=OFF
+      - run: cmake --build build --parallel 3
+      - run: ctest --test-dir build --output-on-failure

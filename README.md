@@ -144,10 +144,11 @@ produce warnings; invalid values leave the current setting unchanged. Missing
 explicit configuration files fail with an error; missing default `fb.cfg` uses
 the built-in defaults.
 
-The inherited defaults use `SAVE` for manual saves and `TUNES` for music.
-`--savepath` and `--tunepath` override them. Parent directories must already
-exist. Passing a single existing folder as the only argument retains the
-upstream behavior of using that folder for data, tunes, and saves.
+Release packages include an empty `assets` folder beside the executable and a
+one-click launcher. Copy one edition's prepared game files there. Default saves
+use the platform's writable user-data folder; `--savepath` overrides it and
+`--portable` keeps saves beside the executable. A sole existing folder argument
+selects game data and tunes while retaining the normal save location.
 
 Arrow keys move Conrad, Shift performs actions, Enter uses the selected item,
 Backspace opens inventory, and Escape or F10 opens the new paused settings

@@ -694,16 +694,21 @@ void SettingsOverlay::draw(settings::Session &s) {
 		}
 	}
 	const float available = ImGui::GetContentRegionAvail().x;
-	const float exitWidth = _compact ? (available - ImGui::GetStyle().ItemSpacing.x) / 2 : 190;
-	if (ImGui::Button(_native ? "Resume" : "Resume game", ImVec2(_compact ? exitWidth : 160, 0)))
+	const float spacing = ImGui::GetStyle().ItemSpacing.x;
+	const float padding = ImGui::GetStyle().FramePadding.x * 2;
+	const float resumeWidth = std::max(160.0f, ImGui::CalcTextSize("Resume game").x + padding);
+	const float naturalExit = std::max(190.0f, ImGui::CalcTextSize("EXIT GAME").x + padding);
+	const float saveWidth = ImGui::CalcTextSize("Save settings").x + padding;
+	const bool compactFooter = _compact || resumeWidth + naturalExit + saveWidth + spacing * 2 > available;
+	const float exitWidth = compactFooter ? (available - spacing) / 2 : naturalExit;
+	const char *resumeLabel = compactFooter || _native ? "Resume" : "Resume game";
+	if (ImGui::Button(resumeLabel, ImVec2(compactFooter ? exitWidth : resumeWidth, 0)))
 		s.action = settings::Action::Resume;
 	ImGui::SameLine();
-	if (!_compact) {
-		if (ImGui::Button("Save settings"))
-			s.saveRequested = true;
+	if (!compactFooter) {
+		if (ImGui::Button("Save settings")) s.saveRequested = true;
 		ImGui::SameLine();
-		ImGui::SetCursorPosX(ImGui::GetWindowWidth() - ImGui::GetStyle().WindowPadding.x -
-		                     exitWidth);
+		ImGui::SetCursorPosX(ImGui::GetWindowWidth() - ImGui::GetStyle().WindowPadding.x - exitWidth);
 	}
 	ImGui::PushStyleColor(ImGuiCol_Button, turquoise);
 	ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.95f, 0.86f, 1));

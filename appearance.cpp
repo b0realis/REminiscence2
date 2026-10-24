@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "appearance.h"
 #include <algorithm>
-#include <vector>
+#include <array>
 
 namespace appearance {
 uint8_t shirtPixel(ResourceType edition, uint8_t color, bool conrad) {
@@ -27,19 +27,22 @@ size_t markAmigaTshirt(uint8_t *pixels, int width, int height, size_t capacity) 
 	    size_t(width) * height > capacity)
 		return 0;
 	const size_t count = size_t(width) * height;
-	std::vector<uint8_t> seen(count, 0);
-	std::vector<int> component;
-	component.reserve(count);
+	// Maximum decoded pose is 32 x 127. Reuse bounded per-thread scratch
+	// storage; the segmentation rule and original pixels remain unchanged.
+	thread_local std::array<uint8_t, 32 * 127> seen;
+	thread_local std::array<int, 32 * 127> component;
+	std::fill_n(seen.begin(), count, 0);
+	size_t componentSize = 0;
 	size_t tagged = 0;
 	auto light = [](uint8_t color) { return color == 1 || color == 5; };
 	for (size_t start = 0; start < count; ++start) {
 		if (seen[start] || !light(pixels[start]))
 			continue;
-		component.clear();
-		component.push_back(start);
+		componentSize = 0;
+		component[componentSize++] = start;
 		seen[start] = 1;
 		int jacketEdges = 0;
-		for (size_t cursor = 0; cursor < component.size(); ++cursor) {
+		for (size_t cursor = 0; cursor < componentSize; ++cursor) {
 			const int index = component[cursor], x = index % width, y = index / width;
 			for (int neighbour :
 			     {x > 0 ? index - 1 : -1, x + 1 < width ? index + 1 : -1,
@@ -49,7 +52,7 @@ size_t markAmigaTshirt(uint8_t *pixels, int width, int height, size_t capacity) 
 				jacketEdges += pixels[neighbour] == 7;
 				if (!seen[neighbour] && light(pixels[neighbour])) {
 					seen[neighbour] = 1;
-					component.push_back(neighbour);
+					component[componentSize++] = neighbour;
 				}
 			}
 		}
@@ -57,9 +60,11 @@ size_t markAmigaTshirt(uint8_t *pixels, int width, int height, size_t capacity) 
 		// silhouette; metal highlights meet the hand. Two contacts also avoid
 		// accepting a single incidental corner in a folded/rolling pose.
 		if (jacketEdges >= 2) {
-			for (int index : component)
+			for (size_t i = 0; i < componentSize; ++i) {
+				const int index = component[i];
 				pixels[index] = pixels[index] == 1 ? ShirtLight : ShirtShadow;
-			tagged += component.size();
+			}
+			tagged += componentSize;
 		}
 	}
 	return tagged;

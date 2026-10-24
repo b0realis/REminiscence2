@@ -87,40 +87,52 @@ CUTSCENE PLAYER
       tools/play_cutscenes.py provides a numbered menu around these options.
 
 FILES AND CONFIGURATION
-  --datapath=PATH                         Default: DATA
+  --datapath=PATH                         Default: assets beside executable
       Folder containing the original game files. Keep different editions in
       separate folders. For Macintosh, retain the resource fork in a supported
       FLASHBACK.BIN or FLASHBACK.RSRC file. For GOG, select the original DOS
       data folder, rather than the Windows installer or executable.
 
-  --savepath=PATH                         Default: SAVE
+  --savepath=PATH                         Default: user data SAVE folder
       Writable folder for manual save files and game checkpoint saves.
-      It is created if missing; its parent folder must already exist.
+      It and missing parent folders are created when gameplay starts.
       Manual save slots range from 1 to 99 and are selected during play.
 
-  --tunepath=PATH                         Default: TUNES
+  --tunepath=PATH                         Default: discovered TUNES folder
       Folder for optional music files, such as MOD or OGG tracks. It is
-      created if missing; its parent folder must already exist.
+      read without creating or modifying it.
       DOS PRF/MIDI/INS music is searched for in the game folder first,
       then this folder. Original game audio may also come from game data.
 
   --config=PATH                          Default: fb.cfg
       Read the compatibility switches listed below. The default fb.cfg is
-      read from the working directory; if absent, built-in defaults apply.
+      read from the working directory, then beside the executable.
+      If neither file exists, built-in defaults apply.
       An explicitly requested file must be readable or startup fails.
       Saved in-game preferences can override the settings they expose.
       Paths and music backend selection use command-line options.
 
   --no-preferences
-      Ignore SAVE/preferences.cfg (or the file in --savepath) for this launch.
+      Ignore the save folder's preferences.cfg (or the file in --savepath) for this launch.
       Use this to recover from unwanted saved display or keyboard choices.
       F10 always opens the in-game settings menu. Saving settings from that
       menu can still write a new preferences file.
 
   GAME_FOLDER (only argument)
       An existing folder passed without any switches is used for game data,
-      tunes AND saves. This compatibility shortcut writes saves into that
-      folder. Use --datapath and --savepath for separate locations.
+      and tunes. Saves use the normal writable user-data location.
+
+  --portable
+      Keep default assets, TUNES and SAVE folders beside the executable.
+      Explicit path options take priority. The executable folder must be
+      writable for saves. Without this switch, saves use:
+        Windows: %%APPDATA%%/REminiscence2/SAVE
+        macOS:   ~/Library/Application Support/REminiscence2/SAVE
+        Linux:   $XDG_DATA_HOME/REminiscence2/SAVE, or
+                 ~/.local/share/REminiscence2/SAVE
+      Data discovery checks assets beside the executable, then legacy DATA.
+      Music discovery checks beside the executable, then the working
+      directory, then the same user-data root. Game files are read-only.
 
 DISPLAY
   --window

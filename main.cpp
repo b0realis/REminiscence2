@@ -10,6 +10,7 @@
 #include <sys/stat.h>
 #include <filesystem>
 #include "cli_text.h"
+#include "runtime_paths.h"
 #include "config.h"
 #include "cutscene_tool.h"
 #include "file.h"
@@ -109,12 +110,10 @@ static bool parseWidescreen(const char *mode, WidescreenMode &result) {
 }
 
 static bool makeDir(const char *name) {
-	struct stat st = {};
-	if (stat(name, &st) == -1) {
-		return mkdir(name, 0700) == 0;
-	} else {
-		return S_ISDIR(st.st_mode);
-	}
+	std::error_code ec;
+	const auto path = std::filesystem::u8path(name);
+	std::filesystem::create_directories(path, ec);
+	return !ec && std::filesystem::is_directory(path, ec);
 }
 
 int main(int argc, char *argv[]) {
@@ -136,7 +135,7 @@ int main(int argc, char *argv[]) {
 	const char *tunePath = "TUNES";
 	const char *savePath = "SAVE";
 	const char *configPath = "fb.cfg";
-	bool explicitConfig = false;
+	bool explicitConfig = false, explicitData = false, explicitTunes = false, explicitSaves = false, portable = false;
 	bool positionalDataPath = false;
 	int levelNum = 0;
 	bool fullscreen = true;
@@ -154,7 +153,8 @@ int main(int argc, char *argv[]) {
 		// data path as the only command line argument
 		struct stat st;
 		if (stat(argv[1], &st) == 0 && S_ISDIR(st.st_mode)) {
-			dataPath = tunePath = savePath = argv[1];
+			dataPath = tunePath = argv[1];
+			explicitData = explicitTunes = true;
 			positionalDataPath = true;
 		}
 	}
@@ -181,6 +181,7 @@ int main(int argc, char *argv[]) {
 		                                  {"list-cutscenes", no_argument, 0, 20},
 		                                  {"play-cutscene", required_argument, 0, 21},
 		                                  {"no-preferences", no_argument, 0, 22},
+		                                  {"portable", no_argument, 0, 23},
 		                                  {0, 0, 0, 0}};
 		int index;
 		const int c = getopt_long(argc, argv, "h", options, &index);
@@ -189,13 +190,13 @@ int main(int argc, char *argv[]) {
 		}
 		switch (c) {
 		case 1:
-			dataPath = optarg;
+			dataPath = optarg; explicitData = true;
 			break;
 		case 2:
-			savePath = optarg;
+			savePath = optarg; explicitSaves = true;
 			break;
 		case 3:
-			tunePath = optarg;
+			tunePath = optarg; explicitTunes = true;
 			break;
 		case 4: {
 			char *end = 0;
@@ -310,6 +311,9 @@ int main(int argc, char *argv[]) {
 			}
 			playCutscene = true;
 			break;
+		case 23:
+			portable = true;
+			break;
 		case 22:
 			ignorePreferences = true;
 			break;
@@ -328,6 +332,11 @@ int main(int argc, char *argv[]) {
 		        argv[optind]);
 		return EXIT_FAILURE;
 	}
+	const auto paths = runtimePaths(portable);
+	if (!explicitData) dataPath = paths.data.c_str();
+	if (!explicitTunes) tunePath = paths.tunes.c_str();
+	if (!explicitSaves) savePath = paths.saves.c_str();
+	if (!explicitConfig) configPath = paths.config.c_str();
 	setDefaultOptions(g_options);
 	if (!loadConfiguration(configPath, g_options) && explicitConfig) {
 		fprintf(stderr, "Unable to read configuration file '%s'.\n", configPath);
@@ -376,7 +385,7 @@ int main(int argc, char *argv[]) {
 		        dataPath);
 		return EXIT_FAILURE;
 	}
-	if (!listCutscenes && !playCutscene && (!makeDir(tunePath) || !makeDir(savePath))) {
+	if (!listCutscenes && !playCutscene && !makeDir(savePath)) {
 		error("Unable to create directories");
 		return -1;
 	}

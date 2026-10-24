@@ -4,7 +4,9 @@
  * Copyright (C) 2005-2019 Gregory Montoir (cyx@users.sourceforge.net)
  */
 
+#ifndef _WIN32
 #include <sys/param.h>
+#endif
 #include <sys/stat.h>
 #include <limits>
 #include <filesystem>
@@ -39,12 +41,17 @@ struct StdioFile : File_impl {
 	bool open(const char *path, const char *mode) {
 		_ioErr = false;
 		_writable = strchr(mode, 'w') || strchr(mode, 'a') || strchr(mode, '+');
+		#ifdef _WIN32
+		const auto wideMode = std::filesystem::path(mode).wstring();
+		_fp = _wfopen(std::filesystem::u8path(path).c_str(), wideMode.c_str());
+#else
 		_fp = fopen(path, mode);
+#endif
 		return (_fp != 0);
 	}
 	void close() {
 		if (_fp) {
-			fclose(_fp);
+			if (fclose(_fp) != 0) _ioErr = true;
 			_fp = 0;
 		}
 	}
@@ -116,12 +123,16 @@ struct GzipFile : File_impl {
 	GzipFile() : _fp(0) {}
 	bool open(const char *path, const char *mode) {
 		_ioErr = false;
+		#ifdef _WIN32
+		_fp = gzopen_w(std::filesystem::u8path(path).c_str(), mode);
+#else
 		_fp = gzopen(path, mode);
+#endif
 		return (_fp != 0);
 	}
 	void close() {
 		if (_fp) {
-			gzclose(_fp);
+			if (gzclose(_fp) != Z_OK) _ioErr = true;
 			_fp = 0;
 		}
 	}
@@ -137,7 +148,7 @@ struct GzipFile : File_impl {
 	}
 	void seek(int32_t off) {
 		if (_fp) {
-			gzseek(_fp, off, SEEK_SET);
+			if (off < 0 || gzseek(_fp, off, SEEK_SET) < 0) _ioErr = true;
 		}
 	}
 	uint32_t tell() {
@@ -148,7 +159,8 @@ struct GzipFile : File_impl {
 	}
 	uint32_t read(void *ptr, uint32_t len) {
 		if (_fp) {
-			uint32_t r = gzread(_fp, ptr, len);
+			const int result = gzread(_fp, ptr, len);
+			const uint32_t r = result > 0 ? uint32_t(result) : 0;
 			if (r != len) {
 				_ioErr = true;
 			}
@@ -365,7 +377,7 @@ bool File::open(const char *filename, const char *mode, const char *directory) {
 	if (!_impl) {
 		_impl = new StdioFile;
 	}
-	const auto path = (std::filesystem::path(directory) / filename).string();
+	const auto path = (std::filesystem::u8path(directory) / std::filesystem::u8path(filename)).u8string();
 	debug(DBG_FILE, "Open file name '%s' mode '%s' path '%s'", filename, mode, path.c_str());
 	return _impl->open(path.c_str(), mode);
 }
@@ -379,10 +391,25 @@ void File::openMemoryBuffer(int initialCapacity) {
 	_impl = new MemoryBufferFile(initialCapacity);
 }
 
-void File::close() {
-	if (_impl) {
-		_impl->close();
+bool File::openDescriptor(int descriptor, bool compressed) {
+	if (_impl) { _impl->close(); delete _impl; _impl = nullptr; }
+#ifdef USE_ZLIB
+	if (compressed) {
+		auto *gzip = new GzipFile;
+		gzip->_fp = gzdopen(descriptor, "wb");
+		_impl = gzip;
+		return gzip->_fp != nullptr;
 	}
+#endif
+	auto *stdio = new StdioFile;
+	stdio->_writable = true;
+	stdio->_fp = fdopen(descriptor, "wb");
+	_impl = stdio;
+	return stdio->_fp != nullptr;
+}
+bool File::close() {
+	if (_impl) _impl->close();
+	return !ioErr();
 }
 
 bool File::ioErr() const {

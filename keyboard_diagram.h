@@ -13,7 +13,7 @@ struct Key {
 	std::string legend;
 };
 int bindingForKey(const settings::Preferences &preferences, int scancode);
-std::vector<Key> layout(const settings::Preferences &preferences);
+const std::vector<Key> &layout(const settings::Preferences &preferences);
 
 // Returns the action selected for rebinding, or -1. This only presents the live
 // preference model; the host retains validation, persistence and input capture.

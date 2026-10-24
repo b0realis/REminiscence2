@@ -21,7 +21,8 @@ struct File {
 	bool open(const char *filename, const char *mode, FileSystem *fs);
 	bool open(const char *filename, const char *mode, const char *directory);
 	void openMemoryBuffer(int initialCapacity);
-	void close();
+	bool openDescriptor(int descriptor, bool compressed);
+	bool close();
 	bool ioErr() const;
 	uint32_t size();
 	void seek(int32_t off);

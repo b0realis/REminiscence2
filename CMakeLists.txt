@@ -59,7 +59,7 @@ target_link_libraries(dear_imgui PUBLIC SDL2::SDL2 PRIVATE reminiscence2_build_o
 
 add_library(reminiscence2_engine STATIC
     collision.cpp config.cpp cpc_player.cpp cutscene.cpp cutscene_assets.cpp cutscene_tool.cpp decode_mac.cpp decode_sega.cpp file.cpp
-    fs.cpp game.cpp game_settings.cpp graphics.cpp menu.cpp mixer.cpp mod_player.cpp ogg_player.cpp
+    atomic_file.cpp fs.cpp game.cpp game_settings.cpp graphics.cpp menu.cpp mixer.cpp mod_player.cpp ogg_player.cpp
     settings.cpp settings_store.cpp settings_overlay.cpp keyboard_diagram.cpp save_catalog.cpp appearance.cpp
     music_midi.cpp music_prf.cpp music_synth.cpp
     piege.cpp protection.cpp resource.cpp resource_aba.cpp resource_mac.cpp
@@ -94,7 +94,7 @@ if(REMINISCENCE2_USE_MODPLUG)
     target_compile_definitions(reminiscence2_engine PRIVATE USE_MODPLUG)
 endif()
 
-add_executable(reminiscence2 main.cpp cli_text.cpp)
+add_executable(reminiscence2 main.cpp cli_text.cpp runtime_paths.cpp)
 if(TARGET SDL2::SDL2main)
     target_link_libraries(reminiscence2 PRIVATE SDL2::SDL2main)
 endif()
@@ -106,6 +106,10 @@ configure_file(fb.cfg fb.cfg COPYONLY)
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(reliability_tests tests/reliability_tests.cpp)
+    target_link_libraries(reliability_tests PRIVATE reminiscence2_engine)
+    add_test(NAME reliability COMMAND reliability_tests "${CMAKE_CURRENT_BINARY_DIR}/reliability-fixtures")
+    set_tests_properties(reliability PROPERTIES TIMEOUT 20)
     add_executable(core_tests tests/core_tests.cpp)
     target_link_libraries(core_tests PRIVATE reminiscence2_engine)
     add_test(NAME core COMMAND core_tests "${CMAKE_CURRENT_BINARY_DIR}/test-fixtures")
@@ -157,6 +161,12 @@ if(BUILD_TESTING)
             "${CMAKE_CURRENT_BINARY_DIR}/amiga-test-output")
         set_tests_properties(amiga_assets PROPERTIES TIMEOUT 60)
     endif()
+    get_property(test_targets DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
+    foreach(test_target IN LISTS test_targets)
+        if(test_target MATCHES "_tests$|^amiga_assets$")
+            target_compile_definitions(${test_target} PRIVATE SDL_MAIN_HANDLED)
+        endif()
+    endforeach()
     if(REMINISCENCE2_SANITIZERS)
         get_property(engine_tests DIRECTORY PROPERTY TESTS)
         set_property(TEST ${engine_tests} APPEND PROPERTY ENVIRONMENT "UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1")
