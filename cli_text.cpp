@@ -98,9 +98,10 @@ FILES AND CONFIGURATION
       It and missing parent folders are created when gameplay starts.
       Manual save slots range from 1 to 99 and are selected during play.
 
-  --tunepath=PATH                         Default: discovered TUNES folder
+  --tunepath=PATH                         Default: discovered music folder
       Folder for optional music files, such as MOD or OGG tracks. It is
-      read without creating or modifying it.
+      read without creating or modifying it. With --datapath and no explicit
+      --tunepath, music uses the same folder as game data.
       DOS PRF/MIDI/INS music is searched for in the game folder first,
       then this folder. Original game audio may also come from game data.
 

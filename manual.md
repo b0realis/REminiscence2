@@ -121,7 +121,7 @@ spaces. Normal game launches use these defaults:
 | Purpose | Default | Change it with |
 | --- | --- | --- |
 | Game resources | `assets` beside the executable (legacy `DATA` fallback) | `--datapath=PATH` |
-| Music resources | `TUNES` | `--tunepath=PATH` |
+| Music resources | Game folder or discovered `TUNES` | `--tunepath=PATH` |
 | Persistent saves | User-data `REminiscence2/SAVE` | `--savepath=PATH` |
 | Compatibility settings | `fb.cfg` | `--portable` | Keep default assets/music/saves beside the executable. |
 | `--config=PATH` |
@@ -452,7 +452,7 @@ and examples at any time, run `reminiscence2 -h`.
 | `-h`, `--help` | Print the full guide and exit without requiring assets. |
 | `--version` | Print version, credits and enabled PRF backends, then exit. |
 | `--datapath=PATH` | Game folder; default `assets` beside the executable. |
-| `--tunepath=PATH` | Music folder; default `TUNES`. |
+| `--tunepath=PATH` | Music folder; defaults to the selected game folder. |
 | `--savepath=PATH` | Persistent save folder; default platform user-data location. |
 | `--portable` | Keep default assets/music/saves beside the executable. |
 | `--config=PATH` | Compatibility configuration; default working-directory `fb.cfg`. |

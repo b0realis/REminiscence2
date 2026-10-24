@@ -63,3 +63,5 @@ fb
 /packaging/android/app/build/
 /packaging/android/app/.cxx/
 /packaging/android/local.properties
+
+/packaging/android/app/src/main/assets/

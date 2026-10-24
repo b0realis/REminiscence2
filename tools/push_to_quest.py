@@ -18,7 +18,9 @@ def asset_files(root):
     for file in sorted(root.rglob('*')):
         if file.is_symlink(): raise ValueError('Asset symlinks are not deployed')
         if file.is_file(): result.append((file, file.relative_to(root).as_posix()))
-    if not result: raise ValueError('Assets directory is empty')
+    markers = {'level1.lev', 'demo.lev', 'level1.map', 'level1.bnq', 'glob_fr.aba', 'demo_uk.aba', 'intro.seq', 'menu1ssi.map', 'flashback.bin', 'flashback.rsrc', 'global.paq', 'present.lev'}
+    if not any(file.name.lower() in markers for file, _ in result):
+        raise ValueError('No supported prepared game files found in assets; copy your game data first')
     return result
 
 

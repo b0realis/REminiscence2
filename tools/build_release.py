@@ -71,21 +71,42 @@ def prepare_dependency(name):
     return output
 
 
-def common_files(package, build):
-    (package / 'assets').mkdir()
-    shutil.copy2(ROOT / 'packaging/desktop/ASSETS.txt', package / 'assets/README.txt')
-    for name in ('README.md', 'manual.md', 'LICENSE', 'CREDITS.md', 'fb.cfg'):
-        if (ROOT / name).exists(): shutil.copy2(ROOT / name, package / name)
-    shutil.copy2(ROOT / 'docs/RELEASES.md', package / 'RELEASES.md')
-    shutil.copytree(ROOT / 'tools', package / 'tools', ignore=shutil.ignore_patterns('__pycache__'))
-    licenses = package / 'licenses'; licenses.mkdir()
+def copy_licenses(licenses):
+    licenses.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(ROOT / 'LICENSE', licenses / 'REminiscence2-GPL.txt')
     for source in (ROOT / 'third_party').glob('**/*'):
         if source.is_file() and ('license' in source.name.lower() or 'copying' in source.name.lower()):
             relative = source.relative_to(ROOT / 'third_party')
             target = licenses / relative; target.parent.mkdir(parents=True, exist_ok=True); shutil.copy2(source, target)
     shutil.copy2(prepare_dependency('SDL2') / 'LICENSE.txt', licenses / 'SDL2.txt')
     shutil.copy2(prepare_dependency('zlib') / 'LICENSE', licenses / 'zlib.txt')
+    shutil.copy2(ROOT / 'packaging/licenses/COPYING.RUNTIME', licenses / 'COPYING.RUNTIME')
+    (licenses / 'README.txt').write_text('REminiscence2: GPL-3.0-or-later. See individual third-party license files.\nGCC-built desktop packages include compiler runtimes under GPLv3 with the\nGCC Runtime Library Exception 3.1 (COPYING.RUNTIME). SDK/system libraries\ncome from the operating system. Corresponding engine/SDL/zlib sources are\nprovided with the same GitHub release. Original game assets are not bundled.\n')
+
+
+def common_files(package, build):
+    (package / 'assets').mkdir()
+    shutil.copy2(ROOT / 'packaging/desktop/ASSETS.txt', package / 'assets/README.txt')
+    for name in ('README.md', 'manual.md', 'LICENSE', 'CREDITS.md', 'CHANGELOG.md', 'version.h', 'fb.cfg'):
+        if (ROOT / name).exists(): shutil.copy2(ROOT / name, package / name)
+    # Include tracked documentation only; ignored scans/reference art stay private.
+    tracked_docs = subprocess.check_output(['git', 'ls-files', '-z', 'docs'], cwd=ROOT).decode().split('\0')
+    for name in filter(None, tracked_docs):
+        target = package / name; target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(ROOT / name, target)
+    shutil.copy2(ROOT / 'docs/RELEASES.md', package / 'RELEASES.md')
+    shutil.copytree(ROOT / 'tools', package / 'tools', ignore=shutil.ignore_patterns('__pycache__'))
+    copy_licenses(package / 'licenses')
     (package / 'dependency-manifest.json').write_text(json.dumps({'version': VERSION, 'dependencies': PINS, 'music': 'internal MOD, AdLib/OPL3; no ROMs or soundfonts'}, indent=2) + '\n')
+
+
+def runtime_dll(name):
+    # shutil.which applies Windows PATHEXT executable rules and can reject DLLs.
+    # Search literal filenames instead; DLLs do not need an executable suffix.
+    for directory in os.environ.get('PATH', '').split(os.pathsep):
+        candidate = Path(directory) / name
+        if candidate.is_file(): return candidate
+    raise RuntimeError(f'Missing runtime DLL {name}')
 
 
 def archive_directory(directory, output):
@@ -109,6 +130,7 @@ def main():
     build = (args.build_dir or ROOT / 'build' / ('package-' + args.target)).resolve()
     if args.target == 'quest':
         prepare_dependency('SDL2')
+        copy_licenses(ROOT / 'packaging/android/app/src/main/assets/licenses')
         if not args.quest_debug and not os.environ.get('REMINISCENCE2_KEYSTORE'):
             parser.error('Quest release requires REMINISCENCE2_KEYSTORE and signing passwords; use --quest-debug for a separate experimental app')
         run('gradle', '--no-daemon', '-p', ROOT / 'packaging/android', 'assembleDebug' if args.quest_debug else 'assembleRelease')
@@ -116,6 +138,22 @@ def main():
         apk = ROOT / f'packaging/android/app/build/outputs/apk/{variant}/app-{variant}.apk'
         destination = args.output / f'REminiscence2-{VERSION}-quest-arm64{("-experimental" if args.quest_debug else "")}.apk'
         shutil.copy2(apk, destination)
+        bundle = args.output / (destination.stem + '-bundle')
+        if bundle.exists(): shutil.rmtree(bundle)
+        bundle.mkdir()
+        shutil.copy2(destination, bundle / destination.name)
+        (bundle / 'assets').mkdir()
+        shutil.copy2(ROOT / 'packaging/desktop/ASSETS.txt', bundle / 'assets/README.txt')
+        shutil.copy2(ROOT / 'tools/push_to_quest.py', bundle / 'push_to_quest.py')
+        shutil.copy2(ROOT / 'docs/RELEASES.md', bundle / 'RELEASES.md')
+        shutil.copy2(ROOT / 'manual.md', bundle / 'manual.md')
+        shutil.copy2(ROOT / 'LICENSE', bundle / 'LICENSE')
+        copy_licenses(bundle / 'licenses')
+        launcher = bundle / 'push-to-quest.sh'
+        launcher.write_text('#!/bin/sh\nset -eu\nPACKAGE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\nexec python3 "$PACKAGE_DIR/push_to_quest.py" --apk "$PACKAGE_DIR/' + destination.name + '" --assets "$PACKAGE_DIR/assets" "$@"\n')
+        launcher.chmod(0o755)
+        archive_directory(bundle, args.output / (bundle.name + '.zip'))
+        shutil.rmtree(bundle)
         print(destination); return
     options = ['-DCMAKE_BUILD_TYPE=Release', '-DREMINISCENCE2_BUNDLED_DEPS=ON', '-DREMINISCENCE2_USE_MODPLUG=OFF', '-DCMAKE_POLICY_VERSION_MINIMUM=3.5']
     for dependency in ('SDL2', 'zlib'):
@@ -154,9 +192,11 @@ def main():
         runtime_names = {'libwinpthread-1.dll', 'libgcc_s_seh-1.dll', 'libstdc++-6.dll'}
         for dll in re.findall(r'DLL Name: (\S+)', imports):
             if dll.lower() in runtime_names:
-                source = shutil.which(dll)
-                if not source: raise RuntimeError(f'Missing runtime DLL {dll}')
+                source = runtime_dll(dll)
                 shutil.copy2(source, staging / dll)
+        compiler = Path(shutil.which('gcc')).resolve()
+        notices = compiler.parent.parent / 'share/licenses'
+        if notices.is_dir(): shutil.copytree(notices, staging / 'licenses/UCRT64')
         (staging / 'native-dependencies.txt').write_text(imports)
     else:
         shutil.copy2(ROOT / 'packaging/desktop/play.sh', staging / 'play.sh')

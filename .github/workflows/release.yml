@@ -92,6 +92,7 @@ jobs:
       - name: Verify APK signature and contents
         run: |
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose build/dist/*.apk
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -P 16 -v 4 build/dist/*.apk
           unzip -l build/dist/*.apk | tee build/apk-contents.txt
           test "$(unzip -Z1 build/dist/*.apk | grep '^lib/' | grep -v '^lib/arm64-v8a/' | wc -l)" -eq 0
           test "$(unzip -Z1 build/dist/*.apk | grep '^lib/arm64-v8a/.*\.so$' | wc -l)" -ge 2

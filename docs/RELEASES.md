@@ -83,6 +83,9 @@ preparation still runs on the computer with `tools/extract_amiga.py`.
 
 ### Push from Linux using adb
 
+The Quest bundle ZIP includes the APK, precreated `assets` folder and
+`push-to-quest.sh`. Fill that folder and run the launcher on Linux.
+
 Enable headset Developer Mode, connect USB and authorize the computer. Install
 Linux tools (`sudo apt install adb`), then run:
 
@@ -100,3 +103,20 @@ Each transfer and installed file is SHA-256 checked. A complete new assets tree
 is promoted only after verification; existing saves and tunes are preserved.
 No root or all-files permission is required. A live headset deployment is a
 separate hardware test; automated helper tests cannot establish USB/OS behavior.
+
+## Tag and publish a verified preview
+
+After committing the version bump, run the **Release packages** workflow on
+that commit. All six targets and corresponding source must succeed, together
+with the normal Build and test workflow. Prepare release notes, then run:
+
+```sh
+python3 tools/publish_release.py --run-id RUN_ID --notes /path/to/notes.md --publish
+```
+
+The publisher checks both workflows against exactly HEAD, downloads the eight
+expected assets, validates archives/architectures/private-file boundaries and
+source versions, writes SHA256SUMS, pushes the annotated `vVERSION` tag and
+publishes a GitHub prerelease. Omit `--publish` for verification only. Physical
+Deck/Quest and full GOG/Macintosh asset playthroughs remain release-test work;
+a passing compiler does not establish those hardware/data combinations.

@@ -36,8 +36,9 @@ ROM extraction and Sega audio are not implemented.
 
 See the [0.5.6 integration ledger](docs/UPSTREAM_056.md),
 [validation record](docs/VALIDATION.md), and [roadmap](docs/ROADMAP.md).
-Linux and macOS CI is configured. Windows packaging and a native SDL3 backend
-remain future work.
+Linux, macOS and Windows CI runs native builds and tests. See the
+[release recipes](docs/RELEASES.md) for desktop packages and the Quest flat-panel
+APK. A native SDL3 backend remains future work.
 
 The [release-readiness audit](docs/RELEASE_READINESS.md) ranks the next fixes
 and covers Win64, Linux x86-64, Steam Deck, macOS Apple Silicon/Intel, and

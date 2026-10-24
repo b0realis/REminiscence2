@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
 import build_release
 import push_to_quest
+import publish_release
 
 class ReleaseTools(unittest.TestCase):
     def test_version_and_pins(self):
@@ -17,6 +18,12 @@ class ReleaseTools(unittest.TestCase):
         for value in build_release.PINS.values():
             self.assertRegex(value['revision'], r'^[a-f0-9]{40}$')
             self.assertRegex(value['sha256'], r'^[a-f0-9]{64}$')
+    def test_dll_lookup_does_not_apply_executable_suffixes(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'libwinpthread-1.dll'; path.write_bytes(b'fixture'); path.chmod(0o644)
+            with patch.dict('os.environ', {'PATH': temp}):
+                self.assertEqual(build_release.runtime_dll(path.name), path)
+                with self.assertRaises(RuntimeError): build_release.runtime_dll('missing.dll')
     def test_assets_paths_and_symlink_rejection(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp); (root / 'a b').mkdir(); (root / 'a b/level1.lev').write_bytes(b'fixture')
@@ -63,6 +70,25 @@ class ReleaseTools(unittest.TestCase):
             engine = root / 'reminiscence2'; engine.write_text('#!/bin/sh\nprintf "%s\\n" "$@"\n'); engine.chmod(0o755)
             result = subprocess.check_output(['sh',str(root/'play.sh'),'--window','literal $(echo nope)'],cwd='/',text=True).splitlines()
             self.assertEqual(result, ['--datapath='+str(root/'assets'),'--window','literal $(echo nope)'])
+    def test_publication_checks_full_artifact_set_and_private_files(self):
+        import io, tarfile, zipfile
+        version = build_release.VERSION; prefix = 'REminiscence2-' + version
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for target in ('win64', 'macos-arm64', 'macos-x86_64', 'quest-arm64-bundle'):
+                with zipfile.ZipFile(root / (prefix+'-'+target+'.zip'), 'w') as z:
+                    z.writestr(prefix+'-'+target+'/assets/README.txt','placeholder')
+            with zipfile.ZipFile(root/(prefix+'-quest-arm64.apk'),'w') as z:
+                z.writestr('lib/arm64-v8a/libmain.so',b'fixture'); z.writestr('lib/arm64-v8a/libSDL2.so',b'fixture')
+            for target in ('linux64','steamdeck','source'):
+                with tarfile.open(root/(prefix+'-'+target+'.tar.gz'),'w:gz') as archive:
+                    data = {'assets/README.txt': b'placeholder'}
+                    if target == 'source': data = {'version.h': ('#define REMINISCENCE2_VERSION "'+version+'"').encode(), 'third_party_src/SDL2/file': b'fixture', 'third_party_src/zlib/file': b'fixture'}
+                    for name,content in data.items():
+                        info = tarfile.TarInfo(prefix+'-'+target+'/'+name); info.size = len(content); archive.addfile(info,io.BytesIO(content))
+            self.assertEqual(len(publish_release.verify_files(root)),8)
+            with zipfile.ZipFile(root/(prefix+'-win64.zip'),'a') as z: z.writestr(prefix+'-win64/signing.p12',b'private fixture')
+            with self.assertRaises(RuntimeError): publish_release.verify_files(root)
     def test_zip_preserves_launcher_mode_and_empty_assets_folder(self):
         import zipfile
         with tempfile.TemporaryDirectory() as temp:
