@@ -7,6 +7,7 @@ It works in an extracted source tree too; Git-specific checks run when available
 """
 
 from pathlib import Path
+import json
 import re
 import subprocess
 import sys
@@ -42,12 +43,27 @@ def check(root: Path) -> list[str]:
             problems.append("The player guide must remain text-only; found an embedded-image/object marker")
         if "SPDX-License-Identifier: GPL-3.0-or-later" not in text:
             problems.append("The original guide's license identifier is missing")
+    manifest = root / "packaging/public-docs.json"
+    public_docs = []
+    try:
+        public_docs = json.loads(manifest.read_text(encoding="utf-8"))
+        if not isinstance(public_docs, list) or not all(isinstance(name, str) for name in public_docs):
+            raise ValueError("Expected a list of public documentation paths")
+        for name in public_docs:
+            path = Path(name)
+            if path.is_absolute() or ".." in path.parts or not path.parts or path.parts[0] != "docs" or not (root / path).is_file():
+                problems.append(f"Invalid public documentation manifest entry: {name}")
+    except (OSError, ValueError) as error:
+        problems.append(f"Cannot read public documentation manifest: {error}")
     if (root / ".git").exists():
         result = subprocess.run(["git", "ls-files", "-z"], cwd=root, capture_output=True, check=False)
         if result.returncode:
             problems.append("Unable to inspect the tracked release paths")
         else:
-            for name in result.stdout.decode("utf-8", errors="replace").split("\0"):
+            tracked = result.stdout.decode("utf-8", errors="replace").split("\0")
+            if sorted(name for name in tracked if name.startswith("docs/")) != public_docs:
+                problems.append("packaging/public-docs.json must match tracked docs paths")
+            for name in tracked:
                 first = name.split("/", 1)[0]
                 if first in (".local", "build") or first.startswith("build-"):
                     problems.append(f"Private/generated path is tracked: {name}")

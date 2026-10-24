@@ -27,6 +27,8 @@ def run(*args, **kwargs):
 
 def prepare_dependency(name):
     """Retrieve exact sources, checking content before extraction or execution."""
+    offline = ROOT / 'third_party_src' / name
+    if offline.is_dir(): return offline
     pin = PINS[name]
     archive = ROOT / 'deps' / f'{name}.tar.gz'
     archive.parent.mkdir(exist_ok=True)
@@ -90,12 +92,18 @@ def common_files(package, build):
     for name in ('README.md', 'manual.md', 'LICENSE', 'CREDITS.md', 'CHANGELOG.md', 'version.h', 'fb.cfg'):
         if (ROOT / name).exists(): shutil.copy2(ROOT / name, package / name)
     # Include tracked documentation only; ignored scans/reference art stay private.
-    tracked_docs = subprocess.check_output(['git', 'ls-files', '-z', 'docs'], cwd=ROOT).decode().split('\0')
-    for name in filter(None, tracked_docs):
+    tracked_docs = json.loads((ROOT / 'packaging/public-docs.json').read_text())
+    for name in tracked_docs:
+        path = Path(name)
+        if path.is_absolute() or '..' in path.parts or not path.parts or path.parts[0] != 'docs':
+            raise RuntimeError('Unsafe public documentation manifest path')
         target = package / name; target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ROOT / name, target)
     shutil.copy2(ROOT / 'docs/RELEASES.md', package / 'RELEASES.md')
     shutil.copytree(ROOT / 'tools', package / 'tools', ignore=shutil.ignore_patterns('__pycache__'))
+    (package / 'packaging').mkdir()
+    for manifest in ('dependencies.json', 'public-docs.json'):
+        shutil.copy2(ROOT / 'packaging' / manifest, package / 'packaging' / manifest)
     copy_licenses(package / 'licenses')
     (package / 'dependency-manifest.json').write_text(json.dumps({'version': VERSION, 'dependencies': PINS, 'music': 'internal MOD, AdLib/OPL3; no ROMs or soundfonts'}, indent=2) + '\n')
 
@@ -196,7 +204,8 @@ def main():
                 shutil.copy2(source, staging / dll)
         compiler = Path(shutil.which('gcc')).resolve()
         notices = compiler.parent.parent / 'share/licenses'
-        if notices.is_dir(): shutil.copytree(notices, staging / 'licenses/UCRT64')
+        if not notices.is_dir(): raise RuntimeError('UCRT64 runtime license directory is missing')
+        shutil.copytree(notices, staging / 'licenses/UCRT64')
         (staging / 'native-dependencies.txt').write_text(imports)
     else:
         shutil.copy2(ROOT / 'packaging/desktop/play.sh', staging / 'play.sh')

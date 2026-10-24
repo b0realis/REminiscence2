@@ -18,6 +18,24 @@ class ReleaseTools(unittest.TestCase):
         for value in build_release.PINS.values():
             self.assertRegex(value['revision'], r'^[a-f0-9]{40}$')
             self.assertRegex(value['sha256'], r'^[a-f0-9]{64}$')
+    def test_public_docs_package_without_git_or_private_files(self):
+        import json
+        with tempfile.TemporaryDirectory() as temp:
+            source = Path(temp)/'source'; package = Path(temp)/'package'
+            (source/'packaging/desktop').mkdir(parents=True); (source/'docs').mkdir(); (source/'tools').mkdir(); package.mkdir()
+            (source/'packaging/desktop/ASSETS.txt').write_text('placeholder')
+            (source/'packaging/public-docs.json').write_text(json.dumps(['docs/RELEASES.md']))
+            (source/'packaging/dependencies.json').write_text('{}')
+            (source/'docs/RELEASES.md').write_text('public fixture'); (source/'docs/private.pdf').write_bytes(b'private fixture')
+            with patch.object(build_release,'ROOT',source), patch.object(build_release,'copy_licenses',side_effect=lambda path:path.mkdir()), patch('subprocess.check_output',side_effect=AssertionError('Git was executed')):
+                build_release.common_files(package,Path(temp))
+            self.assertTrue((package/'docs/RELEASES.md').is_file())
+            self.assertFalse((package/'docs/private.pdf').exists())
+    def test_offline_dependency_source_needs_no_download(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); source = root/'third_party_src/SDL2'; source.mkdir(parents=True)
+            with patch.object(build_release,'ROOT',root), patch('urllib.request.urlopen',side_effect=AssertionError('Network accessed')):
+                self.assertEqual(build_release.prepare_dependency('SDL2'),source)
     def test_dll_lookup_does_not_apply_executable_suffixes(self):
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / 'libwinpthread-1.dll'; path.write_bytes(b'fixture'); path.chmod(0o644)

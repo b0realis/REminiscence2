@@ -1,6 +1,13 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 # Changes
 
+## 1.06
+
+- Package public documentation from an explicit manifest, without requiring Git
+  in the native Windows build shell or an extracted source archive.
+- Reuse the included dependency sources in offline desktop and Android recipes.
+- Require the UCRT64 runtime notice directory when assembling Windows packages.
+
 ## 1.05
 
 - Fix Windows runtime-DLL discovery during packaging and include toolchain notices.

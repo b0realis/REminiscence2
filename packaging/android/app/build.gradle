@@ -22,7 +22,9 @@ android {
         }
     }
     externalNativeBuild { cmake { path new File(repositoryRoot, 'CMakeLists.txt'); version '3.22.1' } }
-    sourceSets.main.java.srcDirs += new File(repositoryRoot, 'deps/SDL2/android-project/app/src/main/java')
+    def sdlHost = new File(repositoryRoot, 'third_party_src/SDL2')
+    if (!sdlHost.isDirectory()) sdlHost = new File(repositoryRoot, 'deps/SDL2')
+    sourceSets.main.java.srcDirs += new File(sdlHost, 'android-project/app/src/main/java')
     signingConfigs {
         release {
             storeType 'pkcs12'
