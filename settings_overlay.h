@@ -26,6 +26,7 @@ public:
 	~SettingsOverlay();
 	bool attach(SDL_Window *window, SDL_Renderer *renderer);
 	void detach();
+	void resetRenderer();
 	void open(const settings::Preferences &preferences);
 	static constexpr int PageCount = 8;
 	void selectPage(int index) { _requestedTab = index >= 0 && index < PageCount ? index : 0; }

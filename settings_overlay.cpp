@@ -446,6 +446,11 @@ void SettingsOverlay::detach() {
 	_attached = false;
 	_renderer = nullptr;
 }
+void SettingsOverlay::resetRenderer() {
+	if (!_attached) return;
+	ImGui::SetCurrentContext(_context);
+	ImGui_ImplSDLRenderer2_DestroyDeviceObjects();
+}
 void SettingsOverlay::open(const settings::Preferences &p) {
 	ImGui::SetCurrentContext(_context);
 	ImGui::GetIO().ClearInputKeys();

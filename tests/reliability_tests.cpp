@@ -31,7 +31,7 @@ static std::vector<uint8_t> literals(const std::vector<uint8_t> &plain) {
 }
 int main(int argc, char **argv) {
 	if (argc != 2) return 1;
-	const auto root = fs::u8path(argv[1]); fs::remove_all(root); fs::create_directories(root / "nested");
+	const auto root = fs::u8path(argv[1]) / fs::u8path("assets é 雪"); fs::remove_all(root); fs::create_directories(root / "nested");
 	std::ofstream(root / "Mixed.Dat") << "root";
 	std::ofstream(root / "nested/mixed.dat") << "nested";
 	std::error_code ec; fs::create_directory_symlink(root, root / "nested/loop", ec);

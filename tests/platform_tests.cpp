@@ -110,6 +110,8 @@ int main() {
 			return 9;
 		platform->setGameplayActive(true);
 		platform->updateScreen(0);
+		reset.type = SDL_RENDER_DEVICE_RESET;
+		SDL_PushEvent(&reset); platform->processEvents();
 		platform->updateScreen(0);
 		SDL_Event click = {};
 		click.type = SDL_MOUSEBUTTONUP;

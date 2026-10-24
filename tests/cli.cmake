@@ -78,3 +78,16 @@ if("${last_cli_errors}" MATCHES "unsupported preferences")
 endif()
 
 message(STATUS "CLI checks passed")
+
+# A relocated one-click executable discovers assets beside itself, independent
+# of the terminal/Explorer working directory. No SDL devices or real data needed.
+set(package "${TEST_ROOT}/isolated package")
+file(MAKE_DIRECTORY "${package}/assets")
+file(COPY "${ENGINE}" DESTINATION "${package}")
+get_filename_component(engine_name "${ENGINE}" NAME)
+set(ENGINE "${package}/${engine_name}")
+check_cli(1 "No supported Flashback game data found in '.*isolated package.*assets'" --no-preferences)
+check_cli(1 "No supported Flashback game data found in '.*isolated package.*assets'" --portable)
+if(EXISTS "${package}/SAVE")
+    message(FATAL_ERROR "Missing-data startup must not create portable saves")
+endif()

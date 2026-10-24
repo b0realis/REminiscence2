@@ -512,6 +512,7 @@ void SystemStub_SDL::copyWidescreenMirror(int w, int h, const uint8_t *buf) {
 			assert((pitch & 3) == 0);
 			uint32_t *p = (uint32_t *)dst;
 			for (int y = 0; y < h; ++y) {
+				std::fill_n(p, _wideWidth, 0);
 				for (int x = 0; x < _wideMargin; ++x) {
 					// left side
 					const int xLeft = _wideMargin - 1 - x;
@@ -538,7 +539,7 @@ void SystemStub_SDL::copyWidescreenBlur(int w, int h, const uint8_t *buf) {
 		_rgbScratch.resize(size_t(w) * h);
 		uint32_t *src = _rgbScratch.data();
 		_blurScratch.resize(size_t(w) * h);
-			uint32_t *tmp = _blurScratch.data();
+		uint32_t *tmp = _blurScratch.data();
 		uint32_t *dst = (uint32_t *)ptr;
 
 		if (src && tmp) {
@@ -591,6 +592,7 @@ void SystemStub_SDL::updateWide(const SDL_Rect *area, const uint32_t *pixels, in
 	if (area) SDL_UpdateTexture(_widescreenTexture, area, pixels, pitch);
 }
 void SystemStub_SDL::restoreTextures() {
+	if (_overlay) _overlay->resetRenderer();
 	SDL_DestroyTexture(_texture);
 	_texture = SDL_CreateTexture(_renderer, kPixelFormat, SDL_TEXTUREACCESS_STREAMING, _texW, _texH);
 	if (!_texture) error("Cannot restore game texture: %s", SDL_GetError());

@@ -13,6 +13,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, default=ROOT / 'build/dist')
     args = parser.parse_args(); args.output.mkdir(parents=True, exist_ok=True)
+    if subprocess.run(['git', 'diff', '--quiet', 'HEAD', '--'], cwd=ROOT).returncode:
+        parser.error('Commit tracked changes before packaging corresponding source')
     # git archive enforces the public-source boundary: no ignored game files,
     # local scans, credentials, build outputs, or private historical branches.
     source = subprocess.check_output(['git', 'archive', '--format=tar', 'HEAD'], cwd=ROOT)
