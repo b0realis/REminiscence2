@@ -86,6 +86,27 @@ if("${last_cli_errors}" MATCHES "unsupported preferences")
     message(FATAL_ERROR "--no-preferences must bypass saved profile parsing")
 endif()
 
+# Selection validation is read-only and must not start a device or a game.
+file(MAKE_DIRECTORY "${TEST_ROOT}/library/amiga" "${TEST_ROOT}/library/dos" "${TEST_ROOT}/library/music/Disc")
+file(WRITE "${TEST_ROOT}/library/amiga/level1.lev" "fixture")
+file(WRITE "${TEST_ROOT}/library/dos/level1.map" "fixture")
+file(WRITE "${TEST_ROOT}/library/music/Disc/track02.ogg" "fixture")
+check_cli(0 "amiga:amiga" "--datapath=${TEST_ROOT}/library" "--savepath=${TEST_ROOT}/no-write" --list-assets --no-preferences)
+if(NOT "${last_cli_output}" MATCHES "dos:dos" OR NOT "${last_cli_output}" MATCHES "music:music/Disc")
+    message(FATAL_ERROR "Asset listing omitted an edition or soundtrack")
+endif()
+if(EXISTS "${TEST_ROOT}/no-write")
+    message(FATAL_ERROR "Listing assets created a save directory")
+endif()
+check_cli(1 "Unknown or ambiguous asset set" "--datapath=${TEST_ROOT}/library" --asset-set=missing --no-preferences)
+check_cli(1 "Unknown or ambiguous music source" "--datapath=${TEST_ROOT}/library" --asset-set=dos --music-source=missing --no-preferences)
+check_cli(1 "Multiple asset sets found" "--datapath=${TEST_ROOT}/library" --list-cutscenes --no-preferences)
+check_cli(1 "Multiple asset sets found" "--datapath=${TEST_ROOT}/library" --continue --no-preferences)
+
+file(MAKE_DIRECTORY "${TEST_ROOT}/remembered")
+file(WRITE "${TEST_ROOT}/remembered/preferences.cfg" "version=1\nasset_set=\"amiga:amiga\"\n")
+check_cli(0 "Amiga" "--datapath=${TEST_ROOT}/library" "--savepath=${TEST_ROOT}/remembered" --list-cutscenes)
+
 message(STATUS "CLI checks passed")
 
 # A relocated one-click executable discovers assets beside itself, independent

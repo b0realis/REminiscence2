@@ -817,6 +817,7 @@ void Resource::load(const char *objName, int objType, const char *ext) {
 					break;
 				case OT_SPC:
 					_spc = dat;
+					_spcSize = size;
 					_numSpc = READ_BE_UINT16(_spc) / 2;
 					break;
 				case OT_RP:
@@ -984,6 +985,7 @@ void Resource::load_RP(File *f) {
 void Resource::load_SPC(File *f) {
 	debug(DBG_RES, "Resource::load_SPC()");
 	int len = f->size();
+	_spcSize = len;
 	_spc = (uint8_t *)malloc(len);
 	if (!_spc) {
 		error("Unable to allocate SPC buffer");
@@ -1737,6 +1739,7 @@ void Resource::MAC_loadLevelData(int level) {
 	// .SPC
 	snprintf(name, sizeof(name), "Objects %c", _macLevelNumbers[level][0]);
 	_spc = decodeResourceMacData(name, true, "PPSS");
+	_spcSize = _resourceMacDataSize;
 
 	// .TBN
 	snprintf(name, sizeof(name), "Level %s", _macLevelNumbers[level]);

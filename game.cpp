@@ -80,7 +80,6 @@ void Game::initCutsceneResources() {
 void Game::run() {
 	_randSeed = time(0);
 	initCutsceneResources();
-	const bool hasRecovery = !progress::scan(_savePath, _res._type).empty();
 
 	if (!g_options.bypass_protection && !g_options.use_words_protection &&
 	    editionTraits(_res._type).shapeProtection) {
@@ -94,16 +93,6 @@ void Game::run() {
 	_mix.init();
 	_mix._mod._isAmiga = _res.isAmiga();
 
-	if (!hasRecovery && !_continueRequested && _res.isMac()) {
-		displayTitleScreenMac(Menu::kMacTitleScreen_MacPlay);
-		if (!_stub->_pi.quit) {
-			displayTitleScreenMac(Menu::kMacTitleScreen_Presage);
-		}
-	}
-	if (!hasRecovery && !_continueRequested) {
-		playCutscene(0x40);
-		playCutscene(0x0D);
-	}
 
 	// global resources
 	switch (_res._type) {
@@ -167,64 +156,95 @@ void Game::run() {
 			_continueFailed = true;
 			_stub->_pi.quit = true;
 		}
-	} else if (hasRecovery && !_stub->_pi.quit) {
-		memset(_vid._frontLayer, 0, _vid._layerSize);
-		_stub->copyRect(0, 0, _vid._w, _vid._h, _vid._frontLayer, _vid._w);
+	} else if (_preferences.quickResume) {
+		std::string reason;
+		resumeLoaded = resumeLatestSave(reason);
+	}
+	// Default startup presents the original opening; opted-in resume bypasses it.
+	// Esc unwinds the player first: a menu load must never replace resources while
+	// a cutscene decoder still holds pointers into them.
+	bool openingMenuRequested = false;
+	_cut._interruptForMenu = _seq._interruptForMenu = [&] {
+		if (_stub->_pi.escape || _stub->consumePauseRequest()) {
+			_stub->_pi.escape = false;
+			openingMenuRequested = true;
+		}
+		return openingMenuRequested;
+	};
+	if (!resumeLoaded && !_stub->_pi.quit) {
+		if (_res.isMac()) {
+			displayTitleScreenMac(Menu::kMacTitleScreen_MacPlay);
+			if (!_stub->_pi.quit && !openingMenuRequested)
+				displayTitleScreenMac(Menu::kMacTitleScreen_Presage);
+		}
+		for (int scene : {0x40, 0x0D}) {
+			if (_stub->_pi.quit || openingMenuRequested)
+				break;
+			playCutscene(scene);
+		}
+	}
+	_cut._interruptForMenu = _seq._interruptForMenu = {};
+
+	if (openingMenuRequested && !_stub->_pi.quit) {
 		_startupMenu = true;
 		_continued = false;
 		handleConfigPanel();
 		_startupMenu = false;
 		resumeLoaded = _continued;
 	}
+
 	bool presentMenu =
 	    !_res.isSega() && ((_res._type != kResourceTypeDOS) || _res.fileExists("MENU1.MAP"));
-	while (!_stub->_pi.quit) {
+	while (!_stub->_pi.quit && _requestedAsset < 0) {
 		if (!resumeLoaded && _stub->hasWidescreen()) {
 			_stub->clearWidescreen();
 		}
 		if (presentMenu && !resumeLoaded) {
 			_mix.playMusic(1);
-			switch (_res._type) {
-			case kResourceTypeDOS:
-			case kResourceTypePC98:
-			case kResourceTypeMac:
-				_menu.handleTitleScreen();
-				if (_menu._selectedOption == Menu::MENU_OPTION_ITEM_QUIT || _stub->_pi.quit) {
-					_stub->_pi.quit = true;
-					break;
-				}
-				if (_menu._selectedOption == Menu::MENU_OPTION_ITEM_DEMO) {
-					_demoBin = (_demoBin + 1) % ARRAYSIZE(_demoInputs);
-					const char *fn = _demoInputs[_demoBin].name;
-					debug(DBG_DEMO, "Loading inputs from '%s'", fn);
-					_res.load_DEM(fn);
-					if (_res._demLen == 0) {
-						continue;
-					}
-					_skillLevel = kSkillNormal;
-					_currentLevel = _demoInputs[_demoBin].level;
-					_randSeed = 0;
-					if (_res.isMac()) {
-						static const int ranges[] = {19, 11, 17};
-						_demoRandCounter = 0;
-						_demoRandRange = ranges[_demoBin];
-					}
-				} else {
-					_demoBin = -1;
-					_skillLevel = _menu._skill;
-					_currentLevel = _menu._level;
-				}
-				break;
-			case kResourceTypeSega:
-				break;
-			case kResourceTypeAmiga:
+			_startupMenu = true;
+			if (_res.isAmiga()) {
 				displayTitleScreenAmiga();
-				_stub->setScreenSize(Video::GAMESCREEN_W, Video::GAMESCREEN_H);
+				_stub->setScreenSize(_vid._w, _vid._h);
+			} else {
+				_menu.handleTitleScreen();
+			}
+			_startupMenu = false;
+			if (_menu._selectedOption == Menu::MENU_OPTION_ITEM_QUIT || _stub->_pi.quit) {
+				_stub->_pi.quit = true;
 				break;
+			}
+			if (_menu._selectedOption == Menu::MENU_OPTION_ITEM_SETTINGS) {
+				_mix.stopMusic();
+				_startupMenu = true;
+				_continued = false;
+				handleConfigPanel();
+				_startupMenu = false;
+				resumeLoaded = _continued;
+				if (!resumeLoaded)
+					continue; // Closing settings returns to the original title.
+			} else if (_menu._selectedOption == Menu::MENU_OPTION_ITEM_DEMO) {
+				_demoBin = (_demoBin + 1) % ARRAYSIZE(_demoInputs);
+				const char *fn = _demoInputs[_demoBin].name;
+				debug(DBG_DEMO, "Loading inputs from '%s'", fn);
+				_res.load_DEM(fn);
+				if (_res._demLen == 0)
+					continue;
+				_skillLevel = kSkillNormal;
+				_currentLevel = _demoInputs[_demoBin].level;
+				_randSeed = 0;
+				if (_res.isMac()) {
+					static const int ranges[] = {19, 11, 17};
+					_demoRandCounter = 0;
+					_demoRandRange = ranges[_demoBin];
+				}
+			} else {
+				_demoBin = -1;
+				_skillLevel = _menu._skill;
+				_currentLevel = _menu._level;
 			}
 			_mix.stopMusic();
 		}
-		if (_stub->_pi.quit) {
+		if (_stub->_pi.quit || _requestedAsset >= 0) {
 			break;
 		}
 		if (!resumeLoaded && _stub->hasWidescreen()) {
@@ -253,7 +273,7 @@ void Game::run() {
 			_endLoop = false;
 			_frameTimestamp = _stub->getTimeStamp();
 			_saveTimestamp = _frameTimestamp;
-			while (!_stub->_pi.quit && !_endLoop) {
+			while (!_stub->_pi.quit && !_endLoop && _requestedAsset < 0) {
 				mainLoop();
 				if (_demoBin != -1 && _inp_demPos >= _res._demLen) {
 					debug(DBG_DEMO, "End of demo");
@@ -305,59 +325,65 @@ void Game::displayTitleScreenAmiga() {
 	_stub->copyRect(0, 0, kW, kH, buf, kW);
 	_stub->updateScreen(0);
 	_vid.AMIGA_decodeCmp(_res._scratchBuffer + 6, buf);
+	// Preserve the original 320-pixel title artwork. Level browsing belongs in
+	// the QoL overlay; arriving here never implicitly chooses a level.
+	const std::vector<uint8_t> background(buf, buf + kW * kH);
+	_menu._selectedOption = -1;
+	int selected = 0;
 	int h = 0;
-	while (1) {
-		if (h <= kH / 2) {
-			const int y = kH / 2 - h;
-			_stub->copyRect(0, y, kW, h * 2, buf, kW);
-			_stub->updateScreen(0);
-			h += 2;
-		} else {
-			static const uint8_t selectedColor = 0xE4;
-			static const uint8_t defaultColor = 0xE8;
-			for (int i = 0; i < 8; ++i) {
-				const char *str = _menu.getLevelName(i);
-				const uint8_t color = (_currentLevel == i) ? selectedColor : defaultColor;
-				const int x = 24;
-				const int y = 24 + i * 16;
-				for (int j = 0; str[j]; ++j) {
-					_vid.AMIGA_drawStringChar(buf, kW, x + j * Video::CHAR_W, y, _res._fnt, color, str[j]);
-				}
-			}
-			if (_stub->_pi.dirMask & PlayerInput::DIR_UP) {
-				_stub->_pi.dirMask &= ~PlayerInput::DIR_UP;
-				if (_currentLevel > 0) {
-					--_currentLevel;
-				}
-			}
-			if (_stub->_pi.dirMask & PlayerInput::DIR_DOWN) {
-				_stub->_pi.dirMask &= ~PlayerInput::DIR_DOWN;
-				if (_currentLevel < 7) {
-					++_currentLevel;
-				}
-			}
-			_stub->copyRect(0, 0, kW, kH, buf, kW);
-			_stub->updateScreen(0);
-		}
+	while (!_stub->_pi.quit) {
 		_stub->processEvents();
-		if (_stub->_pi.quit) {
+		if (_stub->_pi.escape || _stub->consumePauseRequest()) {
+			_stub->_pi.escape = false;
+			_menu._selectedOption = Menu::MENU_OPTION_ITEM_SETTINGS;
 			break;
 		}
-		if (_stub->_pi.enter) {
+		if (_stub->_pi.dirMask & (PlayerInput::DIR_UP | PlayerInput::DIR_DOWN)) {
+			selected = (selected + ((_stub->_pi.dirMask & PlayerInput::DIR_UP) ? 3 : 1)) % 4;
+			_stub->_pi.dirMask &= ~(PlayerInput::DIR_UP | PlayerInput::DIR_DOWN);
+		}
+		const bool changeSkill =
+		    selected == 1 &&
+		    (_stub->_pi.enter ||
+			 (_stub->_pi.dirMask & (PlayerInput::DIR_LEFT | PlayerInput::DIR_RIGHT)));
+		if (changeSkill) {
+			_menu._skill =
+			    (_menu._skill + ((_stub->_pi.dirMask & PlayerInput::DIR_LEFT) ? 2 : 1)) % 3;
 			_stub->_pi.enter = false;
+			_stub->_pi.dirMask &= ~(PlayerInput::DIR_LEFT | PlayerInput::DIR_RIGHT);
+		} else if (_stub->_pi.enter) {
+			_stub->_pi.enter = false;
+			_menu._selectedOption = selected == 0   ? Menu::MENU_OPTION_ITEM_START
+			                        : selected == 2 ? Menu::MENU_OPTION_ITEM_SETTINGS
+			                                        : Menu::MENU_OPTION_ITEM_QUIT;
 			break;
 		}
+		std::copy(background.begin(), background.end(), buf);
+		static const char *skills[] = {"EASY", "NORMAL", "EXPERT"};
+		const std::string skill = std::string("SKILL: ") + skills[_menu._skill];
+		const char *items[] = {"START", skill.c_str(), "OPTIONS (ESC)", "QUIT"};
+		for (int i = 0; i < 4; ++i) {
+			for (int j = 0; items[i][j]; ++j) {
+				_vid.AMIGA_drawStringChar(buf, kW, 200 + j * Video::CHAR_W, 104 + i * 24, _res._fnt,
+				                          i == selected ? 0xE4 : 0xE8, items[i][j]);
+			}
+		}
+		h = std::min(h + 2, kH / 2);
+		_stub->copyRect(0, kH / 2 - h, kW, h * 2, buf, kW);
+		_stub->updateScreen(0);
 		_stub->sleep(30);
 	}
 	free(buf);
 }
 
 void Game::displayTitleScreenMac(int num) {
+	CutsceneInputScope input(_stub, _preferences.skipLogosWithKeyboard);
 	_menu.drawMacTitle(num);
 	_vid.updateScreen();
 	while (!_stub->_pi.quit) {
 		_stub->processEvents();
-		if (_stub->_pi.enter || _stub->_pi.escape) {
+		if ((_cut._interruptForMenu && _cut._interruptForMenu()) || _stub->consumeCutsceneSkip() ||
+		    _stub->_pi.enter || _stub->_pi.escape) {
 			_stub->_pi.enter = _stub->_pi.escape = false;
 			break;
 		}
@@ -366,6 +392,7 @@ void Game::displayTitleScreenMac(int num) {
 }
 
 void Game::resetGameState() {
+	_weaponFx.clear();
 	_animBuffers._states[0] = _animBuffer0State;
 	_animBuffers._curPos[0] = 0xFF;
 	_animBuffers._states[1] = _animBuffer1State;
@@ -420,6 +447,7 @@ void Game::mainLoop() {
 			_endLoop = true;
 		return;
 	}
+	_weaponFx.tick();
 	// Preserve the composed frame when a device event opens the pause overlay.
 	memcpy(_vid._frontLayer, _vid._backLayer, _vid._layerSize);
 	pge_prepare();
@@ -430,7 +458,9 @@ void Game::mainLoop() {
 		if (pge) {
 			_col_currentPiegeGridPosY = (pge->pos_y / 36) & ~1;
 			_col_currentPiegeGridPosX = (pge->pos_x + 8) >> 4;
+			const int previousFrame = pge->anim_number;
 			pge_process(pge);
+			updateConradShot(pge, previousFrame);
 		}
 	}
 	if (oldLevel != _currentLevel) {
@@ -442,10 +472,12 @@ void Game::mainLoop() {
 		return;
 	}
 	if (_cut._id != 0xFFFF) {
+		_weaponFx.clear();
 		// A queued cutscene owns the next presentation; do not reveal its destination room
 		return;
 	}
 	if (_loadMap) {
+		_weaponFx.clear();
 		const uint8_t player_room = _pgeLive[0].room_location;
 		if (_currentRoom == 0xFF || !hasLevelMap(_currentLevel, player_room)) {
 			if (_demoBin != -1) {
@@ -528,9 +560,12 @@ void Game::playCutscene(int id) {
 		_cut._id = id;
 	}
 	if (_cut._id != 0xFFFF) {
+		const bool skipWithKeyboard = _cut._id == 0x40 ? _preferences.skipLogosWithKeyboard
+		                                               : _preferences.skipCutscenesWithKeyboard;
+		_cut._skipWithKeyboard = _seq._skipWithKeyboard = skipWithKeyboard;
 		ToggleWidescreenStack tws(_stub, false);
 		_mix.stopMusic();
-		if (_res._hasSeqData) {
+		if (_res._hasSeqData && _cut._id != 0x40) {
 			int num = 0;
 			switch (_cut._id) {
 			case 0x02: {
@@ -584,18 +619,7 @@ void Game::playCutscene(int id) {
 				}
 			}
 		}
-		if (_res.isAmiga()) {
-			const int num = Cutscene::_musicTableAmiga[_cut._id * 2];
-			if (num != 0xFF) {
-				const int bpm = Cutscene::_musicTableAmiga[_cut._id * 2 + 1];
-				_mix.playMusic(num, bpm);
-			}
-		} else {
-			const int num = Cutscene::_musicTableDOS[_cut._id];
-			if (num != 0xFF) {
-				_mix.playMusic(num);
-			}
-		}
+		_mix.playCutsceneMusic(_cut._id, _res.isAmiga());
 		const auto playedId = _cut._id;
 		_cut.play();
 		if (_demoBin == -1 && playedId == Cutscene::kCineMemo && _cut._completed)
@@ -1008,6 +1032,14 @@ void Game::prepareAnims() {
 
 void Game::prepareAnimsHelper(LivePGE *pge, int16_t dx, int16_t dy) {
 	debug(DBG_GAME, "Game::prepareAnimsHelper() dx=0x%X dy=0x%X pge_num=%ld pge->flags=0x%X pge->anim_number=0x%X", dx, dy, pge - &_pgeLive[0], pge->flags, pge->anim_number);
+	const bool conrad = pge == &_pgeLive[0];
+	const int frame = pge->anim_number;
+	const uint8_t displayFlags = pge->flags;
+	if (effectivePistolStyle() != weapon::Style::Original && _weaponFx.nativeFlashMatched &&
+	    isConradShotEffect(pge) && (pge->anim_number == 287 || pge->anim_number == 288))
+		return;
+	if (conrad && effectivePistolStyle() != weapon::Style::Original)
+		dx += _weaponFx.recoil(pge->obj_type);
 	if (!(pge->flags & 8)) {
 		if (pge->index != 0 && loadMonsterSprites(pge) == 0) {
 			return;
@@ -1020,7 +1052,7 @@ void Game::prepareAnimsHelper(LivePGE *pge, int16_t dx, int16_t dy) {
 		case kResourceTypePC98:
 		case kResourceTypeSega:
 			assert(pge->anim_number < 1287);
-			dataPtr = _res._sprData[pge->anim_number];
+			dataPtr = _res._sprData[frame];
 			if (dataPtr == 0) {
 				return;
 			}
@@ -1051,7 +1083,7 @@ void Game::prepareAnimsHelper(LivePGE *pge, int16_t dx, int16_t dy) {
 		}
 		int16_t ypos = dy + pge->pos_y - dh + 2;
 		int16_t xpos = dx + pge->pos_x - dw;
-		if (pge->flags & 2) {
+		if (displayFlags & 2) {
 			xpos = dw + dx + pge->pos_x;
 			uint8_t _cl = w;
 			if (_cl & 0x40) {
@@ -1102,6 +1134,7 @@ void Game::drawAnims() {
 	_eraseBackground = false;
 	drawAnimBuffer(2, _animBuffer2State);
 	drawAnimBuffer(1, _animBuffer1State);
+	drawWeaponFx();
 	drawAnimBuffer(0, _animBuffer0State);
 	_eraseBackground = true;
 	drawAnimBuffer(3, _animBuffer3State);
@@ -1118,6 +1151,7 @@ void Game::drawAnimBuffer(uint8_t stateNum, AnimBufferState *state) {
 		_animBuffers._curPos[stateNum] = 0xFF;
 		do {
 			LivePGE *pge = state->pge;
+			const uint8_t displayFlags = pge->flags;
 			if (!(pge->flags & 8)) {
 				if (pge == &_pgeLive[0]) _vid.refreshConradShirtPalette();
 				if (stateNum == 1 && (_blinkingConradCounter & 1) && !_preferences.reduceBlink) {
@@ -1131,22 +1165,25 @@ void Game::drawAnimBuffer(uint8_t stateNum, AnimBufferState *state) {
 						const int height = state->dataPtr[2] & 0x7F;
 						appearance::markAmigaTshirt(_res._scratchBuffer, width, height, Resource::kScratchBufferSize);
 					}
-					drawCharacter(_res._scratchBuffer, state->x, state->y, state->h, state->w, pge->flags, pge == &_pgeLive[0]);
+					drawCharacter(_res._scratchBuffer, state->x, state->y, state->h, state->w,
+					              displayFlags, pge == &_pgeLive[0]);
 					break;
 				case kResourceTypeDOS:
 				case kResourceTypePC98:
 					if (!(state->dataPtr[-2] & 0x80)) {
 						_vid.DOS_decodeSpm(state->dataPtr, _res._scratchBuffer);
-						drawCharacter(_res._scratchBuffer, state->x, state->y, state->h, state->w, pge->flags, pge == &_pgeLive[0]);
+						drawCharacter(_res._scratchBuffer, state->x, state->y, state->h, state->w,
+						              displayFlags, pge == &_pgeLive[0]);
 					} else {
-						drawCharacter(state->dataPtr, state->x, state->y, state->h, state->w, pge->flags, pge == &_pgeLive[0]);
+						drawCharacter(state->dataPtr, state->x, state->y, state->h, state->w,
+						              displayFlags, pge == &_pgeLive[0]);
 					}
 					break;
 				case kResourceTypeSega:
 					if (decodeSegaCharacter(state->dataPtr, _res._sprDataSizes[pge->anim_number],
 					                        _res._scratchBuffer, Resource::kScratchBufferSize)) {
 						drawCharacter(_res._scratchBuffer, state->x, state->y, state->h, state->w,
-						              pge->flags, pge == &_pgeLive[0]);
+						              displayFlags, pge == &_pgeLive[0]);
 					} else {
 						warning("Invalid Sega character %d", pge->anim_number);
 					}
@@ -1180,7 +1217,8 @@ void Game::drawPiege(AnimBufferState *state) {
 				break;
 			}
 			const int frame = _res.MAC_getPersoFrame(pge->anim_number);
-			_vid.MAC_drawSprite(state->x, state->y, _res._perso, frame, (pge->flags & 2) != 0, _eraseBackground, true);
+			_vid.MAC_drawSprite(state->x, state->y, _res._perso, frame, (pge->flags & 2) != 0,
+			                    _eraseBackground, true);
 		} else {
 			const int frame = _res.MAC_getMonsterFrame(pge->anim_number);
 			_vid.MAC_drawSprite(state->x, state->y, _res._monster, frame, (pge->flags & 2) != 0, _eraseBackground);
@@ -1610,6 +1648,7 @@ void Game::loadLevelMap() {
 }
 
 void Game::loadLevelData() {
+	_weaponFx.clear();
 	_lastRewindTick = _playTicks;
 	_persistentDue = true;
 	_activeProgress = false;
@@ -1775,10 +1814,11 @@ void Game::loadLevelData() {
 	for (uint16_t i = 0; i < _res._pgeNum; ++i) {
 		if (_res._pgeInit[i].skill <= _skillLevel) {
 			LivePGE *pge = &_pgeLive[i];
-			if (pge->room_location < 0x40) {
-				pge->next_PGE_in_room = _pge_liveTable1[pge->room_location];
-				_pge_liveTable1[pge->room_location] = pge;
-			}
+			// Keep off-screen actors in their 0xFE/0xFF holding lists too.
+			// Spawning moves an actor out of its old list; omitting it here
+			// would prevent shot effects (and inventory objects) entering a room.
+			pge->next_PGE_in_room = _pge_liveTable1[pge->room_location];
+			_pge_liveTable1[pge->room_location] = pge;
 		}
 	}
 	pge_resetMessages();
@@ -2292,10 +2332,11 @@ void Game::loadState(File *f, int version) {
 			if (pge->flags & 4) {
 				_pge_liveTable2[pge->index] = pge;
 			}
-			if (pge->room_location < 0x40) {
-				pge->next_PGE_in_room = _pge_liveTable1[pge->room_location];
-				_pge_liveTable1[pge->room_location] = pge;
-			}
+			// Keep off-screen actors in their 0xFE/0xFF holding lists too.
+			// Spawning moves an actor out of its old list; omitting it here
+			// would prevent shot effects (and inventory objects) entering a room.
+			pge->next_PGE_in_room = _pge_liveTable1[pge->room_location];
+			_pge_liveTable1[pge->room_location] = pge;
 		}
 	}
 	resetGameState();

@@ -20,35 +20,6 @@
 #include "systemstub.h"
 #include "util.h"
 
-static int detectVersion(FileSystem *fs) {
-	static const struct {
-		const char *filename;
-		int type;
-		const char *name;
-	} table[] = {
-	    {"DEMO_UK.ABA", kResourceTypeDOS, "DOS (Demo)"},
-	    {"GLOB_FR.ABA", kResourceTypeDOS, "DOS"},
-	    {"INTRO.SEQ", kResourceTypeDOS, "DOS CD"},
-	    {"MENU1SSI.MAP", kResourceTypeDOS, "DOS SSI"},
-	    {"LEVEL1.MAP", kResourceTypeDOS, "DOS"},
-	    {"LEVEL1.BNQ", kResourceTypeDOS, "DOS (Demo)"},
-	    {"PRESENT.LEV", kResourceTypeSega, "Sega Mega Drive (extracted data, experimental)"},
-	    {"LEVEL1.LEV", kResourceTypeAmiga, "Amiga"},
-	    {"DEMO.LEV", kResourceTypeAmiga, "Amiga (Demo)"},
-	    {"FLASHBACK.BIN", kResourceTypeMac, "Macintosh"},
-	    {"FLASHBACK.RSRC", kResourceTypeMac, "Macintosh"},
-	    {"GLOBAL.PAQ", kResourceTypePC98, "PC98"},
-	    {0, -1, 0}};
-	for (int i = 0; table[i].filename; ++i) {
-		File f;
-		if (f.open(table[i].filename, "rb", fs)) {
-			debug(DBG_INFO, "Detected %s version", table[i].name);
-			return table[i].type;
-		}
-	}
-	return -1;
-}
-
 static Language detectLanguage(FileSystem *fs) {
 	static const struct {
 		const char *filename;
@@ -125,15 +96,19 @@ static bool makeDir(const char *name) {
 int main(int argc, char *argv[]) {
 	// The catalog is a JSON interface for small front ends. Its stdout must stay
 	// machine-readable; normal launches retain the startup banner.
-	bool listCutscenes = false;
+	bool listCutscenes = false, listAssets = false;
 	for (int i = 1; i < argc; ++i) {
+		if (strcmp(argv[i], "--list-assets") == 0)
+			listAssets = true;
 		if (strcmp(argv[i], "--list-cutscenes") == 0) {
 			listCutscenes = true;
 		}
 	}
-	if (!listCutscenes) {
+	if (!listCutscenes && !listAssets) {
 		cli::printStartup();
 	}
+	std::string requestedAsset, requestedMusic;
+	bool explicitMusic = false;
 	bool playCutscene = false;
 	cinematics::Selection selectedCutscene;
 
@@ -161,7 +136,7 @@ int main(int argc, char *argv[]) {
 		struct stat st;
 		if (stat(argv[1], &st) == 0 && S_ISDIR(st.st_mode)) {
 			dataPath = tunePath = argv[1];
-			explicitData = explicitTunes = true;
+			explicitData = true;
 			positionalDataPath = true;
 		}
 	}
@@ -192,6 +167,9 @@ int main(int argc, char *argv[]) {
 		                                  {"continue", no_argument, 0, 24},
 		                                  {"disk-autosave", required_argument, 0, 25},
 		                                  {"no-disk-autosave", no_argument, 0, 26},
+		                                  {"list-assets", no_argument, 0, 27},
+		                                  {"asset-set", required_argument, 0, 28},
+		                                  {"music-source", required_argument, 0, 29},
 		                                  {0, 0, 0, 0}};
 		int index;
 		const int c = getopt_long(argc, argv, "h", options, &index);
@@ -199,6 +177,16 @@ int main(int argc, char *argv[]) {
 			break;
 		}
 		switch (c) {
+		case 27:
+			listAssets = true;
+			break;
+		case 28:
+			requestedAsset = optarg;
+			break;
+		case 29:
+			requestedMusic = optarg;
+			explicitMusic = true;
+			break;
 		case 24:
 			continueRequested = true;
 			break;
@@ -376,7 +364,7 @@ int main(int argc, char *argv[]) {
 	}
 	settings::Preferences preferences;
 	preferences.readCompatibility(g_options);
-	if (!ignorePreferences && !listCutscenes) {
+	if (!ignorePreferences) {
 		std::string diagnostic;
 		const auto path = (std::filesystem::u8path(savePath) / "preferences.cfg").u8string();
 		settings::load(path, preferences, diagnostic);
@@ -412,70 +400,179 @@ int main(int argc, char *argv[]) {
 	}
 	musicOptions.correctWaveformRegister = g_options.fix_fmopl_e0_reg;
 	g_debugMask = listCutscenes ? 0 : debugMask;
-	FileSystem fs(dataPath);
-	const int version = detectVersion(&fs);
-	if (version == -1) {
+	const auto library = assets::discover(dataPath);
+	for (const auto &message : library.diagnostics)
+		fprintf(stderr, "%s\n", message.c_str());
+	if (listAssets) {
+		puts("Game editions (use --asset-set=ID):");
+		for (const auto &source : library.games)
+			printf("  %s\t%s\n", source.id.c_str(), source.label.c_str());
+		puts("Music sources (use --music-source=ID, or native):");
+		for (const auto &source : library.music)
+			printf("  %s\t%s\n", source.id.c_str(), source.label.c_str());
+		return library.games.empty() ? EXIT_FAILURE : EXIT_SUCCESS;
+	}
+	if (library.games.empty()) {
 		fprintf(stderr,
 		        "No supported Flashback game data found in '%s'.\n"
-		        "Provide your original DOS, Amiga, Macintosh or PC-98 files with --datapath=PATH.\n"
-		        "REminiscence2 includes the engine only.\n",
+		        "Put each prepared edition in its own subfolder. REminiscence2 includes the engine "
+		        "only.\n",
 		        dataPath);
 		return EXIT_FAILURE;
 	}
-	if (!listCutscenes && !playCutscene && !makeDir(savePath)) {
-		error("Unable to create directories");
-		return -1;
-	}
-	FileSystem tuneFs(tunePath);
-	const Language language =
-	    (forcedLanguage == -1) ? detectLanguage(&fs) : (Language)forcedLanguage;
-	if (listCutscenes) {
-		Resource resource(&fs, static_cast<ResourceType>(version), language);
-		resource.init(true);
-		cinematics::printCatalog(stdout, cinematics::catalog(resource), resource);
-		return EXIT_SUCCESS;
-	}
-	if (playCutscene) {
-		Resource resource(&fs, static_cast<ResourceType>(version), language);
-		resource.init(true);
-		bool available = false;
-		for (const auto &entry : cinematics::catalog(resource)) {
-			available |= entry.name == selectedCutscene.name && selectedCutscene.part < entry.parts;
-		}
-		if (!available) {
-			fprintf(stderr, "Cutscene '%s:%u' is unavailable. Use --list-cutscenes to inspect the assets.\n",
-			        selectedCutscene.name.c_str(), selectedCutscene.part);
-			return EXIT_FAILURE;
-		}
-	}
-	if (continueRequested && progress::scan(savePath, version).empty()) {
-		fprintf(stderr, "No valid autosave is available for this asset edition.\n");
+	int selected =
+	    assets::find(library.games, requestedAsset.empty() ? preferences.assetSet : requestedAsset);
+	if (!requestedAsset.empty() && selected < 0) {
+		fprintf(stderr, "Unknown or ambiguous asset set '%s'. Use --list-assets.\n",
+		        requestedAsset.c_str());
 		return EXIT_FAILURE;
 	}
-	SystemStub *stub = SystemStub_SDL_create();
-	stub->configure(runtime);
-	Game *g = new Game(stub, &fs, &tuneFs, savePath, levelNum, (ResourceType)version, language,
-	                   widescreen, autoSave, cheats);
-	g->configurePreferences(preferences);
-	g->_continueRequested = continueRequested;
-	switch (musicOptions.backend) {
-	case music::Backend::None: g->_settingsAudioBackend = "Disabled"; break;
-	case music::Backend::Adlib: g->_settingsAudioBackend = "AdLib / OPL3"; break;
-	case music::Backend::FluidSynth: g->_settingsAudioBackend = "FluidSynth"; break;
-	case music::Backend::Mt32: g->_settingsAudioBackend = "MT-32"; break;
+	if (explicitMusic) {
+		if (requestedMusic == "native")
+			preferences.musicSource.clear();
+		else {
+			const int musicIndex = assets::find(library.music, requestedMusic);
+			if (musicIndex < 0) {
+				fprintf(stderr, "Unknown or ambiguous music source '%s'. Use --list-assets.\n",
+				        requestedMusic.c_str());
+				return EXIT_FAILURE;
+			}
+			preferences.musicSource = library.music[musicIndex].id;
+		}
 	}
-	g->_mix.configureMusic(musicOptions, &fs);
-	stub->init(g_caption, g->_vid._w, g->_vid._h, fullscreen, widescreen, &scalerParameters);
-	bool success = true;
-	if (playCutscene) {
-		g->initCutsceneResources();
-		success = cinematics::play(*g, selectedCutscene);
-	} else {
-		g->run();
-		success = !g->_continueFailed;
+	if (!preferences.musicSource.empty() &&
+	    assets::find(library.music, preferences.musicSource) < 0) {
+		fprintf(stderr, "Saved music source is unavailable; using this edition's music.\n");
+		preferences.musicSource.clear();
 	}
-	delete g;
-	stub->destroy();
-	delete stub;
-	return success ? EXIT_SUCCESS : EXIT_FAILURE;
+	const bool choose = selected < 0 && library.games.size() > 1;
+	if (choose && (listCutscenes || playCutscene || continueRequested)) {
+		fprintf(stderr, "Multiple asset sets found. Choose --asset-set=ID (see --list-assets).\n");
+		return EXIT_FAILURE;
+	}
+	if (selected < 0)
+		selected = 0;
+	if (!listCutscenes && !playCutscene && !makeDir(savePath)) {
+		fprintf(stderr, "Unable to create save directory '%s'.\n", savePath);
+		return EXIT_FAILURE;
+	}
+	const auto preferencePath = (std::filesystem::u8path(savePath) / "preferences.cfg").u8string();
+	auto rememberEdition = [&](const std::string &id) {
+		settings::Preferences stored;
+		stored.readCompatibility(g_options);
+		std::string reason;
+		settings::load(preferencePath, stored, reason);
+		stored.assetSet = id;
+		if (!settings::save(preferencePath, stored, reason))
+			fprintf(stderr, "Could not remember edition: %s\n", reason.c_str());
+	};
+	if (choose) {
+		std::unique_ptr<SystemStub> picker(SystemStub_SDL_create());
+		picker->configure(runtime);
+		picker->configurePreferences(preferences);
+		picker->init(g_caption, 256, 224, fullscreen, widescreen, &scalerParameters);
+		std::vector<uint8_t> black(256 * 224);
+		picker->copyRect(0, 0, 256, 224, black.data(), 256);
+		settings::Session session;
+		session.assetPicker = session.startup = true;
+		session.values = preferences;
+		session.assetSources = library.games;
+		session.assetIndex = selected;
+		picker->showSettings(session);
+		const bool quit = picker->_pi.quit || session.action == settings::Action::Quit;
+		selected = session.assetIndex;
+		picker->destroy();
+		if (quit)
+			return EXIT_SUCCESS;
+		rememberEdition(library.games[selected].id);
+	}
+	for (;;) {
+		const auto &source = library.games[selected];
+		const int version = source.edition;
+		preferences.assetSet = source.id;
+		FileSystem fs(source.root.c_str(), source.excludedRoots);
+		const bool nativeTunes = !explicitTunes && (explicitData || paths.tunes == paths.data);
+		FileSystem tuneFs(nativeTunes ? source.root.c_str() : tunePath,
+		                  nativeTunes ? source.excludedRoots : std::vector<std::string>{});
+		const Language language =
+		    forcedLanguage == -1 ? detectLanguage(&fs) : Language(forcedLanguage);
+		if (listCutscenes) {
+			Resource resource(&fs, ResourceType(version), language);
+			resource.init(true);
+			cinematics::printCatalog(stdout, cinematics::catalog(resource), resource);
+			return EXIT_SUCCESS;
+		}
+		if (playCutscene) {
+			Resource resource(&fs, ResourceType(version), language);
+			resource.init(true);
+			bool available = false;
+			for (const auto &entry : cinematics::catalog(resource))
+				available |=
+				    entry.name == selectedCutscene.name && selectedCutscene.part < entry.parts;
+			if (!available) {
+				fprintf(stderr,
+				        "Cutscene '%s:%u' is unavailable. Use --list-cutscenes to inspect the "
+				        "assets.\n",
+				        selectedCutscene.name.c_str(), selectedCutscene.part);
+				return EXIT_FAILURE;
+			}
+		}
+		if (continueRequested && progress::scan(savePath, version).empty()) {
+			fprintf(stderr, "No valid autosave is available for this asset edition.\n");
+			return EXIT_FAILURE;
+		}
+		std::unique_ptr<SystemStub> stub(SystemStub_SDL_create());
+		stub->configure(runtime);
+		auto game =
+		    std::make_unique<Game>(stub.get(), &fs, &tuneFs, savePath, levelNum,
+			                       ResourceType(version), language, widescreen, autoSave, cheats);
+		game->_assetSources = library.games;
+		game->_musicSources = library.music;
+		game->_assetIndex = selected;
+		game->configurePreferences(preferences);
+		game->_continueRequested = continueRequested;
+		switch (musicOptions.backend) {
+		case music::Backend::None:
+			game->_settingsAudioBackend = "Disabled";
+			break;
+		case music::Backend::Adlib:
+			game->_settingsAudioBackend = "AdLib / OPL3";
+			break;
+		case music::Backend::FluidSynth:
+			game->_settingsAudioBackend = "FluidSynth";
+			break;
+		case music::Backend::Mt32:
+			game->_settingsAudioBackend = "MT-32";
+			break;
+		}
+		game->_mix.configureMusic(musicOptions, &fs);
+		game->selectMusicSource(preferences.musicSource);
+		stub->init(g_caption, game->_vid._w, game->_vid._h, preferences.fullscreen,
+		           preferences.widescreen, &scalerParameters);
+		bool success;
+		if (playCutscene) {
+			game->initCutsceneResources();
+			success = cinematics::play(*game, selectedCutscene);
+		} else {
+			game->run();
+			success = !game->_continueFailed;
+		}
+		const int next = game->_requestedAsset;
+		const bool quit = stub->_pi.quit;
+		preferences = game->_preferences;
+		game.reset();
+		stub->destroy();
+		if (next < 0 || quit || playCutscene)
+			return success ? EXIT_SUCCESS : EXIT_FAILURE;
+		selected = next;
+		continueRequested = false;
+		rememberEdition(library.games[selected].id);
+		const char *filter = preferences.filter == settings::Filter::Point    ? "point"
+		                     : preferences.filter == settings::Filter::Linear ? "linear"
+		                                                                      : "scale";
+		snprintf(scalerParameters.name, sizeof(scalerParameters.name), "%s", filter);
+		scalerParameters.factor = preferences.scale;
+		autoSave = preferences.rewind;
+		widescreen = static_cast<WidescreenMode>(preferences.widescreen);
+	}
 }

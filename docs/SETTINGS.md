@@ -19,11 +19,11 @@ menu, save browser, graphics settings and original-resolution 256×224 layout.
 
 | Page | Available controls |
 | --- | --- |
-| Session | Continue latest autosave, disk autosave settings and optional contextual hints; health, score, room and rewind count; rewind; clean screenshot capture; restart level; return to title; preference save/undo/defaults; focus pause, FPS and shortcut visibility. |
+| Session | Game edition selection; default-off automatic resume of the latest compatible save; Continue latest autosave, disk autosave settings and optional contextual hints; health, score, room and rewind count; rewind; clean screenshot capture; restart level; return to title; preference save/undo/defaults; focus pause, FPS and shortcut visibility. |
 | Rewind | Captured-frame timeline with active age, room and health; restores the selected moment after confirmation. |
 | Save / Load | Manual slots 1–99, occupied-slot browser with room and modification time, checkpoint loading, refresh, overwrite and load confirmation. |
 | Graphics | Fullscreen, VSync, point/linear/ScaleNx sampling, window scale, widescreen side content, compact layout and menu text scale. |
-| Audio | Master, music and effects volume, mute, save-confirmation sound, current output rate and PRF fallback information. |
+| Audio | Independent soundtrack selection with native fallback; master, music and effects volume, mute, save-confirmation sound, current output rate and PRF fallback information. |
 | Enhancements | Conrad’s Original/Red-Pink/White T-shirt, rewind, inventory insertion order, transition style, save sound, additional MEMO content, text/SEQ choices and optional cutscene switches. |
 | Controls | Live keyboard diagram with colored action keys and arrow callouts; rebind the nine primary actions; view fixed shortcuts, menu navigation and controller bindings. |
 | Cheats | All three gameplay cheat flags, unlimited life, fast mode, diagnostic rectangles, DOS combat zoom, one-shot health restoration and clear-all. |
@@ -125,6 +125,61 @@ Return to title, level restart/selection and **EXIT GAME** ask before discarding
 unsaved progress. Escape/B cancels a confirmation; Escape/F10/Start otherwise
 resumes gameplay. The preferences file contains settings, not a game save,
 cheats, selected level or rewind history.
+
+## Cutscene skip keys
+
+Under **Enhancements → Cutscene presentation**, two options are enabled by default:
+
+- **Space/A-Z skips developer logos** covers opening developer/publisher scenes,
+  including the Macintosh title cards.
+- **Space/A-Z skips other cutscenes** covers the intro and subsequent polygon,
+  SET, text-summary and PC CD SEQ scenes.
+
+Press Space or any letter once to skip. A held key skips only the current scene;
+release and press again for the next scene. These keys are independent of gameplay
+bindings and are consumed before returning to play. Enter and arrows retain
+their interactive-panel functions. Backspace remains available when the options
+are off. **Save settings** persists `skip_logos_with_keyboard` and
+`skip_cutscenes_with_keyboard` for subsequent launches. The standalone cutscene
+player uses the same preferences; Escape also exits that player.
+
+## Experimental pistol styles
+
+**Enhancements → Pistol style** selects Original (default), Heavy / red, or
+Laser. Save settings persists `pistol_style=0`, `1` or `2` respectively.
+Invalid values retain the previous setting. These preferences do not change the
+save-state format. These experiments support Amiga, GOG/DOS and Macintosh assets,
+using each edition's own shot position. Original remains the default. PC-98 and
+Sega retain their original pistol presentation for now.
+
+With Laser selected, **Laser colour** offers **Orange (default), Red, Green, Blue
+and Purple**. The flash, beam and pistol light use the same hue, with a darker
+halo and lighter core. Save settings stores `laser_color=0` through `4` in that
+order. Colour changes clear old effects; they never change sound or gameplay.
+
+Heavy adds red flame/casings and drawing-only recoil; a strong 240 Hz low shelf makes
+Conrad's original pistol sample bassier without lowering its pitch or changing
+its duration, with soft peak limiting for loud source samples. Laser uses the
+loaded edition's original laser sound (`laser205.spl` on Amiga) with a dedicated
+deep-bass shelf and soft peak limiting, a coloured muzzle
+flash, a moving glowing segment and a small pistol-side light, with no casings.
+A short synthesized electrical pulse with the same bass processing covers asset
+sets missing the laser sample. Both styles preserve sound pitch and duration.
+Enemy firing, hits, damage and player movement use the original logic.
+
+`game_weapon.cpp` follows Conrad → pistol → shot-effect script links. It starts
+replacement effects on the native flash frame and reads the native sprite's rear
+edge and centerline for their position. The second flash frame follows its native
+position too; the laser travels horizontally at the initial origin's height.
+Native render-pixel coordinates preserve odd Macintosh rows at 512×448; they
+are never rounded down to the 256×224 playfield. Conrad keeps his original
+animation. Heavy adds a drawing-only recoil offset without shifting the shot origin.
+`weapon_fx.cpp` owns bounded, deterministic particles and fallback PCM. Effects
+pause with simulation and clear on restore, level/room transitions and style changes.
+Game palette entries 0x60–0x65 are private effect colors. Sprite/resource buffers
+and imported files are never edited. Missing or invalid geometry leaves the
+native flash visible. DOS and Macintosh positioning has synthetic format/render
+coverage; their actual commercial assets still need visual validation.
 
 ## Conrad's T-shirt
 
@@ -272,9 +327,15 @@ synthetic session data and the production overlay, without commercial artwork.
 ## Persistent recovery, previews and reminders
 
 See the [player guide](../manual.md#autosaves-and-continue) for the complete flow.
-The welcome-back screen offers Continue/New game/EXIT GAME. Session offers
-Continue and preferences; Save / Load can select an older generation across
-levels. Rewind has its own timeline page. Contextual hints are opt-in on Session.
+Normal launches play the developer logos and introduction, then show the title
+menu. Autosaves never replace this flow automatically. Space/A–Z skips each
+scene by default; Backspace remains available. Esc/F10/controller Start leaves
+the opening and opens all QoL pages immediately, or opens them from the title.
+Closing settings returns to the title. Levels can start any available level;
+Session offers Continue and preferences; Save / Load selects saved progress,
+including older autosave generations. Save and rewind require active gameplay.
+Rewind has its own timeline page. Contextual hints are opt-in on Session.
+The explicit `--continue` CLI option still bypasses openings and the title.
 
 `progress_store.cpp` owns the bounded, CRC32-protected autosave envelope, preview
 bytes, three-generation catalog and atomic replacement. `game_progress.cpp`
@@ -327,3 +388,25 @@ New preference keys: `sticky_action`, `input_buffer`, `reduce_shake`, `reduce_bl
 (default 0), `game_speed` (50–100, default 100) and `objectives_notebook` (default 1).
 Mapped trigger bindings use codes 32/33; raw joystick bindings still use 0–31.
 A disconnected audio device uses a silent mixer clock until output reconnects.
+
+## Startup and independent soundtracks
+
+**Session → Quicksave skips title sequence** is off by default. Enable it and
+save settings to resume the newest compatible modern quick/manual/checkpoint
+save or autosave on launch. Damaged or incompatible saves are skipped; if none
+works, the developer logos, introduction and title menu appear. Legacy `.state`
+files still need manual loading. `--no-preferences` uses defaults for one launch.
+
+Keep multiple editions in separate subfolders under `assets`. The first launch
+with several available sets shows an edition picker. Its choice is remembered.
+**Session → Game edition → Use selected edition…** confirms before restarting
+the session with the chosen assets. Save first; modern save compatibility checks
+still apply. `--list-assets` prints IDs for `--asset-set=ID` and `--music-source=ID`.
+
+**Audio → Soundtrack** switches immediately and **Save settings** remembers it.
+Choose discovered Amiga MOD, DOS PRF or a user-provided Ogg pack under
+`assets/music/<pack>/`; **This edition / supplied tunes** restores native music.
+Missing tracks fall back to native music. The override does not change sound
+effects, voices or embedded SEQ audio. See the [music mapping](../manual.md#music-sources)
+for names, looping and preparation of Genesis/Sega CD recordings. Raw ROM/VGM
+playback and Sega CD disc extraction are not implemented.

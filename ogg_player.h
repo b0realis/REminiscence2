@@ -8,6 +8,7 @@
 #define OGG_PLAYER_H__
 
 #include "intern.h"
+#include <array>
 
 struct FileSystem;
 struct Mixer;
@@ -18,17 +19,23 @@ struct OggPlayer {
 	~OggPlayer();
 
 	bool playTrack(int num);
+	bool playFile(const char *name);
 	void stopTrack();
 	void pauseTrack();
 	void resumeTrack();
 	bool isPlaying() const { return _impl != 0; }
 	bool mix(int16_t *buf, int len);
+	bool nextFrame(int16_t *frame);
 	static bool mixCallback(void *param, int16_t *buf, int len);
 
 	Mixer *_mix;
 	FileSystem *_fs;
 	OggDecoder_impl *_impl;
+	std::array<int16_t, 1024> _input{};
+	int _inputCount = 0, _inputOffset = 0;
+	int16_t _left[2]{}, _right[2]{};
+	double _phase = 0, _step = 1;
+	bool _primed = false;
 };
 
 #endif // OGG_PLAYER_H__
-

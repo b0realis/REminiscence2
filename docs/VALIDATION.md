@@ -1,5 +1,203 @@
 # REminiscence2 validation
 
+## Patch 1.21 — new-feature bug pass and release
+
+Focused source review found and fixed stale Ogg/CPC background state after a
+missing next-level track, inconsistent soundtrack cue selection in standalone
+cutscene playback, a skipped DOS-only PRF cue (25), and Quest/Python launchers
+forcing a shared tune root across editions. Scene override fallback now restores
+the native cue and tempo. Catalog commands also honor the remembered edition.
+
+All 22 suites pass in local pinned-SDL Release and Debug/UBSan. Added music
+regressions cover a missing next-level track followed by a scene, native fallback
+from an empty DOS override, and audible DOS cue 25 with Amiga graphics. CLI and
+Python tests exercise remembered/explicit library selection without an implicit
+shared tune path. All 11 release-tool tests pass. The Apple Silicon app/ZIP was
+assembled, ad-hoc signed, dependency-checked and smoke-tested after relocation.
+The 386 original Amiga/GOG asset hashes are unchanged. Hardware playthrough
+limits from 1.20 still apply; remote target builds are verified before publishing.
+
+## Patch 1.20 — automatic resume, edition library and independent music
+
+Local pinned-SDL Release and Debug/UBSan cover 22 CTest suites. Production
+startup tests with the supplied Amiga and GOG data verify normal openings by
+default, newest manual-save auto-resume across levels, corrupt-save fallback to
+an autosave, empty-save fallback to the openings, and an edition-switch request
+unwinding the opening safely. The automatic-resume preference round-trips with
+source IDs containing spaces and quotes.
+
+Synthetic libraries test DOS MAP+LEV disambiguation, separate Macintosh/Amiga
+markers, sibling Amiga fonts, nested editions, duplicate filenames, ambiguous
+shorthand IDs, external Ogg/MOD packs and exclusion of raw RNC-packed WHDLoad
+resources. CLI checks cover read-only listing and invalid/ambiguous selections.
+The local launcher finds both prepared Amiga copies and the extracted GOG set;
+its `--amiga` and `--gog` choices produce their respective cutscene catalogs.
+
+Music tests use original CC0 sine-wave fixtures to verify mono/stereo Ogg,
+44.1-to-22.05 kHz pitch preservation, background/cue transitions, native fallback
+and source-hook cleanup. The supplied Amiga modules play through a DOS mixer;
+the supplied DOS PRF cues also produce nonzero audio after source switching.
+Release uses the internal MOD player, while Debug exercises libmodplug.
+Edition-picker and Audio captures were visually inspected at desktop and
+256×224 resolution; the turquoise exit button remains accessible.
+
+The 386 original Amiga/GOG files in the startup manifest retain their SHA-256
+hashes. No actual Genesis/Sega CD soundtrack was supplied, so only the prepared
+Ogg-pack path has been tested. Raw ROM/VGM or Sega CD image playback/extraction
+is not implemented. Macintosh remains limited to synthetic fixtures; no full
+playthrough or physical-controller/device certification is implied.
+
+## Patch 1.19 — opening flow and real GOG data
+
+All 19 suites pass in local pinned-SDL Release and Debug/UBSan. Private startup
+integration tests run the production `Game::run()` path with both editions:
+complete openings despite saved progress, per-scene skipping, Esc during the
+first logo with letter skipping disabled, Esc during the introduction and at
+the title, the pause-request shortcut, level/difficulty selection without an
+unintended reset, and explicit CLI Continue. Closing title settings returns to
+the title. Native-size overlay tests retain the full page navigator there.
+
+The supplied GOG Windows installer `1.0.0 (25550)` was extracted without running
+its executable. Its 250 loose files under `Flashback_Data/StreamingAssets/data`
+are recognized as DOS resources; the cutscene catalog finds 28 polygon files.
+The new optional `REMINISCENCE2_DOS_DATA` test fixture renders 272 room backgrounds
+across seven levels. It compares seven 220-tick runs (Original, Heavy and five
+laser colours), checking identical serialized gameplay, native flash positions
+for standing/crouched shots in both directions, and the original source samples
+with the selected audio filter. This exposed uninitialized collision-buffer
+padding in saves; newly allocated records now clear that padding.
+
+The title screens and actual GOG firing frames were visually inspected. Private
+captures remain in ignored build output. Recorded hashes for Amiga and GOG data
+remain unchanged, including all 129 Amiga files from the earlier manifest.
+The installer and extracted assets remain ignored and are not release contents.
+The local launcher supports `--gog`; the plain invocation keeps the Amiga data.
+
+This is automated engine validation and visual inspection, not a complete GOG
+playthrough or physical-device certification. Real Macintosh assets are still
+unavailable; their existing synthetic coverage remains the testing limit.
+
+
+## Patch 1.18 — DOS/Mac shot geometry and five laser colours
+
+Local pinned-SDL Release and Debug/UBSan each pass all 16 CTest suites. Synthetic
+DOS SPC and Macintosh C211 fixtures exercise the production native sprite and
+replacement-effect paths with different offsets, both directions and two shot
+heights. Macintosh fixtures deliberately place the flash on odd native pixels.
+The moving laser core is checked against the launch row throughout its visible
+lifetime, even when the following flash frame moves vertically. Truncated
+geometry produces no replacement and leaves native rendering enabled.
+
+All five palettes are exercised in both formats. Preference tests cover Orange
+as default, all five saved colours and rejection of invalid values. Desktop and
+256×224 menu captures show the colour selector and retain the turquoise exit
+button. Real Amiga captures of Orange, Red, Green, Blue and Purple were visually
+inspected; the existing 660-tick simulation comparison still passes.
+
+The capture run also exposed a save-test assumption about catalogue ordering.
+The assertion now looks up the saved slot by level and slot number; the full
+Amiga fixture passes with a fresh output directory as well as reused fixtures.
+All 129 imported asset files retain their SHA-256 hashes. The launcher reports
+1.18; documentation and whitespace checks pass.
+
+Actual commercial GOG/DOS and Macintosh assets remain unavailable for visual
+play testing. Synthetic coverage verifies format handling and positioning, not
+the appearance of every commercial edition. Private game-derived captures remain
+in ignored build output.
+
+## Patch 1.17 — native shot positions and edition isolation
+
+All 16 CTest suites pass in local pinned-SDL Release and Debug/UBSan. The real
+Amiga tests render Original's flash in isolation and measure its pixels as an
+independent reference. Both Heavy and Laser match the native flash's rear edge,
+centerline and starting tick in standing/crouched shots facing both directions;
+the second flash frame also follows its native position. The three 220-tick runs
+continue to serialize identical gameplay state, including save/restore.
+
+Conrad now keeps his native firing animation. Private comparison captures were
+visually inspected. Non-Amiga fixtures with saved Heavy/Laser preferences verify
+effective Original mode, no effect pixels or palette writes, and no sound
+substitution. Those fixtures exercise the edition guard; actual GOG/Macintosh
+assets and physical-device playback have not been tested.
+
+SHA-256 manifests before and after the work match for all 129 imported Amiga
+files. The local launcher reports 1.17. Documentation boundary and whitespace
+checks pass; game-derived captures remain in ignored build output.
+
+## Patch 1.16 — cutscene shortcuts and pistol rendering
+
+Local pinned-SDL Release and Debug/UBSan pass all 16 CTest suites. SDL event tests
+cover Space and every A–Z key, remapped bindings, disabled shortcuts, held-key
+repeat and release after playback. Real Amiga logo/intro/story scenes exercise
+the independent preferences; text, SET and synthetic SEQ fixtures cover the other
+playback paths and interruption cleanup.
+
+Three real-input weapon runs total 660 ticks and serialize identically across
+Original, Heavy and Laser, including a save/restore between shooting sequences.
+Standing/crouched shots in both directions are checked against the original
+shot actor's motion. Isolated production sprite rendering verifies that each
+new effect starts on the last metal pixel of the barrel, with an empty pixel
+immediately beyond it, and includes Heavy's recoil offset.
+
+The missing Original flash was reproduced: dormant actors were omitted from
+room lists, so the existing room-transfer code could not insert them on spawn.
+Tests now verify every eligible actor belongs to exactly one list, including
+off-screen holding rooms, after level load, firing and save restoration. A real
+rendered flash pixel guards against recurrence. Seven-level/419-room asset
+checks and the 21,000-tick campaign suite also pass. Private before/after captures
+were visually inspected; original shot-effect sprites are flashes, not evidence
+of a separate casing-ejection animation.
+
+The local launcher reports 1.16. Actual DOS/Macintosh/Sega barrel alignment and
+physical-device playback remain unverified; the supplied Amiga assets were used
+for visual validation. No game-derived captures are included in public docs.
+
+## Patch 1.14 — deeper laser bass
+
+All 16 CTest suites pass in local Debug/UBSan and pinned-SDL Release. Both bass
+profiles pass frequency-balance and full-scale polarity/peak checks at 22050,
+44100 and 48000 Hz. Real Amiga firing and the missing-laser fixture select the
+deep-bass profile; the 510-tick simulation comparison remains identical.
+
+Private Amiga mixer previews measure about 11.8 dB more laser low-band energy
+using a 240 Hz one-pole analysis filter, with no full-scale clipped samples.
+Original and Heavy previews are byte-identical to 1.13. Documentation and
+whitespace checks pass. This remains a local audio revision; physical-device
+listening and other editions' source samples remain unverified.
+
+## Patch 1.13 — pistol audio refinement
+
+Local Debug/UBSan and pinned-SDL Release each pass all 16 CTest suites.
+New audio checks verify bass emphasis, reduced treble and bounded full-scale
+positive/negative input at 22050, 44100 and 48000 Hz. Existing callback-partition
+and dry-voice reset checks still pass. Real Amiga firing selects the original
+laser asset; a missing-sample fixture selects the synthesized fallback.
+
+All 510 firing/mirrored/crouching simulation states still match Original byte
+for byte. Fresh private mixer previews preserve the Original WAV exactly and
+contain no full-scale clipped samples. The documentation boundary and whitespace
+checks pass. This patch remains local; physical-device listening and other
+editions' actual sound assets remain unverified.
+
+## Patch 1.12 — cosmetic pistol experiments
+
+Local Debug/UBSan and pinned-SDL Release each pass all 16 CTest suites.
+The new weapon suite covers default no-op rendering, foreground masking,
+offscreen clipping at native/double scale, lifetime expiry, pose cancellation,
+audio callback partitioning, dry/bass voice reuse and synthesized laser PCM.
+Preference round trips include the selected pistol style.
+
+Three real Amiga runs total 510 ticks of firing, mirrored aim and crouching.
+Every serialized simulation state matches the Original run byte for byte.
+The tests check the actual bass/laser voice selection and generate private shot
+captures; standing and crouching muzzle alignment in both directions was visually
+inspected. The existing seven-level/419-room and 21,000-tick checks still pass.
+
+This experiment is local and has not been published. Its renderer supports
+the edition scaling paths, but actual DOS/Macintosh/Sega visual alignment and
+physical-device listening remain unverified. Preview frames and audio derived
+from the player's Amiga files remain in ignored build output.
+
 ## Patch 1.11 — feature bug pass and release candidate
 
 Local validation on 24 October 2026:

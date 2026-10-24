@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "game.h"
 #include "file.h"
+#include "fs.h"
 #include "systemstub.h"
 #include "save_catalog.h"
 #include "screenshot.h"
@@ -9,7 +10,25 @@
 #include <filesystem>
 #include <vector>
 
+void Game::selectMusicSource(const std::string &id) {
+	const int index = assets::find(_musicSources, id);
+	std::unique_ptr<FileSystem> files;
+	if (index >= 0) {
+		const auto &source = _musicSources[index];
+		files = std::make_unique<FileSystem>(source.root.c_str(), source.excludedRoots);
+		_mix.selectMusicSource(files.get(), source.edition);
+	} else {
+		_mix.selectMusicSource(nullptr, -1);
+	}
+	_selectedMusicFiles = std::move(files);
+}
+
 void Game::configurePreferences(const settings::Preferences &preferences) {
+	if (_preferences.pistolStyle != preferences.pistolStyle ||
+	    _preferences.laserColor != preferences.laserColor) {
+		_weaponFx.clear();
+		_vid.fullRefresh(); // Erase any old beam when gameplay resumes.
+	}
 	_preferences = preferences;
 	_vid._conradShirt = preferences.conradShirt;
 	_stub->setInputProfileDirectory(_savePath);
@@ -31,12 +50,22 @@ bool Game::applyPreferences(const settings::Preferences &preferences, std::strin
 		_persistentDue = true;
 		_nextPersistentAttempt = 0;
 	}
+	const bool newMusic = _preferences.musicSource != preferences.musicSource;
 	const bool redrawSides = _widescreenMode != preferences.widescreen;
 	const bool redrawShirt = _preferences.conradShirt != preferences.conradShirt;
 	if (_autoSave && !preferences.rewind) {
 		clearStateRewind();
 	}
 	_autoSave = preferences.rewind;
+	if (_preferences.pistolStyle != preferences.pistolStyle ||
+	    _preferences.laserColor != preferences.laserColor) {
+		_weaponFx.clear();
+		_vid.fullRefresh(); // Erase any old beam when gameplay resumes.
+	}
+	if (newMusic) {
+		selectMusicSource(preferences.musicSource);
+		_mix.playMusic(_startupMenu ? 1 : Mixer::MUSIC_TRACK + _gameLevels[_currentLevel].track);
+	}
 	_preferences = preferences;
 	_vid._conradShirt = preferences.conradShirt;
 	_preferences.applyCompatibility(g_options);
@@ -87,6 +116,7 @@ bool Game::startSettingsLevel(int level, int skill, std::string &reason) {
 	// checkpoint-valid flag, inventory pointers or death script survive the jump.
 	clearStateRewind();
 	_mix.stopMusic();
+	_demoBin = -1;
 	_currentLevel = _menu._level = level;
 	_skillLevel = _menu._skill = skill;
 	_score = 0;
@@ -109,10 +139,14 @@ bool Game::startSettingsLevel(int level, int skill, std::string &reason) {
 bool Game::handleConfigPanel(bool recovery) {
 	settings::Session session;
 	session.startup = _startupMenu;
+	session.assetSources = _assetSources;
+	session.musicSources = _musicSources;
+	session.assetIndex = _assetIndex;
+	session.experimentalPistolAvailable = _res.isAmiga() || _res.isDOS() || _res.isMac();
 	session.recovery = recovery;
 	session.browseLevel = _currentLevel;
 	session.autosaves = progress::scan(_savePath, _res._type);
-	for (int age = 0; age < _rewindLen; ++age) {
+	for (int age = 0; !_startupMenu && age < _rewindLen; ++age) {
 		const auto &record = _rewindRecords[(_rewindPtr - age + kRewindSize) % kRewindSize];
 		session.rewindPoints.push_back({record.preview, unsigned((_playTicks - record.tick) / 30),
 		                                record.room, record.health});
@@ -141,8 +175,8 @@ bool Game::handleConfigPanel(bool recovery) {
 	session.level = _currentLevel;
 	session.room = _currentRoom;
 	session.score = _score;
-	session.health = _res._pgeNum ? _pgeLive[0].life : 0;
-	session.rewindCount = _rewindLen;
+	session.health = !_startupMenu && _res._pgeNum ? _pgeLive[0].life : 0;
+	session.rewindCount = _startupMenu ? 0 : _rewindLen;
 	session.targetLevel = _currentLevel;
 	session.targetSkill = _skillLevel;
 	session.skill = _skillLevel;
@@ -172,12 +206,13 @@ bool Game::handleConfigPanel(bool recovery) {
 		session.diagnostics.push_back(
 		    "Level " + std::to_string(i + 1) + ": " +
 		    (session.levelAvailable[i] ? "primary resources found" : "not found in these assets"));
-	session.canSave = _res._pgeNum && _pgeLive[0].life > 0 && !_deathCutsceneCounter;
-	session.canRewind = _rewindLen > 0;
+	session.canSave =
+	    !_startupMenu && _res._pgeNum && _pgeLive[0].life > 0 && !_deathCutsceneCounter;
+	session.canRewind = !_startupMenu && _rewindLen > 0;
 	session.apply = [&](const settings::Preferences &p, std::string &reason) {
 		const bool applied = applyPreferences(p, reason);
-		session.canRewind = _rewindLen > 0;
-		session.rewindCount = _rewindLen;
+		session.canRewind = !_startupMenu && _rewindLen > 0;
+		session.rewindCount = _startupMenu ? 0 : _rewindLen;
 		return applied;
 	};
 	session.persist = [&](const settings::Preferences &p, std::string &reason) {
@@ -210,6 +245,16 @@ bool Game::handleConfigPanel(bool recovery) {
 		                              PlayerInput::DF_SETLIFE | PlayerInput::DF_AUTOZOOM);
 	};
 	session.command = [&](settings::Action action, int slot, std::string &message) {
+		if (action == settings::Action::SwitchAssets) {
+			if (session.assetIndex < 0 || size_t(session.assetIndex) >= _assetSources.size()) {
+				message = "Choose an available edition.";
+				return false;
+			}
+			_requestedAsset = session.assetIndex;
+			_preferences.assetSet = _assetSources[_requestedAsset].id;
+			message = "Switching edition.";
+			return true;
+		}
 		if (action == settings::Action::ContinueLatest)
 			return continueLatest(message);
 		if (action == settings::Action::LoadAutosave) {
@@ -227,8 +272,13 @@ bool Game::handleConfigPanel(bool recovery) {
 			message = loaded ? "Rewind restored." : "No rewind snapshot is available.";
 			return loaded;
 		}
-		if (action == settings::Action::StartLevel)
-			return startSettingsLevel(session.targetLevel, session.targetSkill, message);
+		if (action == settings::Action::StartLevel) {
+			const bool loaded =
+			    startSettingsLevel(session.targetLevel, session.targetSkill, message);
+			if (loaded && _startupMenu)
+				_continued = true;
+			return loaded;
+		}
 		if (action == settings::Action::Screenshot) {
 			static unsigned serial = 0;
 			const auto stamp = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -297,6 +347,8 @@ bool Game::handleConfigPanel(bool recovery) {
 		}
 		if (action == settings::Action::LoadGame) {
 			const bool loaded = loadManualState(session.browseLevel, slot, message);
+			if (loaded && _startupMenu)
+				_continued = true;
 			_stub->notify(message, !loaded);
 			return loaded;
 		}

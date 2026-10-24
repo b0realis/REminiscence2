@@ -191,6 +191,9 @@ bool play(Game &game, const Selection &selection) {
 	game._cut._id = event >= 0 ? event : 0xFFFF;
 	game._cut._creditsSequence = false;
 	game._cut._allowEscape = true;
+	game._cut._skipWithKeyboard = selection.name == "logos" || selection.name == "logosssi"
+	                                  ? game._preferences.skipLogosWithKeyboard
+	                                  : game._preferences.skipCutscenesWithKeyboard;
 	game._cut._textCurBuf = nullptr;
 	memset(game._vid._frontLayer, 0, game._vid._layerSize);
 	memset(game._vid._backLayer, 0, game._vid._layerSize);
@@ -203,14 +206,7 @@ bool play(Game &game, const Selection &selection) {
 	}
 	game._mix.init();
 	game._mix._mod._isAmiga = game._res.isAmiga();
-	if (event >= 0) {
-		const int music = game._res.isAmiga() ? Cutscene::_musicTableAmiga[event * 2]
-		                                      : Cutscene::_musicTableDOS[event];
-		if (music != 0xFF) {
-			const int tempo = game._res.isAmiga() ? Cutscene::_musicTableAmiga[event * 2 + 1] : 125;
-			game._mix.playMusic(music, tempo);
-		}
-	}
+	game._mix.playCutsceneMusic(event, game._res.isAmiga());
 	game._cut.mainLoop(selection.part);
 	game._mix.stopMusic();
 	game._mix.free();

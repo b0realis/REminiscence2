@@ -9,6 +9,7 @@
 
 #include "intern.h"
 #include <array>
+#include <functional>
 
 struct File;
 struct SystemStub;
@@ -67,6 +68,8 @@ struct SeqPlayer {
 	Mixer *_mix;
 	SeqDemuxer _demux;
 	bool _completed = false;
+	bool _skipWithKeyboard = true;
+	std::function<bool()> _interruptForMenu;
 	// A bounded queue avoids allocating/freeing memory on the audio thread.
 	std::array<std::array<int16_t, SeqDemuxer::kAudioBufferSize>, 16> _audioBuffers{};
 	unsigned _audioRead = 0, _audioWrite = 0, _audioCount = 0, _audioOffset = 0;

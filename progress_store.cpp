@@ -184,6 +184,30 @@ bool validLabel(const std::string &label) {
 	return label.size() <= 96 && std::all_of(label.begin(), label.end(),
 	                                         [](unsigned char c) { return c >= 32 && c <= 126; });
 }
+std::vector<Snapshot> recent(const std::string &directory, int edition) {
+	auto result = scan(directory, edition);
+	for (int level = 0; level < 7; ++level) {
+		for (int slot = 0; slot < 100; ++slot) {
+			Snapshot saved;
+			std::string reason;
+			const auto path =
+			    (std::filesystem::u8path(directory) / manualFilename(edition, level, slot))
+			        .u8string();
+			if (read(path, saved, reason) && saved.manual && saved.edition == edition &&
+			    saved.level == level)
+				result.push_back(std::move(saved));
+		}
+	}
+	std::stable_sort(result.begin(), result.end(), [](const Snapshot &a, const Snapshot &b) {
+		if (a.timestamp != b.timestamp)
+			return a.timestamp > b.timestamp;
+		if (a.manual != b.manual)
+			return a.manual;
+		return a.sequence > b.sequence;
+	});
+	return result;
+}
+
 std::string manualFilename(int edition, int level, int slot) {
 	return "reminiscence2-" + std::to_string(edition) + "-level" + std::to_string(level + 1) +
 	       "-manual-" + std::to_string(slot) + ".r2m";

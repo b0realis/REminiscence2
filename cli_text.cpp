@@ -44,11 +44,13 @@ Play Flashback: The Quest for Identity using your original game files.
 The engine opens a graphical game window. Game data is supplied separately.
 
 GETTING STARTED
-  Use --datapath to select one edition's extracted game files. The engine
-  searches that folder and its subfolders and detects the edition itself.
+  Use --datapath to select extracted game files or a parent assets folder.
+  Keep editions in separate subfolders. The engine detects them and offers
+  a remembered choice when several are found. Change it in QoL / Session.
   DOS (including classic DOS data from GOG), Amiga, Macintosh and PC-98 data
   have loaders. Sega Mega Drive extracted data is experimental, without Sega
-  audio. GOG and Macintosh CD data still need real-asset validation.
+  audio playback from ROMs. Supplied GOG DOS-format data passes startup and
+  level-rendering tests; Macintosh CD data still needs real-asset validation.
   Installers, LHA archives, WHDLoad slaves and disk/ROM images cannot be used
   directly. Amiga RNC-packed files must be unpacked before use.
   Prepare a WHDLoad LHA package with tools/extract_amiga.py; run
@@ -68,6 +70,40 @@ INFORMATION
       Show the engine version, upstream credits and enabled PRF music
       backends, then exit. No game files are required.
 
+ASSET AND SOUNDTRACK SELECTION
+  --list-assets
+      List detected game editions and music-source IDs, then exit without
+      opening graphics/audio or creating saves. Game files are read-only.
+      Exit successfully if at least one supported prepared edition is found.
+
+  --asset-set=ID
+      Select a listed game edition, for example dos:gog or amiga:amiga.
+      Shorthand amiga, dos, mac, pc98 or sega works when exactly one match
+      exists. An unknown or ambiguous ID is an error. With no explicit ID,
+      use the remembered edition, the only set, or a graphical picker.
+      Cutscene/--continue commands require a choice if no unique or remembered
+      set is available. Switching in QoL / Session restarts the game session
+      after confirmation. Save progress first.
+
+  --music-source=ID
+      Select a listed soundtrack independently of the game edition. Use
+      native for this edition's normal music; amiga or dos for a unique
+      discovered edition's soundtrack; or music:music/sega-cd for a prepared
+      assets/music/sega-cd folder. QoL / Audio offers the same selector.
+      Missing/unsupported files fall back to native music where available.
+      Changes apply immediately; Save settings remembers them.
+      Supply your own Ogg Vorbis recordings (mono/stereo, 8000-192000 Hz).
+      Backgrounds loop: track02.ogg menu, 03 level 1, 04 level 2, 05 level 3,
+      06 levels 4-5, 07 levels 6-7, 09 credits (all named trackNN.ogg).
+      Scene cues use these names plus .ogg and loop until the scene ends:
+        intro options journal ceinture desinteg reunion voyage level4
+        planetexplo fin ascenseur logo game_over holocube memoire chute
+        debut missions taxi donneobj missions2 recharge generate pont rechagen
+      options.ogg takes priority over the menu track02.ogg. Missing cues try
+      selected-source MOD/PRF, then native music. This does not replace effects,
+      voices or embedded SEQ movie audio. Genesis/Sega CD recordings can be
+      used this way; raw ROM/VGM playback and disc extraction are not included.
+
 CUTSCENE PLAYER
   --list-cutscenes
       Inspect the selected game data and print a JSON catalog of available
@@ -80,6 +116,8 @@ CUTSCENE PLAYER
       NAME is a catalog name such as intro, memo or voyage; spelling ignores
       case. PART defaults to 0. Example: --play-cutscene=chute:1.
       Backspace skips the part; Escape or closing the window exits playback.
+      Space or any letter (A-Z) also skips by default. Saved Enhancements
+      options control this shortcut separately for logos and other scenes.
       Music and subtitles use this edition's files and the selected language.
       This plays the original polygon animation even if SEQ or text-summary
       replacements are enabled in fb.cfg. It does not create save files.
@@ -101,7 +139,9 @@ FILES AND CONFIGURATION
   --tunepath=PATH                         Default: discovered music folder
       Folder for optional music files, such as MOD or OGG tracks. It is
       read without creating or modifying it. With --datapath and no explicit
-      --tunepath, music uses the same folder as game data.
+      --tunepath, music uses only the chosen edition
+      inside that folder. Avoid a --tunepath containing several editions;
+      use --music-source for an intentional independent soundtrack.
       DOS PRF/MIDI/INS music is searched for in the game folder first,
       then this folder. Original game audio may also come from game data.
 
@@ -124,7 +164,8 @@ FILES AND CONFIGURATION
       and tunes. Saves use the normal writable user-data location.
 
   --portable
-      Keep default assets, TUNES and SAVE folders beside the executable.
+      Keep default assets, optional TUNES and SAVE beside the executable.
+      Without a TUNES folder, music uses the selected edition in assets.
       Explicit path options take priority. The executable folder must be
       writable for saves. Without this switch, saves use:
         Windows: %%APPDATA%%/REminiscence2/SAVE
@@ -194,8 +235,15 @@ GAMEPLAY
       Restore the newest valid autosave for this edition, switching levels
       and skipping the opening/title screens. Try older generations if a
       file is damaged or its gameplay assets differ. Exit with an error if
-      none can be restored. Normal launches offer a welcome-back Continue
-      screen when valid autosave files exist; New game opens the title menu.
+      none can be restored. By default launches show the developer logos,
+      introduction and title menu, even when saves exist. Enable Session /
+      Quicksave skips title sequence and Save settings to resume the newest
+      compatible modern quick/manual/checkpoint save or autosave automatically.
+      Damaged/incompatible saves are skipped; if none loads, startup is normal.
+      Legacy .state files still need manual loading. This setting defaults off. Space/A-Z skips
+      scenes by default; Backspace always skips. Esc/F10/controller Start
+      opens title settings immediately, with Levels, Save / Load and Continue.
+      Closing those settings returns to the title menu.
 
   --disk-autosave=SECONDS                Default: enabled, 60 seconds
       Enable persistent autosaves every 15-600 seconds of active gameplay.
@@ -280,6 +328,8 @@ IN-GAME SETTINGS
   cheats and level/difficulty selection. Enhancements includes Conrad's
   Original, Red/Pink or White T-shirt inside the jacket. The jacket, shoes and
   other artwork retain their colours. Save settings keeps the choice.
+  Space/A-Z skips developer logos and other cutscenes by default, with
+  separate toggles under Enhancements. Each scene needs a fresh key press.
   Session also offers level restart,
   health/rewind counts and clean BMP screenshots saved under --savepath.
   Compact layout fits the original 256x224 resolution without window resizing.

@@ -37,12 +37,16 @@ struct MixerChunk {
 	}
 };
 
+enum class MixerTone { Original, Bass, DeepBass };
+
 struct MixerChannel {
 	uint8_t active;
 	uint8_t volume;
 	MixerChunk chunk;
 	uint32_t chunkPos;
 	uint32_t chunkInc;
+	MixerTone tone = MixerTone::Original;
+	int lowPass = 0, bassCoefficient = 0;
 };
 
 struct FileSystem;
@@ -58,6 +62,8 @@ struct Mixer {
 		MT_SFX,
 		MT_CPC,
 		MT_PRF,
+		MT_CUE,
+		MT_SOURCE_PRF,
 	};
 
 	enum {
@@ -77,9 +83,18 @@ struct Mixer {
 	CpcPlayer _cpc;
 	ModPlayer _mod;
 	OggPlayer _ogg;
+	OggPlayer _cueOgg;
 	SfxPlayer _sfx;
 	int _musicTrack;
 	std::unique_ptr<music::PrfPlayer> _prf;
+	std::unique_ptr<music::PrfPlayer> _sourcePrf;
+	music::Options _musicOptions;
+	FileSystem *_sourceFiles = nullptr;
+	int _sourceEdition = -1;
+	bool musicIsAmiga(bool nativeAmiga) const {
+		return _sourceEdition < 0 ? nativeAmiga : _sourceEdition == kResourceTypeAmiga;
+	}
+	void selectMusicSource(FileSystem *files, int edition);
 	int _masterVolume = 100, _musicVolume = 100, _effectsVolume = 100;
 	bool _muted = false;
 
@@ -92,11 +107,14 @@ struct Mixer {
 	void setPremixHook(PremixHook premixHook, void *userData);
 	void clearPremixHook(void *owner);
 	bool hasPremixHook(void *owner) const;
-	void play(const uint8_t *data, uint32_t len, uint16_t freq, uint8_t volume);
+	void play(const uint8_t *data, uint32_t len, uint16_t freq, uint8_t volume,
+	          MixerTone tone = MixerTone::Original);
 	bool isPlaying(const uint8_t *data) const;
 	uint32_t getSampleRate() const;
 	void stopAll();
-	void playMusic(int num, int tempo = 0);
+	void playMusic(int num, int tempo = 0, bool trySource = true);
+	bool playSourceMusic(int num, int tempo);
+	void playCutsceneMusic(int event, bool nativeAmiga);
 	void stopMusic();
 	void mix(int16_t *buf, int len);
 

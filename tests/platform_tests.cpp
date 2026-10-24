@@ -175,6 +175,48 @@ static int checkRate(int rate) {
 	platform->processEvents();
 	if (platform->_pi.dirMask)
 		return 7;
+	// Physical Space/A-Z skip independently of gameplay remapping, on key-down.
+	// Releases and auto-repeat must not leak into the next scene or gameplay.
+	for (int code = SDL_SCANCODE_A; code <= SDL_SCANCODE_Z + 1; ++code) {
+		const bool space = code == SDL_SCANCODE_Z + 1;
+		SDL_Event skip{};
+		skip.type = SDL_KEYDOWN;
+		skip.key.keysym.scancode = space ? SDL_SCANCODE_SPACE : SDL_Scancode(code);
+		skip.key.keysym.sym = space ? SDLK_SPACE : SDLK_a + code - SDL_SCANCODE_A;
+		platform->setCutsceneSkipEnabled(true);
+		SDL_PushEvent(&skip);
+		platform->processEvents();
+		if (!platform->consumeCutsceneSkip() || platform->consumeCutsceneSkip() ||
+		    platform->_pi.dirMask || platform->_pi.space)
+			return 70;
+		platform->setCutsceneSkipEnabled(false);
+		skip.key.repeat = 1;
+		SDL_PushEvent(&skip);
+		platform->processEvents();
+		platform->setCutsceneSkipEnabled(true);
+		SDL_PushEvent(&skip);
+		platform->processEvents();
+		if (platform->consumeCutsceneSkip() || platform->_pi.dirMask || platform->_pi.space)
+			return 71;
+		platform->setCutsceneSkipEnabled(false);
+		skip.type = SDL_KEYUP;
+		skip.key.repeat = 0;
+		SDL_PushEvent(&skip);
+		platform->processEvents();
+		if (platform->_pi.lastChar || platform->_pi.space || platform->_pi.dirMask)
+			return 72;
+	}
+	// With the shortcut disabled, remapped A still moves left as usual.
+	key.type = SDL_KEYDOWN;
+	key.key.keysym.scancode = SDL_SCANCODE_A;
+	key.key.keysym.sym = SDLK_a;
+	SDL_PushEvent(&key);
+	platform->processEvents();
+	if (platform->consumeCutsceneSkip() || !(platform->_pi.dirMask & PlayerInput::DIR_LEFT))
+		return 73;
+	key.type = SDL_KEYUP;
+	SDL_PushEvent(&key);
+	platform->processEvents();
 	preferences.scale = 1;
 	preferences.widescreen = kWidescreenNone;
 	preferences.menuLayout = 1;

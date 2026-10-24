@@ -28,4 +28,7 @@ struct DecodeBuffer {
 	bool conrad = false;
 };
 void blitMacImage(const MacImage &image, const DecodeBuffer &destination);
+// Convert a sprite anchor to its native-pixel top-left, including Mac's mirror
+// convention. Shared by the renderer and cosmetic effects observing that art.
+void positionMacSprite(const MacImage &image, bool flip, int &x, int &y);
 #endif

@@ -8,7 +8,11 @@ public final class GameActivity extends SDLActivity {
         File root = getExternalFilesDir(null);
         File tunes = new File(root, "TUNES");
         File[] tracks = tunes.listFiles();
-        if (tracks == null || tracks.length == 0) tunes = new File(root, "assets");
+        // Let the engine isolate native music to the chosen edition. Passing the
+        // whole assets tree as an explicit tune path merges unrelated editions.
+        if (tracks == null || tracks.length == 0)
+            return new String[] {"--datapath=" + new File(root, "assets"),
+                "--savepath=" + new File(root, "SAVE"), "--window"};
         return new String[] {"--datapath=" + new File(root, "assets"),
             "--savepath=" + new File(root, "SAVE"), "--tunepath=" + tunes, "--window"};
     }

@@ -9,6 +9,7 @@
 
 #include "intern.h"
 #include "graphics.h"
+#include <functional>
 
 struct Resource;
 struct SystemStub;
@@ -60,6 +61,10 @@ struct Cutscene {
 	static const uint8_t _creditsDataDOS[];
 	static const uint8_t _creditsDataAmiga[];
 	static const uint16_t _creditsCutSeq[];
+	struct MusicCue {
+		int number, tempo;
+	};
+	static MusicCue musicCue(int event, bool amiga);
 	static const uint8_t _musicTableDOS[];
 	static const uint8_t _musicTableAmiga[];
 	static const uint8_t _protectionShapeData[];
@@ -80,6 +85,9 @@ struct Cutscene {
 	bool _interrupted;
 	bool _completed = false;
 	bool _allowEscape = false;
+	bool _skipWithKeyboard = true;
+	// The owner may unwind playback before opening a menu that can load resources.
+	std::function<bool()> _interruptForMenu;
 	bool _stop;
 	const uint8_t *_polPtr;
 	const uint8_t *_cmdPtr;

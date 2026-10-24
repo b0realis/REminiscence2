@@ -279,6 +279,19 @@ int main(int argc, char **argv) {
 		std::array<uint8_t, 256 * 224> pixels{};
 		player.setBackBuffer(pixels.data());
 		check(player.play(&file) && player._completed, "complete synthetic SEQ plays");
+		struct SkipSystem : HeadlessSystem {
+			void processEvents() override { _pi.cutsceneSkip = true; }
+		} skipPlatform;
+		Mixer skipMixer(&files, &skipPlatform);
+		SeqPlayer skipped(&skipPlatform, &skipMixer);
+		skipped.setBackBuffer(pixels.data());
+		file.seek(0);
+		check(skipped.play(&file) && !skipped._completed && !skipPlatform._cutsceneSkipEnabled &&
+		          !skipPlatform._pi.cutsceneSkip,
+		      "keyboard-skipped SEQ stays incomplete and clears shortcut state");
+		skipped._skipWithKeyboard = false;
+		file.seek(0);
+		check(skipped.play(&file) && skipped._completed, "disabled keyboard skip lets SEQ finish");
 		movie[base + 5] = 31; // Invalid destination buffer must fall back safely.
 		File corrupt;
 		corrupt.openMemoryBuffer(movie.size());

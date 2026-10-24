@@ -17,7 +17,7 @@ SRCS = runtime_paths.cpp cli_text.cpp collision.cpp config.cpp cpc_player.cpp cu
 	piege.cpp protection.cpp resource.cpp resource_aba.cpp \
 	resource_mac.cpp resource_paq.cpp scaler.cpp screenshot.cpp seq_player.cpp \
 	sfx_player.cpp staticres.cpp staticres_controllers.cpp systemstub_sdl.cpp unpack.cpp util.cpp video.cpp
-SRCS += decode_sgd.cpp atomic_file.cpp decode_seq.cpp object_data.cpp journal.cpp game_progress.cpp progress_store.cpp controller_profile.cpp context_hints.cpp game_settings.cpp settings.cpp settings_store.cpp settings_overlay.cpp keyboard_diagram.cpp save_catalog.cpp appearance.cpp \
+SRCS += asset_library.cpp decode_sgd.cpp atomic_file.cpp decode_seq.cpp object_data.cpp journal.cpp game_progress.cpp progress_store.cpp controller_profile.cpp context_hints.cpp game_settings.cpp settings.cpp settings_store.cpp settings_overlay.cpp keyboard_diagram.cpp save_catalog.cpp appearance.cpp weapon_fx.cpp game_weapon.cpp \
 	third_party/imgui/imgui.cpp third_party/imgui/imgui_draw.cpp third_party/imgui/imgui_tables.cpp \
 	third_party/imgui/imgui_widgets.cpp third_party/imgui/backends/imgui_impl_sdl2.cpp \
 	third_party/imgui/backends/imgui_impl_sdlrenderer2.cpp

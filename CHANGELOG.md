@@ -1,6 +1,111 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 # Changes
 
+## 1.21
+
+- Fix stale background-music state when a custom pack omits the next level's
+  track; native action music and later scene cues remain available.
+- Share soundtrack cue/tempo selection between gameplay and the standalone
+  cutscene player, restore native cue mapping on missing overrides, and include
+  the DOS-only PRF cue beyond the MOD name table.
+- Keep Quest and Python-player default music scoped to the selected edition.
+  Add asset/music selectors to the Python tool and honor remembered editions
+  for catalog commands.
+- Package the 1.12–1.21 pistol, startup, save-resume, edition-library and music
+  improvements for all six release targets.
+
+## 1.20
+
+- Add default-off “Quicksave skips title sequence”: resume the newest compatible
+  modern quick/manual/checkpoint save or autosave; try older saves when needed
+  and return to normal opening/title flow when none loads.
+- Discover separate editions under one assets folder, remember an initial picker
+  choice, and switch editions from QoL Session after confirmation. Isolate each
+  edition's files and exclude packed WHDLoad data until prepared.
+- Select music independently in QoL Audio: Amiga MOD, DOS PRF or mapped external
+  Ogg packs, with native fallback. Add --list-assets, --asset-set and --music-source.
+- Support mono/stereo Ogg and streaming sample-rate conversion for supplied
+  soundtrack recordings. Document Genesis/Sega CD Ogg packs; raw ROM/VGM and
+  disc-image playback/extraction remain outside this feature.
+
+## 1.19
+
+- Always show developer logos and the introduction before the title on normal
+  launches, including with existing autosaves. Preserve explicit `--continue`.
+- Replace the Amiga title's automatic level list with a Start/Skill/Options/Quit
+  menu over its original artwork. Esc, F10 and controller Start open the full QoL
+  menu from the openings and title; closing it returns to the title. Level jumps
+  and save loads enter the selected session without resetting it.
+- Validate the supplied GOG Windows installer's DOS data, including native shot
+  positions and all five laser colours. Add optional private DOS integration
+  tests and `play-local.sh --gog` for the extracted local assets.
+- Initialize unused collision-record bytes before serialization, fixing
+  nondeterministic save payloads exposed by the DOS comparisons.
+
+## 1.18
+
+- Enable Heavy and Laser with DOS/GOG and Macintosh assets, deriving their
+  origin from each edition's native flash geometry and timing. Preserve odd
+  Macintosh pixel coordinates and keep the travelling laser on its launch row.
+- Add Orange (default), Red, Green, Blue and Purple laser colours in the QoL
+  menu, with matching flash/beam/light colours and saved preferences.
+- Keep imported graphics and sounds unchanged. Invalid or missing flash
+  geometry retains native rendering instead of hiding it behind a guessed effect.
+
+## 1.17
+
+- Start Heavy and Laser at the native flash's position and animation tick,
+  reading its sprite geometry instead of estimating offsets from Conrad.
+  Keep the original firing animation, with Heavy's extra drawing-only recoil.
+- Limit the pistol experiments to Amiga assets. GOG/DOS, Macintosh, PC-98 and
+  Sega keep their native pistol graphics and sound even when a saved Amiga
+  preference selects Heavy or Laser. Imported resource files remain unmodified.
+
+## 1.16
+
+- Add separate, persistent Space/A-Z skip controls for opening developer/publisher
+  logos and other cutscenes, enabled by default. Cover polygon, text, SET and SEQ
+  playback; consume skip keys so holds cannot skip successive scenes or affect
+  gameplay. Keep Backspace available.
+- Correct cosmetic pistol direction to match the original firing script and
+  retain the aiming sprite's mirror state. Anchor Heavy/laser flashes and beams
+  to the actual barrel-tip pixel, including crouching and Heavy's visual recoil.
+- Restore Original's native shot flash by retaining dormant actors in their
+  off-screen room lists at level load and save restore. Check room membership,
+  visible flash pixels and identical simulation states across all three styles.
+
+## 1.15
+
+- Add an executable `play-local.sh` launcher in the repository root for the
+  local Apple Silicon build and prepared Amiga assets. Support launching from
+  another directory and forwarding additional command-line options.
+
+## 1.14
+
+- Give Orange laser a dedicated deep-bass shelf on both the original game
+  sample and the missing-asset fallback, with soft peak limiting. Preserve
+  the source pitch, playback duration, Heavy sound and gameplay.
+
+## 1.13
+
+- Give Heavy / red a stronger bass shelf while retaining the original shot's
+  pitch and duration; soften boosted peaks to avoid harsh clipping.
+- Use the loaded edition's original laser effect for Orange laser. Replace the
+  wide synthesized pitch sweep with a short electrical pulse as a fallback for
+  asset sets missing that sound. Gameplay and visual effects remain unchanged.
+
+## 1.12
+
+- Add optional Heavy / red and Orange laser pistol presentations under QoL
+  Enhancements, with Original retained as the default.
+- Heavy uses red muzzle flame/casings, extra drawing-only recoil and a bass shelf
+  on the original sample. Laser uses a moving orange beam, pistol-side light,
+  no casings and an original synthesized laser sound.
+- Keep simulation state, hit tests, damage, firing cadence and movement unchanged;
+  test identical serialized states across all styles with real Amiga firing input.
+- Add clipping, lifetime, foreground masking, audio partitioning and preference
+  regressions. Effects are transient and never enter game saves.
+
 ## 1.11
 
 - Preserve specific manual-save and quicksave failure messages, including

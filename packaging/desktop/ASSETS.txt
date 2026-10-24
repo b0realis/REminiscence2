@@ -1,5 +1,9 @@
 Copy your original, prepared Flashback game files into this folder.
-Use one edition at a time. Subdirectories are searched automatically.
+Keep editions in separate subfolders (for example amiga/, gog/ and mac/).
+Subdirectories are searched automatically. A picker remembers your edition;
+QoL / Session lets you change it. --list-assets prints available IDs.
+Optional Ogg soundtracks go in music/<pack-name>/, selected in QoL / Audio.
+See manual.md for track names and supported prepared soundtrack formats.
 Amiga WHDLoad .lha archives must first be prepared with tools/extract_amiga.py.
 DOS/GOG: copy the original DOS resource files, not the installer/executable.
 Macintosh: provide FLASHBACK.BIN or FLASHBACK.RSRC preserving resource data.

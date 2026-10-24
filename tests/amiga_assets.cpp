@@ -38,6 +38,24 @@ struct BoundedSystem final : HeadlessSystem {
 Options g_options;
 const char *g_caption = "REminiscence2 asset tests";
 
+// Every eligible actor belongs to exactly one list, including the inventory
+// and dormant-effect rooms. Otherwise its next scripted move silently fails.
+static bool validRoomLists(const Game &game) {
+	std::vector<bool> seen(game._res._pgeNum);
+	for (int room = 0; room < 256; ++room) {
+		for (auto *pge = game._pge_liveTable1[room]; pge; pge = pge->next_PGE_in_room) {
+			if (pge->index >= seen.size() || pge != &game._pgeLive[pge->index] ||
+			    seen[pge->index] || pge->room_location != room)
+				return false;
+			seen[pge->index] = true;
+		}
+	}
+	for (size_t i = 0; i < seen.size(); ++i)
+		if (seen[i] != (game._res._pgeInit[i].skill <= game._skillLevel))
+			return false;
+	return true;
+}
+
 int main(int argc, char **argv) {
 	if (argc != 3) {
 		return 1;
@@ -68,6 +86,33 @@ int main(int argc, char **argv) {
 		}
 	}
 	// Journal unlocks require a completed scene, not a skipped playback.
+	for (int scene : {0x40, 0x0D, int(Cutscene::kCineMemo)}) {
+		for (bool enabled : {false, true}) {
+			game->_preferences.skipLogosWithKeyboard = scene == 0x40 ? enabled : !enabled;
+			game->_preferences.skipCutscenesWithKeyboard = scene == 0x40 ? !enabled : enabled;
+			int polls = 0;
+			platform.eventHook = [&] {
+				if (++polls == 1)
+					platform._pi.cutsceneSkip = true;
+			};
+			game->playCutscene(scene);
+			platform.eventHook = {};
+			if (game->_cut._interrupted != enabled || game->_cut._completed == enabled ||
+			    platform._cutsceneSkipEnabled || platform._pi.cutsceneSkip || platform._pi.quit)
+				return 82;
+		}
+	}
+	game->_preferences.skipLogosWithKeyboard = game->_preferences.skipCutscenesWithKeyboard = true;
+	// The optional text and SET players share the same shortcut and interruption state.
+	platform.eventHook = [&] { platform._pi.cutsceneSkip = true; };
+	game->_cut.prepare();
+	game->_cut.playText("Test scene");
+	if (!game->_cut._interrupted || platform._cutsceneSkipEnabled)
+		return 83;
+	game->_cut.playSet(Cutscene::_caillouSetData, 0x5E4);
+	if (!game->_cut._interrupted || platform._cutsceneSkipEnabled)
+		return 84;
+	platform.eventHook = {};
 	game->_journal = {};
 	platform._pi.backspace = true;
 	game->playCutscene(Cutscene::kCineMemo);
@@ -77,6 +122,180 @@ int main(int argc, char **argv) {
 	if (!game->_cut._completed || !(game->_journal.unlocked & (1u << 7)))
 		return 33;
 	game->_journal = {};
+	// Identical real input streams must serialize identically for every cosmetic
+	// weapon style. Capture the actual rendered shot frames for visual review.
+	std::vector<std::vector<uint8_t>> weaponBaseline;
+	std::vector<std::array<int, 3>> originalFlashes(220, {-1, -1, 0});
+	for (auto style : {weapon::Style::Original, weapon::Style::Heavy, weapon::Style::Laser}) {
+		HeadlessSystem shotPlatform;
+		auto shotGame =
+		    std::make_unique<Game>(&shotPlatform, &files, &files, argv[2], 0, kResourceTypeAmiga,
+			                       LANG_EN, kWidescreenNone, false, 0);
+		shotGame->initCutsceneResources();
+		shotGame->_res.load("ICONE", Resource::OT_ICN, "SPR");
+		shotGame->_res.load("ICON", Resource::OT_ICN, "SPR");
+		shotGame->_res.load("PERSO", Resource::OT_SPM);
+		shotGame->_mix.init();
+		shotGame->_mix._mod._isAmiga = true;
+		shotGame->_preferences.diskAutosave = false;
+		shotGame->_preferences.pistolStyle = style;
+		shotGame->_randSeed = 1337;
+		shotGame->loadLevelData();
+		if (!validRoomLists(*shotGame))
+			return 86;
+		shotGame->resetGameState();
+		shotGame->_cut._id = 0xffff;
+		bool styledSound = false;
+		unsigned shotDirections = 0;
+		const int pistolActor = shotGame->_res._pgeInit[0].data[0];
+		const int shotActor = shotGame->_res._pgeInit[pistolActor].data[0];
+		for (int tick = 0; tick < 220; ++tick) {
+			if (tick == 90) {
+				// Fire once after a fresh level and again after save restoration.
+				File snapshot;
+				snapshot.openMemoryBuffer(32768);
+				shotGame->saveState(&snapshot);
+				snapshot.seek(0);
+				shotGame->loadState(&snapshot, Game::kSaveVersion);
+				if (!validRoomLists(*shotGame))
+					return 87;
+			}
+			shotPlatform._pi.space = tick == 35;
+			shotPlatform._pi.shift = (tick >= 55 && tick < 79) || (tick >= 105 && tick < 122) ||
+			                         (tick >= 145 && tick < 170) || tick >= 200;
+			// Mirror the settled aim pose for the second half of this fixture;
+			// both directions then receive the same firing/crouching input stream.
+			if (tick == 95 || tick == 190) {
+				shotGame->_pgeLive[0].flags ^= 1;
+				shotGame->pge_setupDefaultAnim(&shotGame->_pgeLive[0]);
+			}
+			shotPlatform._pi.dirMask = tick >= 130 && tick < 140 ? PlayerInput::DIR_DOWN : 0;
+			const int previousShotX = shotGame->_pgeLive[shotActor].pos_x;
+			const int previousShotFrame = shotGame->_pgeLive[shotActor].anim_number;
+			shotGame->mainLoop();
+			if (!validRoomLists(*shotGame))
+				return 88;
+			if (style == weapon::Style::Original && tick == 56 &&
+			    shotGame->_vid._frontLayer[39 * 256 + 32] != 0x21) {
+				std::cerr << "Original shot flash did not reach the rendered frame\n";
+				return 89;
+			}
+			const auto &effect = shotGame->_pgeLive[shotActor];
+			const bool nativeFlash = effect.anim_number == 287 || effect.anim_number == 288;
+			if (style == weapon::Style::Original && nativeFlash) {
+				std::vector<uint8_t> rendered(shotGame->_vid._frontLayer,
+				                              shotGame->_vid._frontLayer +
+				                                  shotGame->_vid._layerSize);
+				const bool erase = shotGame->_eraseBackground;
+				std::fill_n(shotGame->_vid._frontLayer, shotGame->_vid._layerSize, 7);
+				shotGame->_eraseBackground = false;
+				const auto *object = shotGame->_res._spc +
+				                     READ_BE_UINT16(shotGame->_res._spc + effect.anim_number * 2);
+				shotGame->drawObject(object, effect.pos_x + 8, effect.pos_y + 2, effect.flags);
+				// Measure the native renderer's pixels independently of the effect
+				// geometry reader. This is the reference for both replacement styles.
+				int left = 256, right = -1, top = 224, bottom = -1;
+				for (int y = 0; y < 224; ++y)
+					for (int x = 0; x < 256; ++x)
+						if (shotGame->_vid._frontLayer[y * 256 + x] != 7) {
+							left = std::min(left, x);
+							right = std::max(right, x);
+							top = std::min(top, y);
+							bottom = std::max(bottom, y);
+						}
+				if (left > right)
+					return 90;
+				originalFlashes[tick] = {(effect.flags & 1) ? left : right, (top + bottom) / 2,
+				                         (effect.flags & 1) ? 1 : -1};
+				shotGame->_eraseBackground = erase;
+				std::copy(rendered.begin(), rendered.end(), shotGame->_vid._frontLayer);
+			}
+			if (style != weapon::Style::Original && nativeFlash) {
+				const auto &fx = shotGame->_weaponFx;
+				if (!fx.next || fx.poseAge >= 2)
+					return 91;
+				const auto &shot = fx.shots[(fx.next - 1) % fx.shots.size()];
+				const auto &reference = originalFlashes[tick];
+				if (shot.flashX != reference[0] || shot.flashY != reference[1] ||
+				    shot.direction != reference[2]) {
+					std::cerr << "Replacement missed native flash position at tick " << tick
+					          << '\n';
+					return 94;
+				}
+				if (shotGame->_vid._frontLayer[shot.flashY * 256 + shot.flashX] <
+				        weapon::PaletteBase ||
+				    shotGame->_vid._frontLayer[shot.flashY * 256 + shot.flashX] >=
+				        weapon::PaletteBase + 6)
+					return 95;
+			}
+			if (style != weapon::Style::Original && shotGame->_weaponFx.poseAge == 0) {
+				const auto &fx = shotGame->_weaponFx;
+				// A replacement starts on the native flash frame, in the direction
+				// of the original shot actor's movement, not on an earlier input event.
+				const int delta = effect.pos_x - previousShotX;
+				if (!delta || effect.anim_number != 287 || previousShotFrame == 287)
+					return 85;
+				const int direction = delta < 0 ? -1 : 1;
+				if (fx.direction != direction)
+					return 81;
+				const bool crouched = tick >= 130;
+				shotDirections |= 1u << ((crouched ? 2 : 0) + (direction < 0 ? 1 : 0));
+			}
+			File state;
+			state.openMemoryBuffer(32768);
+			shotGame->saveState(&state);
+			state.seek(0);
+			std::vector<uint8_t> bytes(state.size());
+			state.read(bytes.data(), bytes.size());
+			if (style == weapon::Style::Original)
+				weaponBaseline.push_back(bytes);
+			else if (bytes != weaponBaseline[tick]) {
+				std::cerr << "Weapon style changed simulation at tick " << tick << '\n';
+				return 75;
+			}
+			for (const auto &channel : shotGame->_mix._channels) {
+				if (style == weapon::Style::Heavy)
+					styledSound |= channel.active && channel.tone == MixerTone::Bass;
+				if (style == weapon::Style::Laser)
+					styledSound |= channel.active && channel.tone == MixerTone::DeepBass &&
+					               channel.chunk.data == shotGame->_res._sfxList[3].data;
+			}
+			if ((tick >= 55 && tick <= 65) || (tick >= 105 && tick <= 110) ||
+			    (tick >= 145 && tick <= 150) || (tick >= 200 && tick <= 205)) {
+				uint8_t colors[768];
+				shotPlatform.getPalette(colors, 256);
+				const std::string name =
+				    "weapon-" + std::to_string(int(style)) + "-" + std::to_string(tick) + ".bmp";
+				if (!saveBMP((output / name).string().c_str(), shotGame->_vid._frontLayer, colors,
+				             256, 224))
+					return 76;
+			}
+		}
+		if (style != weapon::Style::Original &&
+		    (!styledSound || shotGame->_weaponFx.next < 4 || shotDirections != 15))
+			return 77;
+		if (style == weapon::Style::Laser) {
+			// Partial asset sets still get a laser sound. Restore ownership before
+			// checking the result so both success and failure clean up correctly.
+			shotGame->_mix.stopAll();
+			const auto savedLaser = shotGame->_res._sfxList[3];
+			shotGame->_res._sfxList[3] = {};
+			const int pistol = shotGame->_res._pgeInit[0].data[0];
+			const int effect = shotGame->_res._pgeInit[pistol].data[0];
+			const bool handled = shotGame->playConradShotSound(&shotGame->_pgeLive[effect], 4, 0);
+			shotGame->_res._sfxList[3] = savedLaser;
+			if (!handled || !shotGame->_mix.isPlaying(weapon::laserSample().data()))
+				return 79;
+			for (const auto &channel : shotGame->_mix._channels)
+				if (channel.active && channel.tone != MixerTone::DeepBass)
+					return 80;
+		}
+		shotGame->resetGameState();
+		if (shotGame->_weaponFx.next)
+			return 78;
+	}
+	std::cout << "Weapon styles: 660 real-input ticks, identical simulation states; standing and "
+	             "crouched shots face both directions correctly.\n";
 	// Test the actual Amiga sprite masks, rather than only checking palette RGB.
 	// Jacket, skin, hair and trousers must never enter the recolour mask.
 	int appearanceFrames = 0, shirtPixels = 0;
@@ -125,6 +344,8 @@ int main(int argc, char **argv) {
 		std::cout << "Loading Amiga level " << level + 1 << std::endl;
 		game->_currentLevel = level;
 		game->loadLevelData();
+		if (!validRoomLists(*game))
+			return 92;
 		game->resetGameState();
 		game->_cut._id = 0xFFFF;
 		game->_frameTimestamp = platform.clock;
@@ -263,6 +484,8 @@ int main(int argc, char **argv) {
 		if (!game->loadGameState(1) || game->_score != score) {
 			return 3;
 		}
+		if (!validRoomLists(*game))
+			return 93;
 		if (level == 0) {
 			File snapshot;
 			snapshot.openMemoryBuffer(16384);
@@ -344,7 +567,12 @@ int main(int argc, char **argv) {
 					throw std::runtime_error("clean screenshot failed");
 				const bool checkpointBefore = game->_validSaveState;
 				s.saveSlot = 5;
-				if (!s.command(settings::Action::SaveGame, 5, message) || !s.saves[5].supported)
+				if (!s.command(settings::Action::SaveGame, 5, message) ||
+				    !std::any_of(s.saves.begin(), s.saves.end(),
+				                 [&](const settings::SaveSlot &save) {
+					                 return save.slot == 5 && save.level == game->_currentLevel &&
+									        save.supported;
+				                 }))
 					throw std::runtime_error("menu save/catalog refresh failed");
 				if (game->_validSaveState != checkpointBefore)
 					throw std::runtime_error("manual save changed checkpoint validity");
@@ -690,13 +918,17 @@ int main(int argc, char **argv) {
 	restarted.reset();
 	game->_savePath = oldPath;
 	game->_mix.free();
-	// Exercise the production startup path, including the welcome-back command,
+	// Exercise direct Continue and explicitly opening title settings with Esc,
 	// rather than only calling the recovery helper on an already loaded game.
 	for (bool direct : {true, false}) {
 		platform._pi = {};
 		platform.events = 0;
 		platform.maxEvents = 3;
 		bool welcomeSeen = false;
+		platform.eventHook = [&] {
+			if (!direct && platform.events == 0)
+				platform._pi.escape = true;
+		};
 		platform.menu = [&](settings::Session &session) {
 			welcomeSeen = session.startup && !session.autosaves.empty();
 			if (!session.command(settings::Action::ContinueLatest, 1, reason))
@@ -713,6 +945,7 @@ int main(int argc, char **argv) {
 			return 54;
 	}
 	platform.menu = {};
+	platform.eventHook = {};
 	platform.maxEvents = 100000;
 	platform._pi = {};
 	if (platform.leftCopies < rooms || platform.rightCopies < rooms) {

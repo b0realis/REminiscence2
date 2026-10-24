@@ -76,6 +76,7 @@ struct SystemStub_SDL : SystemStub {
 	bool _controllerDisconnected = false, _pauseRequested = false;
 	unsigned _inputGeneration = 0;
 	InputState _input;
+	std::array<bool, SDL_NUM_SCANCODES> _cutsceneSkipKeys{};
 	std::unique_ptr<SettingsOverlay> _overlay;
 	settings::Session *_settingsSession = nullptr;
 	int _logicalW = 0, _logicalH = 0;
@@ -98,6 +99,14 @@ struct SystemStub_SDL : SystemStub {
 	bool applyPreferences(const settings::Preferences &preferences, std::string &reason) override;
 	void showSettings(settings::Session &session) override;
 	void setGameplayActive(bool active) override { _gameplayActive = active; }
+	void setCutsceneSkipEnabled(bool enabled) override {
+		if (_cutsceneSkipEnabled != enabled) {
+			_input.clear(_pi);
+			_pi.lastChar = 0;
+			_pi.stateSlot = 0;
+		}
+		SystemStub::setCutsceneSkipEnabled(enabled);
+	}
 	void setJournalNotice(bool visible) override { _journalNotice = visible; }
 	void setContextHint(const std::string &text) override { _contextHint = text; }
 	void setInputProfileDirectory(const std::string &directory) override {
@@ -885,6 +894,30 @@ void SystemStub_SDL::processEvent(const SDL_Event &raw, bool &paused) {
 		return;
 	}
 	SDL_Event ev = raw;
+	if (raw.type == SDL_KEYDOWN || raw.type == SDL_KEYUP) {
+		const auto code = raw.key.keysym.scancode;
+		if (code > SDL_SCANCODE_UNKNOWN && code < SDL_NUM_SCANCODES) {
+			// Consume release/repeat events even after playback ends, so skipping
+			// cannot draw the pistol, move Conrad or type into the next menu.
+			if (_cutsceneSkipKeys[code]) {
+				if (raw.type == SDL_KEYUP)
+					_cutsceneSkipKeys[code] = false;
+				return;
+			}
+			const auto key = raw.key.keysym.sym;
+			const bool shortcut = code == SDL_SCANCODE_SPACE || key == SDLK_KP_SPACE ||
+			                      (code >= SDL_SCANCODE_A && code <= SDL_SCANCODE_Z) ||
+			                      (key >= SDLK_a && key <= SDLK_z);
+			if (_cutsceneSkipEnabled && shortcut && raw.type == SDL_KEYDOWN &&
+			    !(raw.key.keysym.mod & (KMOD_CTRL | KMOD_ALT | KMOD_GUI))) {
+				if (!raw.key.repeat) {
+					_pi.cutsceneSkip = true;
+					_cutsceneSkipKeys[code] = true;
+				}
+				return;
+			}
+		}
+	}
 	if ((ev.type == SDL_KEYDOWN || ev.type == SDL_KEYUP) && !(ev.key.keysym.mod & (KMOD_CTRL | KMOD_ALT))) {
 		ev.key.keysym.sym = remapKey(raw.key);
 	}
@@ -907,6 +940,7 @@ void SystemStub_SDL::processEvent(const SDL_Event &raw, bool &paused) {
 			if (ev.window.event == SDL_WINDOWEVENT_FOCUS_LOST) {
 				// Lost key-up events must not leave Conrad running on return.
 				_input.clear(_pi);
+				_cutsceneSkipKeys.fill(false);
 			}
 			break;
 		}
@@ -1443,6 +1477,7 @@ void SystemStub_SDL::showSettings(settings::Session &s) {
 		    s.action == settings::Action::UpdateSaveDetails ||
 		    s.action == settings::Action::Rewind || s.action == settings::Action::Heal ||
 		    s.action == settings::Action::Screenshot || s.action == settings::Action::StartLevel ||
+		    s.action == settings::Action::SwitchAssets ||
 		    s.action == settings::Action::ContinueLatest ||
 		    s.action == settings::Action::LoadAutosave) {
 			const auto command = s.action;
@@ -1454,6 +1489,7 @@ void SystemStub_SDL::showSettings(settings::Session &s) {
 			const bool resume = command == settings::Action::LoadGame ||
 			                    command == settings::Action::Rewind ||
 			                    command == settings::Action::StartLevel ||
+			                    command == settings::Action::SwitchAssets ||
 			                    command == settings::Action::ContinueLatest ||
 			                    command == settings::Action::LoadAutosave;
 			s.action = success && resume ? settings::Action::Resume : settings::Action::None;

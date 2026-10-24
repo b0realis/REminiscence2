@@ -19,7 +19,7 @@ std::string folded(std::string name) {
 }
 struct FileSystem_impl {
 	std::unordered_map<std::string, std::string> files;
-	void setRootDirectory(const char *directory) {
+	void setRootDirectory(const char *directory, const std::vector<std::string> &excluded) {
 		namespace fs = std::filesystem;
 		const auto root = fs::u8path(directory);
 		std::error_code ec;
@@ -32,7 +32,9 @@ struct FileSystem_impl {
 			const auto name = entry.path().filename().u8string();
 			// Directory symlinks/junctions are never followed. Limit stack depth for
 			// hostile directory trees, and preserve the historical hidden-file rule.
-			if (name.empty() || name[0] == '.' || it.depth() >= 64) {
+			if (name.empty() || name[0] == '.' || it.depth() >= 64 ||
+			    std::find(excluded.begin(), excluded.end(), entry.path().u8string()) !=
+			        excluded.end()) {
 				it.disable_recursion_pending();
 			} else if (entry.is_regular_file(ec) && !ec) {
 				entries.push_back({entry.path().lexically_relative(root).generic_u8string(),
@@ -54,7 +56,10 @@ struct FileSystem_impl {
 		debug(DBG_FILE, "Indexed %zu assets", files.size());
 	}
 };
-FileSystem::FileSystem(const char *dataPath) : _impl(new FileSystem_impl) { _impl->setRootDirectory(dataPath); }
+FileSystem::FileSystem(const char *dataPath, const std::vector<std::string> &excludedRoots)
+    : _impl(new FileSystem_impl) {
+	_impl->setRootDirectory(dataPath, excludedRoots);
+}
 FileSystem::~FileSystem() { delete _impl; }
 char *FileSystem::findPath(const char *filename) const {
 	const auto found = _impl->files.find(folded(filename));

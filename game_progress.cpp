@@ -312,6 +312,13 @@ bool Game::continueLatest(std::string &reason) {
 		reason = "No valid autosave is available for this asset edition.";
 	return false;
 }
+bool Game::resumeLatestSave(std::string &reason) {
+	for (const auto &snapshot : progress::recent(_savePath, _res._type))
+		if (loadPersistent(snapshot, reason))
+			return true;
+	reason = "No compatible quick/manual save or autosave could be restored.";
+	return false;
+}
 void Game::refreshRestoredFrame() {
 	_currentRoom = _pgeLive[0].room_location;
 	_vid.setPalette0xF();

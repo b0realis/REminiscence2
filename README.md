@@ -29,9 +29,10 @@ tables and fixes resource caching, effect replay and screenshot output.
 
 Amiga, classic GOG DOS/Windows data, and Macintosh CD are explicit targets.
 Macintosh rendering retains its native 512×448 resolution. The supplied Amiga
-files pass a seven-level headless regression; synthetic Mac resources exercise
-menus and decoding. Actual GOG and Macintosh CD validation and full playthroughs
-remain outstanding. Experimental Sega support expects extracted engine data;
+files pass a seven-level headless regression. The supplied GOG Windows installer's
+DOS-format data passes startup, seven-level room rendering and pistol-effect
+regressions. Synthetic Mac resources exercise menus and decoding; real Macintosh
+CD validation and full playthroughs remain outstanding. Experimental Sega support expects extracted engine data;
 ROM extraction and Sega audio are not implemented.
 
 See the [0.5.6 integration ledger](docs/UPSTREAM_056.md),
@@ -65,6 +66,20 @@ Joypad settings include persistent button remapping, a configurable dead zone,
 optional save/load/rewind shortcuts, and a raw-joystick profile. Start always
 opens settings. The optional Journal page adds short original passages for
 reached story chapters, with save/rewind-aware reading progress.
+
+By default, launches play both opening sequences and end at the title menu. Space or
+A–Z skips the current scene by default; Backspace is always available. Esc, F10
+or controller Start opens QoL settings immediately, including Levels and Save /
+Load. Closing settings returns to the title; `--continue` explicitly resumes an
+autosave without the openings. Enable **Session → Quicksave skips title sequence**
+and save settings to resume the latest compatible quick/manual/checkpoint save
+or autosave automatically. With no compatible save, the opening plays normally.
+
+Keep editions in separate subfolders of `assets`. A picker remembers which to
+play; **Session → Game edition** changes it later. **Audio → Soundtrack** selects
+Amiga MOD, DOS PRF or a separate Ogg soundtrack independently. For recordings
+from Genesis or Sega CD, supply mapped files under `assets/music/<pack>/`; see
+[the music guide](manual.md#music-sources). `--list-assets` prints source IDs.
 
 ## Screenshots
 
@@ -134,6 +149,13 @@ Their soundfonts and ROMs are supplied separately by the player.
 
 ## Run
 
+For the local Apple Silicon build and prepared assets, run
+`./play-local.sh` from the repository root. It opens a game window and accepts
+an edition picker when needed. Use `--amiga` or `--gog` for a direct choice, plus
+extra engine options, for example `./play-local.sh --help`. The launcher resolves
+its build, configuration and asset paths relative to itself, so it also works
+when invoked by absolute path from another directory.
+
 Supply your own original DOS, Amiga, Macintosh, or PC-98 game data. Game data
 is separate from the engine and is not included in this repository.
 
@@ -160,7 +182,7 @@ explicit configuration files fail with an error; missing default `fb.cfg` uses
 the built-in defaults.
 
 Release packages include an empty `assets` folder beside the executable and a
-one-click launcher. Copy one edition's prepared game files there. Default saves
+one-click launcher. Copy prepared game files there, keeping each edition in its own subfolder. Default saves
 use the platform's writable user-data folder; `--savepath` overrides it and
 `--portable` keeps saves beside the executable. A sole existing folder argument
 selects game data and tunes while retaining the normal save location.

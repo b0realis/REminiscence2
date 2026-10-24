@@ -1,9 +1,10 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 # Release packages and reproducible recipes
 
-Every desktop download includes a precreated **assets** folder. Put one edition's
-prepared original game files there; nested directories are indexed. Music
-falls back to those same assets unless a separate tune path is selected. No original
+Every desktop download includes a precreated **assets** folder. Put prepared
+original game files there, with each edition in its own subfolder. A picker
+remembers your edition; QoL Session changes it later. Music defaults to that
+edition; QoL Audio selects independent soundtracks with native fallback. No original
 game data, reference scans, ROMs or soundfonts are shipped. Manual and tool
 instructions are included. Default saves/preferences live in writable user data;
 `--portable` and explicit path switches remain available.

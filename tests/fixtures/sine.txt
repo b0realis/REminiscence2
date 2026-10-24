@@ -1,0 +1,4 @@
+sine.ogg: synthetic 440 Hz sine wave, 0.1 seconds at 22050 Hz, generated for engine audio tests. Original test data; SPDX-License-Identifier: CC0-1.0
+
+sine-stereo.ogg: original generated 0.1-second stereo test tone, 44,100 Hz;
+left channel 440 Hz at 20% amplitude, right 660 Hz at 15%. Same CC0-1.0 dedication.

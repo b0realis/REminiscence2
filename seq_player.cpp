@@ -145,6 +145,7 @@ SeqPlayer::~SeqPlayer() {
 }
 
 bool SeqPlayer::play(File *f) {
+	CutsceneInputScope input(_stub, _skipWithKeyboard);
 	_completed = false;
 	bool presented = false, valid = true, skipped = false;
 	if (_demux.open(f)) {
@@ -156,8 +157,9 @@ bool SeqPlayer::play(File *f) {
 		while (true) {
 			const uint32_t nextFrameTimeStamp = _stub->getTimeStamp() + 1000 / 25;
 			_stub->processEvents();
-			if (_stub->_pi.quit || _stub->_pi.backspace) {
-				skipped = _stub->_pi.backspace;
+			skipped = (_interruptForMenu && _interruptForMenu()) || _stub->consumeCutsceneSkip() ||
+			          _stub->_pi.backspace;
+			if (_stub->_pi.quit || skipped) {
 				_stub->_pi.backspace = false;
 				break;
 			}
@@ -260,4 +262,3 @@ bool SeqPlayer::mix(int16_t *buf, int samples) {
 bool SeqPlayer::mixCallback(void *param, int16_t *buf, int len) {
 	return ((SeqPlayer *)param)->mix(buf, len);
 }
-

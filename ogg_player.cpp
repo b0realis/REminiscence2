@@ -70,7 +70,7 @@ struct OggDecoder_impl {
 		}
 	}
 
-	bool load(const char *name, FileSystem *fs, int mixerSampleRate) {
+	bool load(const char *name, FileSystem *fs, int /*mixerSampleRate*/) {
 		if (_open) {
 			ov_clear(&_ovf);
 			_open = false;
@@ -90,11 +90,12 @@ struct OggDecoder_impl {
 		}
 		_open = true;
 		vorbis_info *vi = ov_info(&_ovf, -1);
-		if ((vi->channels != 1 && vi->channels != 2) || vi->rate != mixerSampleRate) {
+		if ((vi->channels != 1 && vi->channels != 2) || vi->rate < 8000 || vi->rate > 192000) {
 			warning("Unhandled ogg/pcm format ch %d rate %d", vi->channels, vi->rate);
 			return false;
 		}
 		_channels = vi->channels;
+		_sampleRate = vi->rate;
 		return true;
 	}
 	int read(int16_t *dst, int samples) {
@@ -145,7 +146,7 @@ struct OggDecoder_impl {
 				break;
 			}
 			size -= len;
-			count += len;
+			count += len / (_channels * sizeof(int16_t));
 		}
 		assert(size == 0);
 		return count;
@@ -154,6 +155,7 @@ struct OggDecoder_impl {
 	VorbisFile _f;
 	OggVorbis_File _ovf;
 	int _channels;
+	int _sampleRate = 0;
 	bool _open;
 	int16_t *_readBuf;
 	int _readBufSize;
@@ -173,7 +175,7 @@ struct OggDecoder_impl {
 			_v = 0;
 		}
 	}
-	bool load(const char *name, FileSystem *fs, int mixerSampleRate) {
+	bool load(const char *name, FileSystem *fs, int /*mixerSampleRate*/) {
 		if (_v) {
 			stb_vorbis_close(_v);
 			_v = nullptr;
@@ -190,11 +192,12 @@ struct OggDecoder_impl {
 			if (_v) {
 				_offset = bytes;
 				stb_vorbis_info info = stb_vorbis_get_info(_v);
-				if (info.channels != 2 || (int)info.sample_rate != mixerSampleRate ||
-				    info.max_frame_size > 8192) {
+				if ((info.channels != 1 && info.channels != 2) || info.sample_rate < 8000 ||
+				    info.sample_rate > 192000 || info.max_frame_size > 8192) {
 					warning("Unhandled ogg/pcm format ch %d rate %d", info.channels, info.sample_rate);
 					return false;
 				}
+				_sampleRate = info.sample_rate;
 				_decodedSamplesLen = 0;
 				_decodedSamplesOffset = 0;
 				return true;
@@ -250,14 +253,14 @@ struct OggDecoder_impl {
 				continue;
 			}
 			_offset += bytes;
-			if (channels == 2) {
+			if (channels == 1 || channels == 2) {
 				if (count > 0)
 					emptyLoops = 0;
 				const int remain = samples - total;
 				const int len = MIN(count, remain);
 				for (int i = 0; i < len; ++i) {
-					const int l = int(outputs[0][i] * 32768 + .5);
-					const int r = int(outputs[1][i] * 32768 + .5);
+					const int l = CLIP(int(outputs[0][i] * 32768), -32768, 32767);
+					const int r = CLIP(int(outputs[channels - 1][i] * 32768), -32768, 32767);
 					*dst = ADDC_S16(*dst, ((l * kMusicVolume) >> 8));
 					++dst;
 					*dst = ADDC_S16(*dst, ((r * kMusicVolume) >> 8));
@@ -269,8 +272,10 @@ struct OggDecoder_impl {
 					if (_decodedSamplesLen > 8192)
 						return total;
 					for (int i = 0; i < _decodedSamplesLen; ++i) {
-						_decodedSamples[0][i] = int(outputs[0][len + i] * 32768 + .5);
-						_decodedSamples[1][i] = int(outputs[1][len + i] * 32768 + .5);
+						_decodedSamples[0][i] =
+						    CLIP(int(outputs[0][len + i] * 32768), -32768, 32767);
+						_decodedSamples[1][i] =
+						    CLIP(int(outputs[channels - 1][len + i] * 32768), -32768, 32767);
 					}
 					total = samples;
 					break;
@@ -283,6 +288,7 @@ struct OggDecoder_impl {
 		return total;
 	}
 
+	int _sampleRate = 0;
 	uint8_t _buffer[8192];
 	std::array<std::array<int16_t, 8192>, 2> _decodedSamples;
 	int _decodedSamplesLen = 0, _decodedSamplesOffset = 0;
@@ -307,11 +313,18 @@ OggPlayer::~OggPlayer() {
 static const char *kMenuThemeRemix = "deadly_cookie_-_flashback.ogg";
 
 bool OggPlayer::playTrack(int num) {
-	stopTrack();
 	char buf[16];
 	snprintf(buf, sizeof(buf), "track%02d.ogg", num);
-	if (_impl->load(buf, _fs, _mix->getSampleRate())
-		|| (num == 2 && _impl->load(kMenuThemeRemix, _fs, _mix->getSampleRate()))) {
+	return playFile(buf) || (num == 2 && playFile(kMenuThemeRemix));
+}
+
+bool OggPlayer::playFile(const char *name) {
+	stopTrack();
+	if (_impl->load(name, _fs, _mix->getSampleRate())) {
+		_inputCount = _inputOffset = 0;
+		_phase = 0;
+		_primed = false;
+		_step = double(_impl->_sampleRate) / _mix->getSampleRate();
 		_mix->setPremixHook(mixCallback, this);
 		return true;
 	}
@@ -336,11 +349,48 @@ void OggPlayer::resumeTrack() {
 	}
 }
 
-bool OggPlayer::mix(int16_t *buf, int len) {
-	if (_impl) {
-		return _impl->read(buf, len) != 0;
+bool OggPlayer::nextFrame(int16_t *frame) {
+	if (_inputOffset == _inputCount) {
+		_input.fill(0); // Decoder adds to the destination, like the mixer.
+		_inputCount = _impl->read(_input.data(), _input.size() / 2);
+		_inputOffset = 0;
+		if (_inputCount <= 0)
+			return false;
 	}
-	return false;
+	frame[0] = _input[_inputOffset * 2];
+	frame[1] = _input[_inputOffset * 2 + 1];
+	++_inputOffset;
+	return true;
+}
+
+bool OggPlayer::mix(int16_t *buf, int len) {
+	if (!_impl)
+		return false;
+	if (_step == 1.0)
+		return _impl->read(buf, len) != 0;
+	// Stream at the device rate without changing pitch or loading an entire
+	// soundtrack into RAM. Keep interpolation state across callback boundaries.
+	if (!_primed) {
+		if (!nextFrame(_left) || !nextFrame(_right))
+			return false;
+		_primed = true;
+	}
+	for (int i = 0; i < len; ++i) {
+		for (int channel = 0; channel < 2; ++channel) {
+			const int value = int(_left[channel] + (_right[channel] - _left[channel]) * _phase);
+			*buf = ADDC_S16(*buf, value);
+			++buf;
+		}
+		_phase += _step;
+		while (_phase >= 1.0) {
+			_left[0] = _right[0];
+			_left[1] = _right[1];
+			if (!nextFrame(_right))
+				return false;
+			_phase -= 1.0;
+		}
+	}
+	return true;
 }
 
 bool OggPlayer::mixCallback(void *param, int16_t *buf, int len) {

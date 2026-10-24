@@ -123,6 +123,12 @@ static void renderPages(const std::filesystem::path &root, const char *assets) {
 	SDL_Texture *background = nullptr;
 	settings::Session session;
 	session.edition = "Amiga";
+	session.assetSources = {{"amiga:amiga", "Amiga / amiga", "amiga", kResourceTypeAmiga, {}},
+	                        {"dos:gog", "DOS / GOG / gog", "gog", kResourceTypeDOS, {}}};
+	session.musicSources = session.assetSources;
+	session.musicSources.push_back(
+	    {"music:music/Sega CD", "Soundtrack / music/Sega CD", "music/Sega CD", -1, {}});
+	session.experimentalPistolAvailable = true;
 	session.language = "English";
 	session.audioBackend = "AdLib / OPL3";
 	session.level = 0;
@@ -221,7 +227,7 @@ static void renderPages(const std::filesystem::path &root, const char *assets) {
 		static const char *const pages[] = {"session",      "saves",    "graphics", "audio",
 		                                    "enhancements", "controls", "cheats",   "levels",
 		                                    "journal",      "joypad"};
-		for (int capture = 0; capture < 44; ++capture) {
+		for (int capture = 0; capture < 48; ++capture) {
 			const bool native = (capture >= 28 && capture % 2) || capture == 26 || capture == 27 ||
 			                    (capture >= 10 && capture < 20) || capture == 21;
 			const bool small = capture == 8 || capture == 9 || capture == 23;
@@ -236,9 +242,13 @@ static void renderPages(const std::filesystem::path &root, const char *assets) {
 			                                                       : settings::Preferences{}.keys;
 			session.values.uiScale = capture == 9 || capture == 18 || capture == 22 ? 175 : 100;
 			session.values.menuLayout = capture == 19 || capture == 23 ? 1 : 0;
+			session.values.pistolStyle = weapon::Style::Laser;
 			session.startup = capture >= 32 && capture < 34;
+			session.assetPicker = capture >= 44 && capture < 46;
 			session.recovery = capture == 34 || capture == 35;
-			const int page = capture >= 42            ? 4
+			const int page = capture >= 46            ? 3
+			                 : capture >= 44          ? 0
+			                 : capture >= 42          ? 4
 			                 : capture >= 40          ? 12
 			                 : capture >= 38          ? 11
 			                 : capture >= 36          ? 1
@@ -274,6 +284,9 @@ static void renderPages(const std::filesystem::path &root, const char *assets) {
 					                                             : capture >= 38 ? "objectives"
 					                                             : capture >= 36 ? "manual-browser"
 					                                                             : "recovery");
+			if (capture >= 44)
+				name = std::string(capture % 2 ? "native-" : "") +
+				       (capture >= 46 ? "music-sources" : "asset-picker");
 			journal::State story;
 			story.chapter(0);
 			session.journalEntries = story.entries();
@@ -315,7 +328,7 @@ static void renderPages(const std::filesystem::path &root, const char *assets) {
 				SDL_RenderPresent(renderer);
 			}
 		}
-		session.startup = session.recovery = false;
+		session.startup = session.recovery = session.assetPicker = false;
 		// Click the real native-resolution footer and its confirmation dialog.
 		SDL_SetWindowSize(window, 256, 224);
 		session.values.keys = settings::Preferences{}.keys;
@@ -472,14 +485,16 @@ static void renderPages(const std::filesystem::path &root, const char *assets) {
 		overlay.open(session.values);
 		frame();
 		frame();
-		click(70, 94);
-		check(session.action == settings::Action::ContinueLatest,
-		      "native welcome screen queues Continue directly");
-		session.action = settings::Action::None;
+		overlay.selectPage(7); // Levels remains reachable before gameplay.
 		frame();
+		frame();
+		bool titlePageVisible = false;
+		for (auto *window : ImGui::GetCurrentContext()->Windows)
+			titlePageVisible |= window->Active && strstr(window->Name, "Page content");
+		check(titlePageVisible, "title settings retain the full page navigator");
 		click(60, 207);
 		check(session.action == settings::Action::Resume,
-		      "native welcome New game leaves recovery screen");
+		      "native Back to title closes the overlay");
 		session.startup = false;
 		session.action = settings::Action::None;
 		// Real key capture routes through the same SDL event handler as gameplay,
@@ -551,6 +566,13 @@ int main(int argc, char **argv) {
 	settings::Preferences p;
 	std::string reason;
 	check(settings::validate(p, reason), "default settings validate");
+	check(p.skipLogosWithKeyboard && p.skipCutscenesWithKeyboard, "skip keys enabled by default");
+	check(p.laserColor == weapon::LaserColor::Orange, "laser defaults to orange");
+	check(!p.quickResume, "quick resume defaults off");
+	p.quickResume = true;
+	p.assetSet = "dos:Folder with spaces";
+	p.musicSource = "music:Music \"quoted\"";
+	p.skipLogosWithKeyboard = p.skipCutscenesWithKeyboard = false;
 	p.fullscreen = false;
 	p.filter = settings::Filter::Point;
 	p.scale = 5;
@@ -562,6 +584,8 @@ int main(int argc, char **argv) {
 	p.showMenuButton = false;
 	p.menuLayout = 1;
 	p.conradShirt = appearance::Shirt::White;
+	p.pistolStyle = weapon::Style::Laser;
+	p.laserColor = weapon::LaserColor::Purple;
 	p.extraMetro = true;
 	const auto path = (root / "preferences with spaces.cfg").string();
 	p.padButtons[5] = SDL_CONTROLLER_BUTTON_LEFTSHOULDER;
@@ -576,16 +600,25 @@ int main(int argc, char **argv) {
 	check(settings::save(path, p, reason), "save settings atomically");
 	settings::Preferences loaded;
 	check(settings::load(path, loaded, reason) && loaded == p, "all preferences round-trip");
+	for (int color = 0; color < 5; ++color) {
+		auto selected = p;
+		selected.laserColor = weapon::LaserColor(color);
+		settings::Preferences restored;
+		const auto colorsPath = (root / "laser-colors.cfg").string();
+		check(settings::save(colorsPath, selected, reason) &&
+		          settings::load(colorsPath, restored, reason) && selected == restored,
+		      "all five laser colours persist");
+	}
 	const auto previous = loaded;
 	write(root / "future.cfg", "version=9\nmaster_volume=1\n");
 	check(!settings::load((root / "future.cfg").string(), loaded, reason) && loaded == previous,
 	      "unknown profile version preserves current settings");
 	write(root / "invalid.cfg", "version=1\nmaster_volume=999\nwindow_scale=-1\nkey_left=41\nmusic_"
-	                            "volume=35\nconrad_shirt=99\n");
+	                            "volume=35\nconrad_shirt=99\nlaser_color=99\n");
 	check(settings::load((root / "invalid.cfg").string(), loaded, reason) &&
 	          loaded.masterVolume == p.masterVolume && loaded.scale == p.scale &&
 	          loaded.keys == p.keys && loaded.musicVolume == 35 &&
-	          loaded.conradShirt == p.conradShirt,
+	          loaded.conradShirt == p.conradShirt && loaded.laserColor == p.laserColor,
 	      "invalid values and colliding bindings are rejected without dropping valid fields");
 	check(!settings::validBinding(SDL_SCANCODE_F10, p, 0, reason),
 	      "recovery shortcut cannot be rebound");

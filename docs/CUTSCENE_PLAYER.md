@@ -15,7 +15,10 @@ part ends. Type `q` at the menu or press Ctrl+C to exit the tool.
 During playback:
 
 - **Backspace, Tab or Escape** skips the part and returns to the menu.
-- **Enter, Space and arrow keys** operate interactive panels, including the
+- **Space or any letter (A–Z)** also skips by default. The two saved Enhancements
+  options control logo scenes and other cutscenes independently. Release the key
+  before skipping another scene; holding it cannot skip successive parts.
+- **Enter and arrow keys** operate interactive panels, including the
   journal. Some original panels wait for input or loop deliberately.
 - Closing the window ends that playback and returns to the menu.
 - **Alt+Enter** toggles fullscreen using the engine's normal display controls.
@@ -135,3 +138,9 @@ engine launch using synthetic data and SDL dummy devices. CTest runs these
 without commercial assets when Python is available. Set the existing
 `REMINISCENCE2_AMIGA_DATA` CMake option to add the private all-parts playback
 test; that test advances interactive panels and can skip looping previews.
+
+For a library containing multiple editions, pass `--asset-set=dos` (or a full ID
+from the engine's `--list-assets`). `--music-source=ID` selects an independent
+soundtrack, with the same cue mapping and native fallback used in gameplay.
+Without `--tunepath`, the tool keeps music scoped to the chosen edition. The
+engine's remembered edition also applies when listing cutscenes.

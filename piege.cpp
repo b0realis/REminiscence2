@@ -233,13 +233,15 @@ void Game::pge_playAnimSound(LivePGE *pge, uint16_t arg2) {
 	if ((pge->flags & 4) && _pge_playAnimSound) {
 		uint8_t sfxId = (arg2 & 0xFF) - 1;
 		if (_currentRoom == pge->room_location) {
-			playSound(sfxId, 0);
+			if (!playConradShotSound(pge, sfxId, 0))
+				playSound(sfxId, 0);
 		} else {
 			if (_res._ctData[CT_DOWN_ROOM + _currentRoom] == pge->room_location ||
 				_res._ctData[CT_UP_ROOM + _currentRoom] == pge->room_location ||
 				_res._ctData[CT_RIGHT_ROOM + _currentRoom] == pge->room_location ||
 				_res._ctData[CT_LEFT_ROOM + _currentRoom] == pge->room_location) {
-				playSound(sfxId, 1);
+				if (!playConradShotSound(pge, sfxId, 1))
+					playSound(sfxId, 1);
 			}
 		}
 	}
@@ -2125,6 +2127,10 @@ int Game::pge_updateCollisionState(LivePGE *pge, int16_t pge_dy, uint8_t value) 
 		}
 		if (_col_slots2Cur < &_col_slots2[255]) {
 			slot1 = _col_slots2Cur;
+			// Saves serialize the whole fixed-size buffer, including unused bytes.
+			// Initialize it when allocating a record so allocator/previous-level
+			// contents cannot leak into saves or break deterministic comparisons.
+			memset(slot1->data_buf, 0, sizeof(slot1->data_buf));
 			slot1->unk2 = grid_data;
 			slot1->data_size = pge_collision_data_len - 1;
 			uint8_t *dst = &slot1->data_buf[0];

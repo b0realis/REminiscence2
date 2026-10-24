@@ -188,6 +188,11 @@ bool decodeMacImage(const uint8_t *data, size_t size, int frame, MacImage &image
 	return true;
 }
 
+void positionMacSprite(const MacImage &image, bool flip, int &x, int &y) {
+	x += flip ? image.originX - image.width - 1 : -image.originX;
+	y -= image.originY;
+}
+
 void blitMacImage(const MacImage &image, const DecodeBuffer &dst) {
 	if (!dst.ptr || dst.w <= 0 || dst.h <= 0 || dst.pitch < dst.w || image.width <= 0 ||
 	    image.height <= 0 || size_t(image.width) * image.height > image.pixels.size()) {

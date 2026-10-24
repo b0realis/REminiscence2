@@ -420,6 +420,11 @@ void Menu::handleTitleScreen() {
 	}
 
 	while (!_stub->_pi.quit) {
+		if (_stub->_pi.escape || _stub->consumePauseRequest()) {
+			_stub->_pi.escape = false;
+			_selectedOption = MENU_OPTION_ITEM_SETTINGS;
+			return;
+		}
 
 		int selectedItem = -1;
 		int previousLanguage = currentLanguage;

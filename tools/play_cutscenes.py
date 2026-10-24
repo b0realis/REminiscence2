@@ -42,7 +42,7 @@ def find_engine(explicit: str | None = None) -> Path:
         resolved = supplied if supplied.is_file() else Path(shutil.which(explicit) or supplied)
         candidates = [resolved]
     else:
-        candidates = [REPO_ROOT / folder / name for folder in ("build/release", "build", ".") for name in names]
+        candidates = [REPO_ROOT / folder / name for folder in ("build/package-arm64", "build/release", "build", ".") for name in names]
         candidates += [Path(found) for name in names if (found := shutil.which(name))]
     for candidate in candidates:
         if candidate.is_file() and os.access(candidate, os.X_OK):
@@ -122,7 +122,7 @@ def print_menu(edition: str, scenes: Sequence[Cutscene]) -> None:
 
 def play(command: Sequence[str], scene: Cutscene, part: int) -> int:
     print(f"\nPlaying {scene.name}:{part} — {scene.title}", flush=True)
-    print("Backspace / Tab / Escape: return to menu. Enter / Space / arrows: advance interactive panels.", flush=True)
+    print("Backspace / Tab / Escape: return to menu. Space / A-Z: skip (enabled by default). Enter / arrows: advance panels.", flush=True)
     try:
         # An argument vector deliberately avoids shell interpolation of paths.
         result = subprocess.run([*command, f"--play-cutscene={scene.name}:{part}"], check=False)
@@ -147,19 +147,22 @@ Requirements: Python 3.9+ (standard library only) and this project's compiled
 REminiscence2 executable. Game files stay local and are read without modification.
 For Amiga WHDLoad LHA archives, first run tools/extract_amiga.py. DOS assets use
 CMD/POL pairs; Macintosh assets need a FLASHBACK.BIN or FLASHBACK.RSRC resource
-fork. Uses the engine's archive support and edition detection. GOG/Macintosh CD
-assets still need real-asset validation. SEQ movies, SET animations, 3DO videos,
+fork. Uses the engine's archive support and edition detection. Supplied GOG DOS data has
+regression coverage; Macintosh CD assets still need real-asset validation. SEQ movies, SET animations, 3DO videos,
 disk images and installers are outside this polygon player's scope.
 
 Interactive use: choose a number or name, optionally followed by :PART; part
 numbers start at zero. A multi-part file prompts for its part if omitted.
 After each part you return to the menu. Type q or press Ctrl+C to quit.
-During playback Backspace, Tab or Escape skips the part. Closing the playback
-window also returns to the menu. Enter, Space and arrow keys advance interactive
-panels such as the journal. --play runs once and exits instead.
+During playback Backspace, Tab or Escape skips the part. Space or A-Z also skips
+by default; saved Enhancements options control logos and other scenes separately.
+Closing the playback window also returns to the menu. Enter and arrow keys advance
+interactive panels such as the journal. --play runs once and exits instead.
 """,
     )
-    result.add_argument("assets", type=Path, help="one edition's extracted game folder (subfolders are searched)")
+    result.add_argument("assets", type=Path, help="extracted game folder or an edition library (subfolders are searched)")
+    result.add_argument("--asset-set", help="edition ID from the engine --list-assets output, or an unambiguous shorthand")
+    result.add_argument("--music-source", help="independent soundtrack ID, or native for this edition")
     result.add_argument("--engine", help="compiled REminiscence2 path; otherwise search the repository builds and PATH")
     mode = result.add_mutually_exclusive_group()
     mode.add_argument("--list", action="store_true", help="print the catalog and exit without opening a window")
@@ -167,7 +170,7 @@ panels such as the journal. --play runs once and exits instead.
     mode.add_argument("--play", metavar="NAME[:PART]", help="play one named part and exit; default part is 0")
     result.add_argument("--filter", default="", metavar="TEXT", help="show names or descriptions containing TEXT (ignores case)")
     result.add_argument("--language", type=str.upper, choices=("EN", "FR", "DE", "SP", "IT", "JP", "RU"), help="subtitle language; default: engine auto-detection")
-    result.add_argument("--tunepath", type=Path, help="music folder; default: the asset folder, including its subfolders")
+    result.add_argument("--tunepath", type=Path, help="explicit music folder; default: only the selected edition")
     result.add_argument("--config", type=Path, help="fb.cfg compatibility file; default: repository fb.cfg")
     result.add_argument("--fullscreen", action="store_true", help="play full screen; default: a window")
     result.add_argument("--scale", type=int, choices=range(1, 7), default=3, metavar="1..6", help="nearest-neighbor window scale; default: 3 (Mac native size is already doubled)")
@@ -182,10 +185,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         arguments.error(f"Asset folder does not exist: {assets}")
     try:
         engine = find_engine(args.engine)
-        tunes = (args.tunepath or assets).expanduser().resolve()
-        if not tunes.is_dir():
-            raise PlayerError(f"Music folder does not exist: {tunes}")
-        command = [str(engine), f"--datapath={assets}", f"--tunepath={tunes}"]
+        command = [str(engine), f"--datapath={assets}"]
+        if args.tunepath:
+            tunes = args.tunepath.expanduser().resolve()
+            if not tunes.is_dir():
+                raise PlayerError(f"Music folder does not exist: {tunes}")
+            command.append(f"--tunepath={tunes}")
+        if args.asset_set:
+            command.append(f"--asset-set={args.asset_set}")
+        if args.music_source:
+            command.append(f"--music-source={args.music_source}")
         config = args.config.expanduser().resolve() if args.config else REPO_ROOT / "fb.cfg"
         if args.config or config.is_file():
             command.append(f"--config={config}")

@@ -29,7 +29,7 @@ RuntimePaths runtimePaths(bool portable) {
 	tunes = data;
 	if (fs::is_directory(executable / "TUNES", ec)) tunes = executable / "TUNES";
 	else if (fs::is_directory("TUNES", ec)) tunes = "TUNES";
-	if (portable) { data = executable / "assets"; tunes = executable / "TUNES"; user = executable; }
+	if (portable) { data = executable / "assets"; tunes = fs::is_directory(executable / "TUNES", ec) ? executable / "TUNES" : data; user = executable; }
 	fs::path config = "fb.cfg";
 	if (!fs::is_regular_file(config, ec)) config = executable / "fb.cfg";
 	return {data.u8string(), tunes.u8string(), (user / "SAVE").u8string(), config.u8string()};

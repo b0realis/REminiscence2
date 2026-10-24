@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <map>
 #include <sstream>
 #include <vector>
@@ -55,6 +56,10 @@ std::vector<Field> fields(Preferences &p) {
 	boolean("muted", p.muted);
 	result.push_back({"conrad_shirt", 0, 2, [&p] { return int(p.conradShirt); },
 	                  [&p](int n) { p.conradShirt = appearance::Shirt(n); }});
+	result.push_back({"pistol_style", 0, 2, [&p] { return int(p.pistolStyle); },
+	                  [&p](int n) { p.pistolStyle = weapon::Style(n); }});
+	result.push_back({"laser_color", 0, 4, [&p] { return int(p.laserColor); },
+	                  [&p](int n) { p.laserColor = weapon::LaserColor(n); }});
 	boolean("rewind", p.rewind);
 	boolean("fade_transitions", p.fadeTransitions);
 	boolean("inventory_original", p.inventoryOriginal);
@@ -62,6 +67,8 @@ std::vector<Field> fields(Preferences &p) {
 	boolean("restore_memo", p.restoreMemo);
 	boolean("text_cutscenes", p.textCutscenes);
 	boolean("seq_cutscenes", p.seqCutscenes);
+	boolean("skip_logos_with_keyboard", p.skipLogosWithKeyboard);
+	boolean("skip_cutscenes_with_keyboard", p.skipCutscenesWithKeyboard);
 	boolean("extra_asc", p.extraAsc);
 	boolean("extra_caillou", p.extraCaillou);
 	boolean("extra_carte", p.extraCarte);
@@ -72,6 +79,7 @@ std::vector<Field> fields(Preferences &p) {
 	boolean("story_journal", p.storyJournal);
 	boolean("journal_notifications", p.journalNotifications);
 	boolean("disk_autosave", p.diskAutosave);
+	boolean("quick_resume", p.quickResume);
 	integer("disk_autosave_seconds", p.diskAutosaveSeconds, 15, 600);
 	boolean("contextual_hints", p.contextualHints);
 	boolean("sticky_action", p.stickyAction);
@@ -135,6 +143,20 @@ bool load(const std::string &path, Preferences &preferences, std::string &diagno
 		return false;
 	}
 	Preferences parsed = preferences;
+	for (const auto &entry : {std::make_pair("asset_set", &parsed.assetSet),
+	                          std::make_pair("music_source", &parsed.musicSource)}) {
+		const auto value = values.find(entry.first);
+		if (value != values.end()) {
+			std::istringstream stream(value->second);
+			std::string decoded;
+			if ((stream >> std::quoted(decoded)) && (stream >> std::ws).eof() &&
+			    decoded.size() <= 4096 && decoded.find_first_of("\r\n") == std::string::npos &&
+			    decoded.find('\0') == std::string::npos)
+				*entry.second = decoded;
+			else
+				diagnostic = "Ignored invalid source selection: " + std::string(entry.first);
+		}
+	}
 	for (const auto &field : fields(parsed)) {
 		const auto found = values.find(field.name);
 		if (found == values.end()) {
@@ -175,6 +197,8 @@ bool save(const std::string &path, const Preferences &preferences, std::string &
 	for (const auto &field : fields(copy)) {
 		text << field.name << '=' << field.get() << '\n';
 	}
+	text << "asset_set=" << std::quoted(copy.assetSet) << '\n'
+	     << "music_source=" << std::quoted(copy.musicSource) << '\n';
 	const std::string bytes = text.str();
 	const auto destination = std::filesystem::u8path(path);
 	static std::atomic<unsigned> serial{0};

@@ -27,6 +27,8 @@ bool read(const std::string &path, Snapshot &snapshot, std::string &reason);
 // Newest first. Invalid files are ignored; loading revalidates the immutable
 // in-memory snapshot against the player's actual game data as a second step.
 std::vector<Snapshot> scan(const std::string &directory, int edition);
+// Includes modern quick/manual/checkpoint bundles, ordered by save time.
+std::vector<Snapshot> recent(const std::string &directory, int edition);
 // Replace only one rotation slot, atomically. A failed write leaves every
 // previous valid generation and all manual/checkpoint slots untouched.
 bool save(const std::string &directory, Snapshot snapshot, std::string &reason);

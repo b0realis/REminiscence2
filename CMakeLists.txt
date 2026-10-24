@@ -28,6 +28,7 @@ option(REMINISCENCE2_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSa
 set(REMINISCENCE2_SANITIZER_SET "address,undefined" CACHE STRING "Sanitizers to enable when requested")
 set(REMINISCENCE2_TEST_SOUNDFONT "" CACHE FILEPATH "Optional local soundfont for synthesis tests")
 set(REMINISCENCE2_AMIGA_DATA "" CACHE PATH "Optional private Amiga data for integration tests")
+set(REMINISCENCE2_DOS_DATA "" CACHE PATH "Optional private DOS/GOG data for integration tests")
 
 option(REMINISCENCE2_BUNDLED_DEPS "Build pinned SDL/zlib sources for distributable packages" OFF)
 if(REMINISCENCE2_BUNDLED_DEPS)
@@ -66,8 +67,8 @@ target_link_libraries(dear_imgui PUBLIC SDL2::SDL2 PRIVATE reminiscence2_build_o
 
 add_library(reminiscence2_engine STATIC
     collision.cpp config.cpp cpc_player.cpp cutscene.cpp cutscene_assets.cpp cutscene_tool.cpp decode_mac.cpp decode_sega.cpp decode_seq.cpp decode_sgd.cpp file.cpp
-    atomic_file.cpp fs.cpp game.cpp game_settings.cpp game_progress.cpp progress_store.cpp controller_profile.cpp context_hints.cpp graphics.cpp menu.cpp mixer.cpp mod_player.cpp ogg_player.cpp
-    settings.cpp settings_store.cpp settings_overlay.cpp keyboard_diagram.cpp save_catalog.cpp appearance.cpp
+    atomic_file.cpp asset_library.cpp fs.cpp game.cpp game_settings.cpp game_progress.cpp progress_store.cpp controller_profile.cpp context_hints.cpp graphics.cpp menu.cpp mixer.cpp mod_player.cpp ogg_player.cpp
+    settings.cpp settings_store.cpp settings_overlay.cpp keyboard_diagram.cpp save_catalog.cpp appearance.cpp weapon_fx.cpp game_weapon.cpp
     music_midi.cpp music_prf.cpp music_synth.cpp object_data.cpp journal.cpp
     piege.cpp protection.cpp resource.cpp resource_aba.cpp resource_mac.cpp
     resource_paq.cpp scaler.cpp screenshot.cpp seq_player.cpp sfx_player.cpp
@@ -126,6 +127,39 @@ configure_file(fb.cfg fb.cfg COPYONLY)
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(asset_library_tests tests/asset_library_tests.cpp)
+    target_link_libraries(asset_library_tests PRIVATE reminiscence2_engine)
+    add_test(NAME asset_library COMMAND asset_library_tests "${CMAKE_CURRENT_BINARY_DIR}/library-fixtures")
+    add_executable(music_source_tests tests/music_source_tests.cpp)
+    target_link_libraries(music_source_tests PRIVATE reminiscence2_engine)
+    add_test(NAME music_sources COMMAND music_source_tests
+        "${CMAKE_CURRENT_BINARY_DIR}/soundtrack-fixtures" "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/sine.ogg")
+    if(REMINISCENCE2_AMIGA_DATA AND REMINISCENCE2_DOS_DATA)
+        add_test(NAME music_source_assets COMMAND music_source_tests
+            "${CMAKE_CURRENT_BINARY_DIR}/soundtrack-assets" "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/sine.ogg"
+            "${REMINISCENCE2_AMIGA_DATA}" "${REMINISCENCE2_DOS_DATA}")
+    endif()
+    add_executable(startup_tests tests/startup_assets.cpp)
+    target_link_libraries(startup_tests PRIVATE reminiscence2_engine)
+    foreach(edition AMIGA DOS)
+        if(REMINISCENCE2_${edition}_DATA)
+            string(TOLOWER "${edition}" edition_name)
+            add_test(NAME startup_${edition_name} COMMAND startup_tests
+                "${REMINISCENCE2_${edition}_DATA}"
+                "${CMAKE_CURRENT_BINARY_DIR}/startup-${edition_name}" "${edition_name}")
+            set_tests_properties(startup_${edition_name} PROPERTIES TIMEOUT 60)
+        endif()
+    endforeach()
+    if(REMINISCENCE2_DOS_DATA)
+        add_executable(dos_assets_tests tests/dos_assets.cpp)
+        target_link_libraries(dos_assets_tests PRIVATE reminiscence2_engine)
+        add_test(NAME dos_assets COMMAND dos_assets_tests "${REMINISCENCE2_DOS_DATA}"
+            "${CMAKE_CURRENT_BINARY_DIR}/dos-test-output")
+        set_tests_properties(dos_assets PROPERTIES TIMEOUT 60)
+    endif()
+    add_executable(weapon_tests tests/weapon_tests.cpp)
+    target_link_libraries(weapon_tests PRIVATE reminiscence2_engine)
+    add_test(NAME weapon COMMAND weapon_tests)
     add_executable(campaign_tests tests/campaign_tests.cpp)
     target_link_libraries(campaign_tests PRIVATE reminiscence2_engine)
     add_test(NAME campaign COMMAND campaign_tests "${CMAKE_CURRENT_BINARY_DIR}/campaign-fixtures")

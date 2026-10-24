@@ -196,6 +196,7 @@ public:
 		pi.dirMask = 0;
 		pi.enter = pi.space = pi.shift = pi.backspace = pi.escape = false;
 		pi.save = pi.load = pi.rewind = false;
+		pi.cutsceneSkip = false;
 	}
 };
 #endif

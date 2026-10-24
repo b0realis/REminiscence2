@@ -8,11 +8,13 @@
 #define FS_H__
 
 #include "intern.h"
+#include <string>
+#include <vector>
 
 struct FileSystem_impl;
 
 struct FileSystem {
-	FileSystem(const char *dataPath);
+	FileSystem(const char *dataPath, const std::vector<std::string> &excludedRoots = {});
 	~FileSystem();
 
 	FileSystem_impl *_impl;
@@ -22,4 +24,3 @@ struct FileSystem {
 };
 
 #endif // FS_H__
-

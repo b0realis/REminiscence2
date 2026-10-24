@@ -46,12 +46,11 @@ Start with a window and keep your saves separate from the game files:
 ```sh
 ./build/release/reminiscence2 \
   --datapath="/path/to/Flashback/assets" \
-  --tunepath="/path/to/Flashback/assets" \
   --savepath=SAVE --window
 ```
 
-The music path in this example also searches your asset folder's subdirectories.
-If your music lives elsewhere, point `--tunepath` to that folder instead.
+Music defaults to the selected edition. For separate soundtracks, use
+**QoL → Audio → Soundtrack**; `--tunepath` remains available for a custom native music folder.
 Use the title menu to start a game. Arrow keys move through menus; Enter confirms.
 
 > **First-session kit:** arrows to move, Shift for actions, Space for the gun,
@@ -63,12 +62,38 @@ memory; [manual saves](#keep-your-progress) preserve progress after you quit.
 ## Prepare your data
 
 Keep each edition in its own folder. REminiscence2 searches below the selected
-folder and detects the edition from the files it recognizes.
+folder and detects the edition from the files it recognizes. Multiple editions
+can share the outer `assets` folder, with each edition in its own subfolder:
+
+```text
+assets/
+  amiga/           # unpacked Amiga resources
+  gog/             # original DOS resources, or the extracted installation tree
+  mac/             # supported Macintosh resource file
+  music/
+    sega-cd/       # your mapped Ogg tracks
+    genesis/       # another optional soundtrack pack
+```
+
+When several editions are found and no available choice is remembered, an edition
+picker appears before startup. Choose **Play selected**; the choice is remembered.
+During play, **QoL → Session → Game edition → Use selected edition…** changes
+edition after confirmation and restarts the engine session. Save first. Asset
+files stay read-only, and the loader isolates editions even when filenames match.
+Modern saves validate edition and gameplay data before loading. Use separate
+`--savepath` folders for different releases of the same edition if you want to
+keep independent manual slots and autosave histories.
+
+`--list-assets` lists game and music source IDs without opening a window.
+`--asset-set=dos`, `amiga` or `mac` selects that edition when unambiguous; use the
+full listed ID if you have two copies of an edition. A missing remembered choice
+reopens the picker. Noninteractive cutscene/continue commands require an explicit
+choice if several sets are available and none is remembered.
 
 | Data set | What to supply | Current evidence |
 | --- | --- | --- |
 | Amiga | Unpacked game files, including cutscenes and fonts; use the WHDLoad preparation tool below when needed. | Supplied assets pass seven-level rendering/save checks and all-parts cutscene playback. |
-| DOS / classic DOS files from GOG | The original data directory, with its resource files or supported archives. | Loaders are present; real GOG data validation is pending. |
+| DOS / classic DOS files from GOG | The original data directory, with its resource files or supported archives. | Supplied GOG Windows data passes opening/title, seven-level background and pistol-effect regressions; a full playthrough remains. |
 | Macintosh / Macintosh CD target | A supported `FLASHBACK.BIN` or `FLASHBACK.RSRC` containing the resource fork. | Synthetic resource tests pass; original Macintosh CD data still needs validation. |
 | PC-98 | The edition's supported PAQ data. | Format support is present; real-data runtime checks remain. |
 | Sega Mega Drive | Extracted engine resources. | Experimental; ROM extraction and Sega audio are not implemented. |
@@ -77,6 +102,29 @@ folder and detects the edition from the files it recognizes.
 An installer, WHDLoad slave, disk image, ROM image or original program executable
 is not a ready-to-use asset directory. Selecting a language does not install
 missing translations. Supply the relevant data yourself.
+
+### GOG Windows installation data
+
+The tested GOG installer contains DOS-format files in
+`Flashback_Data/StreamingAssets/data`. Point `--datapath` to that directory in an
+installed copy, or extract your installer into a new private folder with
+`innoextract`:
+
+```sh
+innoextract --extract --output-dir .local/assets/gog-extracted "/path/to/setup_flashback.exe"
+./build/release/reminiscence2 \
+  --datapath=.local/assets/gog-extracted/Flashback_Data/StreamingAssets/data --window
+```
+
+On macOS, `brew install innoextract` provides the extraction utility. It reads
+the installer without running the Windows application. Keep these files separate
+from Amiga or Macintosh resources. This path was verified with installer build
+`1.0.0 (25550)`; other GOG packages may arrange their files differently.
+
+The local development launcher scans `.local/assets`: `./play-local.sh`.
+Use `./play-local.sh --amiga` for the prepared Amiga files or
+`./play-local.sh --gog` for the extracted GOG folder above.
+Both use the current local Apple Silicon build and accept further engine options.
 
 ### Amiga WHDLoad preparation
 
@@ -121,7 +169,10 @@ spaces. Normal game launches use these defaults:
 | Purpose | Default | Change it with |
 | --- | --- | --- |
 | Game resources | `assets` beside the executable (legacy `DATA` fallback) | `--datapath=PATH` |
-| Music resources | Game folder or discovered `TUNES` | `--tunepath=PATH` |
+| Music resources | Game folder or discovered `TUNES` | `--list-assets` | List detected game editions and independent soundtrack IDs; no window. |
+| `--asset-set=ID` | Choose a listed edition ID, or an unambiguous `amiga`, `dos`, `mac`, `pc98` or `sega`. |
+| `--music-source=ID` | Select a discovered soundtrack independently, or `native` to restore this edition’s music. |
+| `--tunepath=PATH` |
 | Persistent saves | User-data `REminiscence2/SAVE` | `--savepath=PATH` |
 | Compatibility settings | `fb.cfg` | `--config=PATH` |
 
@@ -209,11 +260,11 @@ continue for volume adjustments. Move the mouse to reveal the cursor.
 
 | Page | What you can change or do |
 | --- | --- |
-| Session | Continue latest autosave, set disk autosave interval and optional contextual hints; view health/score/rewind count, rewind, capture a clean screenshot, restart, return to title, save/undo/reset preferences, and show or hide the shortcut. |
+| Session | Game edition selection and automatic resume;  Continue latest autosave, set disk autosave interval and optional contextual hints; view health/score/rewind count, rewind, capture a clean screenshot, restart, return to title, save/undo/reset preferences, and show or hide the shortcut. |
 | Rewind | Preview captured moments, their age, room and health, then restore the selected point. |
 | Save / Load | Browse all levels, previews and names; protect milestones, save/load manual slots 1–99 and restore checkpoint 00. |
 | Graphics | Fullscreen, VSync, point/linear/ScaleNx filtering, window scale, side content, compact layout and menu text size. |
-| Audio | Separate master/music/effects levels, mute and save-confirmation sound. |
+| Audio | Independent soundtrack selection; separate master/music/effects levels, mute and save-confirmation sound. |
 | Enhancements | Conrad’s Original/Red-Pink/White T-shirt, rewind, inventory ordering, transitions and optional cutscene choices. |
 | Controls | Rebind the nine primary keyboard actions and review fixed shortcuts. |
 | Cheats | All three gameplay cheat flags, unlimited life, fast mode, diagnostic rectangles, DOS zoom, one-shot healing and clear-all. |
@@ -261,10 +312,43 @@ changes.** The jacket retains its original brown colours; shoes, equipment,
 other characters, scenery, skin, hair and cutscene/movie artwork keep theirs. The old `use_white_tshirt=true` config
 option selects White unless a saved player preference overrides it.
 
+For an optional cosmetic experiment, choose **Enhancements → Pistol style**:
+
+- **Original** keeps the original firing artwork and sound (the default).
+- **Heavy / red** adds a larger red muzzle flame, larger red ejected casings,
+  extra visual recoil and a bassier version of the original shot sample.
+- **Laser** adds a coloured muzzle flash, a glowing segment that travels
+  along the firing line, a matching pistol-side light and a deep, bass-heavy laser
+  sound. It has no ejected casings.
+
+With Laser selected, choose **Laser colour**: **Orange (default), Red, Green,
+Blue or Purple**. The flash, travelling beam and pistol light match. Use
+**Save settings** to keep your selection.
+
+These styles apply to Conrad's gameplay pistol. Damage, firing speed, collision,
+aim and his actual position stay unchanged; recoil is a drawing offset. Choose
+**Save settings** to remember the style. Changing style affects subsequent shots;
+**Original** restores the normal presentation. The beam is a cosmetic trace,
+not a new projectile or a change to the original hit calculation.
+
+Heavy and Laser work with **Amiga, GOG/DOS and Macintosh assets**. Their position
+and starting frame follow that edition's original shot flash. The laser stays at
+its launch height as it travels, including Macintosh's native pixel resolution.
+PC-98 and Sega retain their original pistol presentation for now. All imported
+game files stay untouched; effects are generated in memory while playing.
+
 At startup, saved menu preferences override their corresponding `fb.cfg`
 settings. Explicit display/rewind command-line options override the saved
 profile. Use `--no-preferences` to ignore that profile for one launch. Paths,
 language, output rate and synthesizer selection remain startup options.
+
+To skip a cutscene, press **Space or any letter key (A–Z)**. Under
+**Enhancements → Cutscene presentation**, the separate **Space/A-Z skips developer
+logos** and **Space/A-Z skips other cutscenes** options are both on by default.
+The second option covers the intro, story scenes and available movie replacements.
+Each scene requires a fresh press; holding the key will not skip the next scene
+or perform a gameplay action. **Save settings** remembers these choices.
+Backspace remains available when the new shortcuts are off.
 
 The Controls page includes an illustrated keyboard: action keys are colored,
 other keys stay dark, and matching arrows point to each action's description.
@@ -398,12 +482,26 @@ not consume the interval. Dead or transitioning frames wait until gameplay is
 coherent. A living frame can still put Conrad near danger; manual saves remain
 useful. Forced termination can lose progress since the last successful write.
 
-On the next launch, the welcome screen offers **Continue latest autosave**,
-**New game** and **EXIT GAME**. Continue restores the newest compatible
-candidate, changing levels automatically; it skips a damaged file or a different
-asset revision and tries an older generation. The command-line `--continue`
-restores directly and skips opening/title screens. It reports failure if no
-candidate can be restored. New game opens the original title/level menu.
+By default, launch plays the developer logos and introduction, then opens
+the title menu, including when saves already exist. **Space** or any **A–Z**
+key skips the current scene by default; **Backspace** always remains available.
+**Esc**, **F10** or controller **Start** opens the full QoL menu immediately,
+even during the first logo. This leaves the opening sequence; closing settings
+returns to the title. **Levels** starts a chosen level, **Save / Load** restores
+saved progress, and **Session → Continue latest autosave** restores the newest
+compatible candidate. Continue skips damaged files or different asset revisions
+and tries an older generation. The explicit command-line `--continue` restores
+directly and skips opening/title screens; it reports failure if no candidate
+can be restored.
+
+To return directly to saved progress on launch, enable **QoL → Session →
+Quicksave skips title sequence**, then **Save settings**. It is **off by default**.
+When enabled, it tries the newest compatible modern quick/manual save, checkpoint
+or autosave by its stored save time, across levels of the selected edition.
+It skips damaged or incompatible candidates and tries older ones. If none loads,
+the normal opening and title menu appear. Old `.state` saves remain available
+through manual loading; they do not participate in automatic resume. Turning the
+setting off restores normal startup. `--no-preferences` bypasses it for one launch.
 
 During play, **Session → Continue latest autosave** asks before replacing the
 current game. **Save / Load → Persistent autosaves** has a generation selector,
@@ -479,10 +577,52 @@ and collisions:
 
 ### Music sources
 
-Original or optional MOD/OGG music belongs in the directory selected by
-`--tunepath`. DOS PRF/MIDI/INS files are also searched for in the game-data
-folder. Available music formats and their priority depend on the edition and
-files present.
+**QoL → Audio → Soundtrack** selects music independently of the game edition.
+For example, play DOS graphics with the discovered Amiga MOD soundtrack, or
+Amiga graphics with DOS PRF music. Changes apply immediately; **Save settings**
+remembers them. **This edition / supplied tunes** restores native music selection.
+Missing or unreadable tracks fall back to the selected game's music when available.
+Sound effects, voices and gameplay assets continue to come from the game edition.
+Embedded audio in SEQ movies is not replaced by this selector.
+
+For recordings from Genesis, Sega CD or another soundtrack you supply, put
+**Ogg Vorbis** files in `assets/music/<pack-name>/`. The engine discovers the pack;
+choose it from Audio or use `--music-source=music:music/<pack-name>`. Run
+`--list-assets` to see exact IDs. `--music-source=amiga` or `dos` selects a discovered
+edition's music when unique; `--music-source=native` clears the override.
+These switches override saved choices for the current launch.
+
+Name background tracks as follows; each loops:
+
+| Filename | Where it plays |
+| --- | --- |
+| `track02.ogg` | Main menu |
+| `track03.ogg` | Level 1 |
+| `track04.ogg` | Level 2 |
+| `track05.ogg` | Level 3 |
+| `track06.ogg` | Levels 4 and 5 |
+| `track07.ogg` | Levels 6 and 7 |
+| `track09.ogg` | Credits |
+
+Optional scene cues use these basenames plus `.ogg`:
+
+```text
+intro options journal ceinture desinteg reunion voyage level4 planetexplo
+fin ascenseur logo game_over holocube memoire chute debut missions taxi
+donneobj missions2 recharge generate pont rechagen
+```
+
+A cue loops until the scene stops it. `options.ogg` takes priority over the
+menu's `track02.ogg`. An omitted cue uses an available MOD/PRF cue from the
+chosen source, then native fallback. Mono and stereo Ogg files at 8–192 kHz
+are adapted to the output rate. Keep each pack in its own folder; no music files
+are bundled or downloaded. This supports already prepared recordings, **not raw
+Genesis ROM/VGM playback or extraction from Sega CD disc images**.
+
+`--tunepath` still selects the native optional MOD/OGG/CPC music folder. DOS
+PRF/MIDI/INS files are searched in the game-data folder first. Avoid pointing
+`--tunepath` at a parent containing several editions; use the Soundtrack selector
+for an intentional override.
 
 `--mididriver` chooses the **PRF fallback** synthesizer:
 
@@ -511,6 +651,7 @@ python3 tools/play_cutscenes.py /path/to/assets
 python3 tools/play_cutscenes.py /path/to/assets --list
 python3 tools/play_cutscenes.py /path/to/assets --play intro
 python3 tools/play_cutscenes.py /path/to/assets --play chute:1
+python3 tools/play_cutscenes.py /path/to/library --asset-set=dos --music-source=amiga --play intro
 ```
 
 Python 3.9+ uses its standard library. A compiled REminiscence2 provides the
@@ -518,8 +659,9 @@ renderer, subtitles and audio. Select a number or name, then a part if asked.
 Part numbering begins at zero. A finished part returns to the menu; `--play`
 plays once and exits. Type `q` at the terminal menu to quit.
 
-Backspace, Tab or Escape skips playback. Enter, Space and directions advance
-interactive panels. Closing the playback window also returns to the menu.
+Backspace, Tab or Escape skips playback. Space and letter keys also skip by
+default, controlled by the saved Enhancements options above. Enter and directions
+advance interactive panels. Closing the playback window also returns to the menu.
 Short or static selections are normal: the catalog includes original gameplay
 panels as well as story sequences. The supplied Amiga set has 27 files and
 68 selectable parts.
@@ -683,7 +825,7 @@ variant; shape challenges use `false`.
 | Music is silent | Check `--tunepath`, the available music files and PRF fallback settings. Extracted Amiga music can remain below the asset folder. |
 | A MIDI driver is unavailable | Read `--version`; optional synthesizers must be enabled at build time. |
 | Soundfont or MT-32 startup fails | Check backend selection and the external file requirements in [Picture and sound](#picture-and-sound). |
-| A cutscene seems to repeat | Some gameplay panels loop or wait for input. Try Enter/Space/directions, or Backspace/Tab/Escape in the mini player. |
+| A cutscene seems to repeat | Some gameplay panels loop or wait for input. Try Enter/directions to advance, or Space/A–Z to skip (enabled by default). Backspace/Tab/Escape also skip in the mini player. |
 | Screenshot output fails | Alt+S writes to the working directory; it must be writable. |
 | Controller input differs | Try the keyboard bindings; adjust bindings/dead zones in QoL → Joypad; physical-device validation is pending. |
 

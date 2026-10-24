@@ -57,6 +57,14 @@ class MenuTests(unittest.TestCase):
             self.assertEqual(run.call_args.args[0], [*command, "--play-cutscene=chute:1"])
             self.assertNotIn("shell", run.call_args.kwargs)
 
+    def test_library_selection_preserves_music_isolation(self):
+        with tempfile.TemporaryDirectory() as folder, patch.object(player, "find_engine", return_value=Path("engine")), patch.object(player, "read_catalog", return_value=("DOS", self.scenes)) as read:
+            self.assertEqual(player.main([folder, "--asset-set=dos", "--music-source=amiga", "--json"]), 0)
+            command = read.call_args.args[0]
+            self.assertIn("--asset-set=dos", command)
+            self.assertIn("--music-source=amiga", command)
+            self.assertFalse(any(arg.startswith("--tunepath=") for arg in command))
+
     def test_invalid_engine_is_reported(self):
         with self.assertRaisesRegex(player.PlayerError, "executable not found"):
             player.find_engine("/does-not-exist/reminiscence2")

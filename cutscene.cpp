@@ -1077,6 +1077,7 @@ uint16_t Cutscene::fetchNextCmdWord() {
 }
 
 void Cutscene::mainLoop(uint16_t num) {
+	CutsceneInputScope input(_stub, _skipWithKeyboard);
 	_completed = false;
 	std::vector<size_t> parts;
 	std::string reason;
@@ -1120,7 +1121,8 @@ void Cutscene::mainLoop(uint16_t num) {
 		}
 		(this->*_opcodeTable[op])();
 		_stub->processEvents();
-		if (_stub->_pi.backspace || (_allowEscape && _stub->_pi.escape)) {
+		if ((_interruptForMenu && _interruptForMenu()) || _stub->consumeCutsceneSkip() ||
+		    _stub->_pi.backspace || (_allowEscape && _stub->_pi.escape)) {
 			_stub->_pi.backspace = false;
 			if (_allowEscape) {
 				_stub->_pi.escape = false;
@@ -1262,6 +1264,7 @@ void Cutscene::playCredits() {
 }
 
 void Cutscene::playText(const char *str) {
+	CutsceneInputScope input(_stub, _skipWithKeyboard);
 	Color c;
 	// background
 	c.r = c.g = c.b = 0;
@@ -1284,9 +1287,13 @@ void Cutscene::playText(const char *str) {
 
 	while (!_stub->_pi.quit) {
 		_stub->processEvents();
+		if ((_interruptForMenu && _interruptForMenu()) || _stub->consumeCutsceneSkip()) {
+			_interrupted = true;
+			break;
+		}
 		if (_stub->_pi.backspace) {
 			_stub->_pi.backspace = false;
-			break;
+			break; // Legacy text-summary acknowledgement counts as read.
 		}
 		_stub->sleep(30);
 	}
@@ -1350,7 +1357,7 @@ void Cutscene::play() {
 			for (int i = 0; textsTable[i].str; ++i) {
 				if (_id == textsTable[i].num) {
 					playText(textsTable[i].str);
-					_completed = !_stub->_pi.quit;
+					_completed = !_interrupted && !_stub->_pi.quit;
 					break;
 				}
 			}
@@ -1424,6 +1431,7 @@ static const int kMaxShapesCount = 16;
 static const int kMaxPaletteSize = 32;
 
 void Cutscene::playSet(const uint8_t *p, int offset) {
+	CutsceneInputScope input(_stub, _skipWithKeyboard);
 	SetShape backgroundShapes[kMaxShapesCount];
 	const int bgCount = READ_BE_UINT16(p + offset); offset += 2;
 	assert(bgCount <= kMaxShapesCount);
@@ -1503,7 +1511,8 @@ void Cutscene::playSet(const uint8_t *p, int offset) {
 		const int diff = 90 - (_stub->getTimeStamp() - timestamp);
 		_stub->sleep((diff < 16) ? 16 : diff);
 		_stub->processEvents();
-		if (_stub->_pi.backspace) {
+		if ((_interruptForMenu && _interruptForMenu()) || _stub->consumeCutsceneSkip() ||
+		    _stub->_pi.backspace) {
 			_stub->_pi.backspace = false;
 			_interrupted = true;
 		}

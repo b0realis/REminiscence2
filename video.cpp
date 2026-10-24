@@ -1005,18 +1005,9 @@ void Video::fillRect(int x, int y, int w, int h, uint8_t color) {
 	}
 }
 
-static void fixOffsetDecodeBuffer(DecodeBuffer *buf, const uint8_t *dataPtr) {
-        if (buf->xflip) {
-		buf->x += (int16_t)READ_BE_UINT16(dataPtr + 4) - READ_BE_UINT16(dataPtr) - 1;
-        } else {
-		buf->x -= (int16_t)READ_BE_UINT16(dataPtr + 4);
-        }
-        buf->y -= (int16_t)READ_BE_UINT16(dataPtr + 6);
-}
-
 void Video::MAC_drawSprite(int x, int y, const uint8_t *data, int frame, bool xflip, bool eraseBackground, bool conrad) {
-	const uint8_t *dataPtr = _res->MAC_getImageData(data, frame);
-	if (dataPtr) {
+	MacImage image;
+	if (_res->_mac && decodeMacImage(data, _res->_mac->decodedSize(data), frame, image)) {
 		DecodeBuffer buf;
 		memset(&buf, 0, sizeof(buf));
 		buf.xflip = xflip;
@@ -1028,8 +1019,8 @@ void Video::MAC_drawSprite(int x, int y, const uint8_t *data, int frame, bool xf
 		buf.transparent = true;
 		buf.conrad = conrad;
 		buf.respectMask = !eraseBackground;
-		fixOffsetDecodeBuffer(&buf, dataPtr);
-		_res->MAC_decodeImageData(data, frame, &buf);
-		markBlockAsDirty(buf.x, buf.y, READ_BE_UINT16(dataPtr), READ_BE_UINT16(dataPtr + 2), 1);
+		positionMacSprite(image, xflip, buf.x, buf.y);
+		blitMacImage(image, buf);
+		markBlockAsDirty(buf.x, buf.y, image.width, image.height, 1);
 	}
 }

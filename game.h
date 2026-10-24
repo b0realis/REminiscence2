@@ -92,6 +92,18 @@ struct Game {
 	bool _persistentDue = true, _activeProgress = false;
 	bool _continueRequested = false, _continueFailed = false, _startupMenu = false,
 	     _continued = false;
+	weapon::State _weaponFx;
+	std::vector<assets::Source> _assetSources, _musicSources;
+	int _assetIndex = 0, _requestedAsset = -1;
+	std::unique_ptr<FileSystem> _selectedMusicFiles;
+	void selectMusicSource(const std::string &id);
+	bool resumeLatestSave(std::string &reason);
+	bool isConradShotEffect(const LivePGE *) const;
+	weapon::Style effectivePistolStyle() const;
+	bool conradFlashOrigin(const LivePGE *, int &x, int &y);
+	void updateConradShot(const LivePGE *, int previousFrame);
+	bool playConradShotSound(const LivePGE *, uint8_t sound, uint8_t softVol);
+	void drawWeaponFx();
 	hints::State _hints;
 	bool _nearInteraction = false;
 	uint32_t _cheats;

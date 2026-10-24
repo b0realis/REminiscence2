@@ -106,8 +106,26 @@ bool preferenceButtons(settings::Session &s, const settings::Preferences &openin
 	return resetCapture;
 }
 void sessionPage(settings::Session &s, const char *query) {
+	if (!s.assetSources.empty() && match(query, "Assets edition Amiga DOS GOG Macintosh source")) {
+		ImGui::SeparatorText("Game edition");
+		s.assetIndex = std::clamp(s.assetIndex, 0, int(s.assetSources.size()) - 1);
+		ImGui::SetNextItemWidth(-1);
+		if (ImGui::BeginCombo("##edition", s.assetSources[s.assetIndex].label.c_str())) {
+			for (size_t i = 0; i < s.assetSources.size(); ++i)
+				if (ImGui::Selectable(s.assetSources[i].label.c_str(), int(i) == s.assetIndex))
+					s.assetIndex = int(i);
+			ImGui::EndCombo();
+		}
+		if (wideButton("Use selected edition..."))
+			ImGui::OpenPopup("Switch edition?");
+		confirmation("Switch edition?",
+		             "Leave this session and open the selected edition? Save your progress first.",
+		             "Switch", [&] { s.action = settings::Action::SwitchAssets; });
+		hint("Each edition uses its own files and compatible saves. Music can be chosen separately "
+		     "in Audio.");
+	}
 	if (match(query, "Session progress health rewind screenshot restart title")) {
-		ImGui::SeparatorText("Paused session");
+		ImGui::SeparatorText(s.startup ? "Title settings" : "Paused session");
 		ImGui::BeginDisabled(s.autosaves.empty());
 		if (wideButton("Continue latest autosave..."))
 			ImGui::OpenPopup("Continue latest?");
@@ -116,32 +134,41 @@ void sessionPage(settings::Session &s, const char *query) {
 		    "Continue latest?",
 		    "Restore the newest compatible autosave? Current unsaved progress will be replaced.",
 		    "Continue", [&] { s.action = settings::Action::ContinueLatest; });
-		ImGui::Text("%s / Level %d / Room %d", s.edition.c_str(), s.level + 1, s.room);
-		ImGui::Text("Score %08u / Health %d", s.score, s.health);
-		ImGui::Text("Rewind: %d snapshots", s.rewindCount);
-		ImGui::BeginDisabled(!s.canRewind);
-		if (wideButton("Rewind one snapshot"))
-			s.action = settings::Action::Rewind;
-		ImGui::EndDisabled();
-		if (wideButton("Capture clean screenshot"))
-			s.action = settings::Action::Screenshot;
-		if (wideButton("Restart current level..."))
-			ImGui::OpenPopup("Restart level?");
-		confirmation("Restart level?",
-		             "Restart this level at the current difficulty? Unsaved progress, score and "
-		             "rewind history will be reset.",
-		             "Restart", [&] {
-			             s.targetLevel = s.level;
-			             s.targetSkill = s.skill;
-			             s.action = settings::Action::StartLevel;
-		             });
-		if (wideButton("Return to title..."))
-			ImGui::OpenPopup("Return to title?");
-		confirmation("Return to title?",
-		             "Return to the title screen? Unsaved progress will be lost.", "Title",
-		             [&] { s.action = settings::Action::Title; });
+		if (!s.startup) {
+			ImGui::Text("%s / Level %d / Room %d", s.edition.c_str(), s.level + 1, s.room);
+			ImGui::Text("Score %08u / Health %d", s.score, s.health);
+			ImGui::Text("Rewind: %d snapshots", s.rewindCount);
+			ImGui::BeginDisabled(!s.canRewind);
+			if (wideButton("Rewind one snapshot"))
+				s.action = settings::Action::Rewind;
+			ImGui::EndDisabled();
+			if (wideButton("Capture clean screenshot"))
+				s.action = settings::Action::Screenshot;
+			if (wideButton("Restart current level..."))
+				ImGui::OpenPopup("Restart level?");
+			confirmation(
+			    "Restart level?",
+			    "Restart this level at the current difficulty? Unsaved progress, score and "
+			    "rewind history will be reset.",
+			    "Restart", [&] {
+				    s.targetLevel = s.level;
+				    s.targetSkill = s.skill;
+				    s.action = settings::Action::StartLevel;
+			    });
+			if (wideButton("Return to title..."))
+				ImGui::OpenPopup("Return to title?");
+			confirmation("Return to title?",
+			             "Return to the title screen? Unsaved progress will be lost.", "Title",
+			             [&] { s.action = settings::Action::Title; });
+		} else {
+			hint("Choose a level in Levels, load progress in Saves, or return to the title menu.");
+		}
 	}
 	ImGui::SeparatorText("Everyday preferences");
+	toggle(s, query, "Quicksave skips title sequence", s.values.quickResume,
+	       "On launch, resume the newest compatible quick/manual save, checkpoint or autosave. "
+	       "If none can be restored, play the normal openings. Save settings to remember this "
+	       "choice.");
 	toggle(s, query, "Persistent autosaves", s.values.diskAutosave,
 	       "Three rotating files, separate from manual slots. Save during living gameplay, at "
 	       "checkpoints, and on clean exit.");
@@ -408,6 +435,28 @@ void graphicsPage(settings::Session &s, const char *query) {
 	     "resolution.");
 }
 void audioPage(settings::Session &s, const char *query) {
+	if (match(query, "Music source soundtrack Amiga DOS GOG Sega Genesis CD")) {
+		ImGui::SeparatorText("Soundtrack");
+		const int selected = assets::find(s.musicSources, s.values.musicSource);
+		ImGui::SetNextItemWidth(-1);
+		if (ImGui::BeginCombo("##music-source", selected < 0
+		                                            ? "This edition / supplied tunes"
+													: s.musicSources[selected].label.c_str())) {
+			if (ImGui::Selectable("This edition / supplied tunes", selected < 0)) {
+				s.values.musicSource.clear();
+				s.applyRequested = true;
+			}
+			for (size_t i = 0; i < s.musicSources.size(); ++i)
+				if (ImGui::Selectable(s.musicSources[i].label.c_str(), int(i) == selected)) {
+					s.values.musicSource = s.musicSources[i].id;
+					s.applyRequested = true;
+				}
+			ImGui::EndCombo();
+		}
+		hint("Choose music independently of graphics. Missing tracks fall back to this edition. "
+		     "Add your own Ogg soundtrack under assets/music, including Genesis recordings or Sega "
+		     "CD tracks; see the manual for filenames.");
+	}
 	ImGui::SeparatorText("Mix levels");
 	toggle(s, query, "Mute all audio", s.values.muted,
 	       "Mute output without discarding music or effect playback state.");
@@ -427,6 +476,26 @@ void audioPage(settings::Session &s, const char *query) {
 }
 void enhancementsPage(settings::Session &s, const char *query) {
 	ImGui::SeparatorText("Play your way");
+	if (match(query, "Conrad pistol weapon fire heavy red recoil bass orange green blue purple "
+	                 "laser colour color cosmetic")) {
+		int choice = s.experimentalPistolAvailable ? int(s.values.pistolStyle) : 0;
+		ImGui::BeginDisabled(!s.experimentalPistolAvailable);
+		combo(s, "Pistol style", choice, "Original\0Heavy / red\0Laser\0");
+		ImGui::EndDisabled();
+		if (s.experimentalPistolAvailable) {
+			s.values.pistolStyle = weapon::Style(choice);
+			if (s.values.pistolStyle == weapon::Style::Laser) {
+				int color = int(s.values.laserColor);
+				combo(s, "Laser colour", color, "Orange (default)\0Red\0Green\0Blue\0Purple\0");
+				s.values.laserColor = weapon::LaserColor(color);
+			}
+		} else
+			hint("This edition keeps its original pistol graphics and sound. "
+			     "Heavy and Laser are available with Amiga, DOS and Macintosh assets.");
+		hint("Cosmetic experiment: Heavy adds red flame/casings, visual recoil and bass. Laser "
+		     "adds a coloured moving beam, pistol light and laser sound, without casings. "
+		     "Damage, aim, movement and firing speed stay original.");
+	}
 	if (match(
 	        query,
 	        "Conrad shirt t-shirt undershirt jacket original red pink white appearance clothing")) {
@@ -461,6 +530,12 @@ void enhancementsPage(settings::Session &s, const char *query) {
 	hint("100% preserves original timing. Slower speed gives more time to react without changing "
 	     "movement steps or scripts. Music and cutscenes keep their normal speed.");
 	ImGui::SeparatorText("Cutscene presentation");
+	toggle(s, query, "Space/A-Z skips developer logos", s.values.skipLogosWithKeyboard,
+	       "Press Space or any letter to skip an opening developer/publisher scene. Save settings "
+	       "to remember this choice at startup. Backspace remains available.");
+	toggle(s, query, "Space/A-Z skips other cutscenes", s.values.skipCutscenesWithKeyboard,
+	       "Press Space or any letter to skip the intro or a story scene, including SEQ movies "
+	       "and text summaries. Each scene needs a fresh press; gameplay bindings are unaffected.");
 	hint("These choices take effect on the next applicable scene and need the corresponding "
 	     "edition resources.");
 	toggle(s, query, "Restore extra MEMO content", s.values.restoreMemo,
@@ -674,7 +749,7 @@ void SettingsOverlay::processEvent(const SDL_Event &event, settings::Session *s)
 		if (event.key.keysym.scancode == SDL_SCANCODE_F10) {
 			_captureBinding = -1;
 			if (!s->recovery)
-				s->action = settings::Action::Resume;
+				s->action = s->assetPicker ? settings::Action::Quit : settings::Action::Resume;
 			return;
 		}
 		if (_captureBinding >= 0) {
@@ -731,7 +806,7 @@ void SettingsOverlay::draw(settings::Session &s) {
 	     ImGui::IsKeyPressed(ImGuiKey_GamepadStart, false) ||
 	     ImGui::IsKeyPressed(ImGuiKey_GamepadFaceRight, false)))
 		if (!s.recovery)
-			s.action = settings::Action::Resume;
+			s.action = s.assetPicker ? settings::Action::Quit : settings::Action::Resume;
 	ImGui::GetBackgroundDrawList()->AddRectFilled(ImVec2(0, 0), io.DisplaySize,
 	                                              IM_COL32(0, 5, 14, 145));
 	const ImVec2 size(_native ? io.DisplaySize.x
@@ -743,15 +818,17 @@ void SettingsOverlay::draw(settings::Session &s) {
 	ImGui::Begin("REminiscence2 settings", nullptr,
 	             ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoDecoration |
 	                 ImGuiWindowFlags_NoMove);
-	ImGui::TextColored(accent, s.recovery  ? "REminiscence2 / RECOVERY"
-	                           : s.startup ? "REminiscence2 / WELCOME"
-	                           : _native   ? "REminiscence2 / PAUSED"
-	                                       : "REminiscence2 / Quality of Life");
+	ImGui::TextColored(accent, s.assetPicker ? "REminiscence2 / GAME EDITION"
+	                           : s.recovery  ? "REminiscence2 / RECOVERY"
+	                           : s.startup   ? "REminiscence2 / TITLE"
+	                           : _native     ? "REminiscence2 / PAUSED"
+	                                         : "REminiscence2 / Quality of Life");
 	if (!_native)
 		ImGui::TextDisabled("%s / %s / %s", s.edition.c_str(), REMINISCENCE2_VERSION,
-		                    s.recovery  ? "Choose a recovery point"
-		                    : s.startup ? "Choose Continue or New game"
-		                                : "Esc, F10 or Start to resume");
+		                    s.assetPicker ? "Choose an edition to start"
+		                    : s.recovery  ? "Choose a recovery point"
+		                    : s.startup   ? "Settings, saves and level selection"
+		                                  : "Esc, F10 or Start to resume");
 	ImGui::Separator();
 	if (s.controllerDisconnected)
 		ImGui::TextWrapped(
@@ -881,28 +958,24 @@ void SettingsOverlay::draw(settings::Session &s) {
 	};
 
 	auto autosaves = [&](bool preview = false, bool focusButton = false) {
-		ImGui::SeparatorText(s.startup ? "Welcome back" : "Persistent autosaves");
+		ImGui::SeparatorText("Persistent autosaves");
 		if (s.autosaves.empty()) {
 			hint("No valid autosaves for this edition yet.");
 			return;
 		}
 		s.autosaveIndex = std::max(0, std::min(s.autosaveIndex, int(s.autosaves.size()) - 1));
-		if (!s.startup) {
+		{
 			ImGui::SetNextItemWidth(-1);
 			ImGui::SliderInt("##autosave", &s.autosaveIndex, 0, int(s.autosaves.size()) - 1,
 			                 "Generation %d (0 = latest)");
 		}
-		const auto &save = s.autosaves[s.startup ? 0 : s.autosaveIndex];
+		const auto &save = s.autosaves[s.autosaveIndex];
 		ImGui::Text("Level %d / Room %d / Health %d", save.level + 1, save.room, save.health);
 		ImGui::TextWrapped("%s", progress::date(save.timestamp).c_str());
 		if (focusButton)
 			ImGui::SetKeyboardFocusHere();
-		if (wideButton(s.startup ? "Continue latest autosave" : "Load this autosave...")) {
-			if (s.startup)
-				s.action = settings::Action::ContinueLatest;
-			else
-				ImGui::OpenPopup("Restore autosave?");
-		}
+		if (wideButton("Load this autosave..."))
+			ImGui::OpenPopup("Restore autosave?");
 		confirmation(
 		    "Restore autosave?",
 		    "Restore this autosave, switching levels if needed? Unsaved progress will be replaced.",
@@ -1086,7 +1159,19 @@ void SettingsOverlay::draw(settings::Session &s) {
 			content(page);
 		ImGui::EndChild();
 	};
-	if (s.recovery) {
+	if (s.assetPicker) {
+		ImGui::BeginChild("Choose assets", ImVec2(0, -footer), ImGuiChildFlags_Borders);
+		ImGui::TextWrapped("Multiple game editions found. Choose which assets to play.");
+		for (size_t i = 0; i < s.assetSources.size(); ++i) {
+			ImGui::PushID(int(i));
+			if (ImGui::RadioButton(s.assetSources[i].label.c_str(), s.assetIndex == int(i)))
+				s.assetIndex = int(i);
+			ImGui::PopID();
+		}
+		hint("Your choice is remembered. Change it later in QoL / Session. Audio has a separate "
+		     "music-source selector.");
+		ImGui::EndChild();
+	} else if (s.recovery) {
 		ImGui::BeginChild("Recovery choices", ImVec2(0, -footer), ImGuiChildFlags_Borders);
 		hint("Conrad fell. Choose where to return; the game stays paused.");
 		if (!s.status.empty())
@@ -1176,12 +1261,6 @@ void SettingsOverlay::draw(settings::Session &s) {
 		             "Leave this session and return to the title? Stored saves are kept.", "Title",
 		             [&] { s.action = settings::Action::Title; });
 		ImGui::EndChild();
-	} else if (s.startup) {
-		ImGui::BeginChild("Welcome", ImVec2(0, -footer), ImGuiChildFlags_Borders);
-		if (!s.status.empty())
-			ImGui::TextWrapped("%s", s.status.c_str());
-		autosaves(true);
-		ImGui::EndChild();
 	} else if (_compact) {
 		if (requested >= 0)
 			_tab = requested;
@@ -1227,8 +1306,9 @@ void SettingsOverlay::draw(settings::Session &s) {
 	const bool compactFooter =
 	    _compact || resumeWidth + naturalExit + saveWidth + spacing * 2 > available;
 	const float exitWidth = compactFooter ? (available - spacing) / 2 : naturalExit;
-	const char *resumeLabel = s.recovery                 ? "Restart level..."
-	                          : s.startup                ? "New game"
+	const char *resumeLabel = s.assetPicker              ? "Play selected"
+	                          : s.recovery               ? "Restart level..."
+	                          : s.startup                ? "Back to title"
 	                          : compactFooter || _native ? "Resume"
 	                                                     : "Resume game";
 	if (ImGui::Button(resumeLabel, ImVec2(compactFooter ? exitWidth : resumeWidth, 0))) {
@@ -1244,10 +1324,12 @@ void SettingsOverlay::draw(settings::Session &s) {
 	});
 	ImGui::SameLine();
 	if (!compactFooter) {
-		if (!s.startup) {
-			if (ImGui::Button("Save settings"))
-				s.saveRequested = true;
-			ImGui::SameLine();
+		{
+			if (!s.assetPicker) {
+				if (ImGui::Button("Save settings"))
+					s.saveRequested = true;
+				ImGui::SameLine();
+			}
 		}
 		ImGui::SetCursorPosX(ImGui::GetWindowWidth() - ImGui::GetStyle().WindowPadding.x -
 		                     exitWidth);
@@ -1266,9 +1348,10 @@ void SettingsOverlay::draw(settings::Session &s) {
 	             "EXIT GAME", [&] { s.action = settings::Action::Quit; });
 	if (!_native) {
 		ImGui::TextDisabled(
-		    s.recovery ? "Choose a recovery point or restart. Escape keeps recovery open."
+		    s.assetPicker ? "Choose an edition, then Play selected. Esc / F10 / Start: exit."
+			: s.recovery  ? "Choose a recovery point or restart. Escape keeps recovery open."
 			: s.startup
-		        ? "Esc / F10 / Start: New game | Continue restores the newest compatible autosave."
+		        ? "Esc / F10 / Start: title | Levels: start anywhere | Saves: restore progress."
 				: "Esc / F10 / Start: resume | Settings, saves and cheats have separate controls.");
 	}
 	ImGui::End();

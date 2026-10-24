@@ -32,6 +32,7 @@ struct PlayerInput {
 	bool shift;
 	bool backspace;
 	bool escape;
+	bool cutsceneSkip; // One fresh Space/letter press, independent of gameplay bindings.
 
 	char lastChar;
 
@@ -56,6 +57,16 @@ struct SystemStub {
 	typedef void (*AudioCallback)(void *param, int16_t *stream, int len);
 
 	PlayerInput _pi;
+	bool _cutsceneSkipEnabled = false;
+	virtual void setCutsceneSkipEnabled(bool enabled) {
+		_cutsceneSkipEnabled = enabled;
+		_pi.cutsceneSkip = false;
+	}
+	bool consumeCutsceneSkip() {
+		const bool requested = _cutsceneSkipEnabled && _pi.cutsceneSkip;
+		_pi.cutsceneSkip = false;
+		return requested;
+	}
 
 	virtual ~SystemStub() {}
 	virtual void configure(const RuntimeOptions &) {}
@@ -105,6 +116,17 @@ struct SystemStub {
 	virtual uint32_t getOutputSampleRate() = 0;
 	virtual void lockAudio() = 0;
 	virtual void unlockAudio() = 0;
+};
+
+// Limit the shortcut to the current playback and discard stale requests on
+// entry/exit. Holding a key must never skip the following scene as well.
+struct CutsceneInputScope {
+	SystemStub *stub;
+	bool previous;
+	CutsceneInputScope(SystemStub *s, bool enabled) : stub(s), previous(s->_cutsceneSkipEnabled) {
+		stub->setCutsceneSkipEnabled(enabled);
+	}
+	~CutsceneInputScope() { stub->setCutsceneSkipEnabled(previous); }
 };
 
 struct LockAudioStack {

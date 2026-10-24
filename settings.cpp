@@ -45,7 +45,9 @@ bool Preferences::operator==(const Preferences &o) const {
 	                extraSerrure, conradShirt, keys, padButtons, joystickButtons, stickDeadzone,
 	                rightStickMovement, storyJournal, journalNotifications, diskAutosave,
 	                contextualHints, diskAutosaveSeconds, stickyAction, reduceShake, gameSpeed,
-	                objectivesNotebook, reduceBlink, inputBuffer) ==
+	                objectivesNotebook, reduceBlink, inputBuffer, pistolStyle, laserColor,
+	                skipLogosWithKeyboard, skipCutscenesWithKeyboard, quickResume, assetSet,
+	                musicSource) ==
 	       std::tie(o.fullscreen, o.vsync, o.pauseOnFocusLoss, o.showFps, o.showMenuButton,
 	                o.menuLayout, o.filter, o.scale, o.widescreen, o.uiScale, o.masterVolume,
 	                o.musicVolume, o.effectsVolume, o.muted, o.rewind, o.fadeTransitions,
@@ -54,7 +56,9 @@ bool Preferences::operator==(const Preferences &o) const {
 	                o.extraSerrure, o.conradShirt, o.keys, o.padButtons, o.joystickButtons,
 	                o.stickDeadzone, o.rightStickMovement, o.storyJournal, o.journalNotifications,
 	                o.diskAutosave, o.contextualHints, o.diskAutosaveSeconds, o.stickyAction,
-	                o.reduceShake, o.gameSpeed, o.objectivesNotebook, o.reduceBlink, o.inputBuffer);
+	                o.reduceShake, o.gameSpeed, o.objectivesNotebook, o.reduceBlink, o.inputBuffer,
+	                o.pistolStyle, o.laserColor, o.skipLogosWithKeyboard,
+	                o.skipCutscenesWithKeyboard, o.quickResume, o.assetSet, o.musicSource);
 }
 
 const char *padBindingName(size_t i) {
@@ -131,13 +135,22 @@ bool validBinding(int key, const Preferences &p, size_t index, std::string &reas
 }
 
 bool validate(const Preferences &p, std::string &reason) {
-	if (int(p.filter) < 0 || int(p.filter) > 2 || p.scale < 1 || p.scale > 6 ||
-	    (p.filter == Filter::Scale && (p.scale < 2 || p.scale > 4)) || p.widescreen < 0 ||
-	    p.widescreen > 5 || p.uiScale < 75 || p.uiScale > 175 || p.masterVolume < 0 ||
-	    p.masterVolume > 100 || p.musicVolume < 0 || p.musicVolume > 100 || p.effectsVolume < 0 ||
-	    p.effectsVolume > 100 || p.menuLayout < 0 || p.menuLayout > 1 || int(p.conradShirt) < 0 ||
-	    p.diskAutosaveSeconds < 15 || p.diskAutosaveSeconds > 600 || int(p.conradShirt) > 2 ||
-	    p.gameSpeed < 50 || p.gameSpeed > 100 || p.stickDeadzone < 5 || p.stickDeadzone > 50) {
+	for (const auto *source : {&p.assetSet, &p.musicSource}) {
+		if (source->size() > 4096 || source->find_first_of("\r\n") != std::string::npos ||
+		    source->find('\0') != std::string::npos) {
+			reason = "Source selection is too long or contains a line break.";
+			return false;
+		}
+	}
+	if (int(p.pistolStyle) < 0 || int(p.pistolStyle) > 2 || int(p.laserColor) < 0 ||
+	    int(p.laserColor) > 4 || int(p.filter) < 0 || int(p.filter) > 2 || p.scale < 1 ||
+	    p.scale > 6 || (p.filter == Filter::Scale && (p.scale < 2 || p.scale > 4)) ||
+	    p.widescreen < 0 || p.widescreen > 5 || p.uiScale < 75 || p.uiScale > 175 ||
+	    p.masterVolume < 0 || p.masterVolume > 100 || p.musicVolume < 0 || p.musicVolume > 100 ||
+	    p.effectsVolume < 0 || p.effectsVolume > 100 || p.menuLayout < 0 || p.menuLayout > 1 ||
+	    int(p.conradShirt) < 0 || p.diskAutosaveSeconds < 15 || p.diskAutosaveSeconds > 600 ||
+	    int(p.conradShirt) > 2 || p.gameSpeed < 50 || p.gameSpeed > 100 || p.stickDeadzone < 5 ||
+	    p.stickDeadzone > 50) {
 		reason = "A display, appearance or volume setting is outside its supported range.";
 		return false;
 	}

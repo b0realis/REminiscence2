@@ -148,6 +148,7 @@ struct Resource {
 	int _icnLen;
 	uint8_t *_tab;
 	uint8_t *_spc;
+	uint32_t _spcSize;
 	uint16_t _numSpc;
 	uint8_t _rp[74];
 	uint8_t *_pal;

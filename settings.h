@@ -4,8 +4,10 @@
 
 #include "intern.h"
 #include "appearance.h"
+#include "weapon_fx.h"
 #include "journal.h"
 #include "progress_store.h"
+#include "asset_library.h"
 #include <array>
 #include <functional>
 #include <string>
@@ -25,9 +27,12 @@ struct Preferences {
 	int scale = 3, widescreen = 0, uiScale = 100;
 	int masterVolume = 100, musicVolume = 100, effectsVolume = 100;
 	bool muted = false, rewind = false;
+	weapon::Style pistolStyle = weapon::Style::Original;
+	weapon::LaserColor laserColor = weapon::LaserColor::Orange;
 	appearance::Shirt conradShirt = appearance::Shirt::Original;
 	bool fadeTransitions = true, inventoryOriginal = false, saveChime = false;
 	bool restoreMemo = true, textCutscenes = false, seqCutscenes = true;
+	bool skipLogosWithKeyboard = true, skipCutscenesWithKeyboard = true;
 	bool extraAsc = false, extraCaillou = false, extraCarte = false;
 	bool extraMetro = false, extraSerrure = false;
 	// Stable SDL scancodes, independent of keyboard layout. Display names and
@@ -40,6 +45,8 @@ struct Preferences {
 	bool rightStickMovement = false;
 	bool storyJournal = true, journalNotifications = true;
 	bool diskAutosave = true, contextualHints = false;
+	bool quickResume = false;
+	std::string assetSet, musicSource; // Empty: ask for edition / use this edition's music.
 	bool stickyAction = false, reduceShake = false, reduceBlink = false, inputBuffer = false;
 	int gameSpeed = 100;
 	bool objectivesNotebook = true;
@@ -74,6 +81,7 @@ enum class Action {
 	Heal,
 	Screenshot,
 	StartLevel,
+	SwitchAssets,
 	Title,
 	Quit
 };
@@ -94,6 +102,10 @@ struct RewindPoint {
 struct Session {
 	Preferences values;
 	bool startup = false, recovery = false;
+	bool assetPicker = false;
+	std::vector<assets::Source> assetSources, musicSources;
+	int assetIndex = 0;
+	bool experimentalPistolAvailable = false;
 	int autosaveIndex = 0, rewindIndex = 0;
 	std::vector<progress::Snapshot> autosaves;
 	std::vector<RewindPoint> rewindPoints;
