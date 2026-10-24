@@ -4,6 +4,7 @@
 #include "game.h"
 #include "headless_system.h"
 #include "screenshot.h"
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
