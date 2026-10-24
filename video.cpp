@@ -191,11 +191,11 @@ void Video::setPaletteSlotLE(int palSlot, const uint8_t *palData) {
 
 void Video::refreshConradShirtPalette() {
 	std::array<Color, 2> source{};
-	const int shadow = _res->isAmiga() ? 0x45 : 0x4C;
-	const int light = _res->isAmiga() ? 0x41 : 0x4D;
+	const int shadow = (_res->isAmiga() || _res->isSegaCD()) ? 0x45 : 0x4C;
+	const int light = (_res->isAmiga() || _res->isSegaCD()) ? 0x41 : 0x4D;
 	_stub->getPaletteEntry(shadow, &source[0]);
 	_stub->getPaletteEntry(light, &source[1]);
-	const auto colors = appearance::shirtColors(_res->_type, _conradShirt, source);
+	const auto colors = appearance::shirtColors(_conradShirt, source);
 	_stub->setPaletteEntry(appearance::ShirtShadow, &colors[0]);
 	_stub->setPaletteEntry(appearance::ShirtLight, &colors[1]);
 }
@@ -802,7 +802,7 @@ void Video::drawSpriteSub3(const uint8_t *src, uint8_t *dst, int pitch, int h, i
 	while (h--) {
 		for (int i = 0; i < w; ++i) {
 			if (src[i] != 0 && !(dst[i] & 0x80)) {
-				dst[i] = appearance::shirtPixel(_res->_type, src[i] | colMask, conrad);
+				dst[i] = appearance::shirtPixel(_res->isAmiga() || _res->isSegaCD(), src[i] | colMask, conrad);
 			}
 		}
 		src += pitch;
@@ -815,7 +815,7 @@ void Video::drawSpriteSub4(const uint8_t *src, uint8_t *dst, int pitch, int h, i
 	while (h--) {
 		for (int i = 0; i < w; ++i) {
 			if (src[-i] != 0 && !(dst[i] & 0x80)) {
-				dst[i] = appearance::shirtPixel(_res->_type, src[-i] | colMask, conrad);
+				dst[i] = appearance::shirtPixel(_res->isAmiga() || _res->isSegaCD(), src[-i] | colMask, conrad);
 			}
 		}
 		src += pitch;
@@ -828,7 +828,7 @@ void Video::drawSpriteSub5(const uint8_t *src, uint8_t *dst, int pitch, int h, i
 	while (h--) {
 		for (int i = 0; i < w; ++i) {
 			if (src[i * pitch] != 0 && !(dst[i] & 0x80)) {
-				dst[i] = appearance::shirtPixel(_res->_type, src[i * pitch] | colMask, conrad);
+				dst[i] = appearance::shirtPixel(_res->isAmiga() || _res->isSegaCD(), src[i * pitch] | colMask, conrad);
 			}
 		}
 		++src;
@@ -841,7 +841,7 @@ void Video::drawSpriteSub6(const uint8_t *src, uint8_t *dst, int pitch, int h, i
 	while (h--) {
 		for (int i = 0; i < w; ++i) {
 			if (src[-i * pitch] != 0 && !(dst[i] & 0x80)) {
-				dst[i] = appearance::shirtPixel(_res->_type, src[-i * pitch] | colMask, conrad);
+				dst[i] = appearance::shirtPixel(_res->isAmiga() || _res->isSegaCD(), src[-i * pitch] | colMask, conrad);
 			}
 		}
 		++src;

@@ -32,6 +32,7 @@ static bool nativePositions(ResourceType edition) {
 	auto game = std::make_unique<Game>(&platform, &files, &files, ".", 0, edition, LANG_EN,
 	                                   kWidescreenNone, false, 0);
 	auto &res = game->_res;
+	res._isSegaCD = edition == kResourceTypeSega;
 	Bytes pixels(64);
 	for (int y = 2; y <= 4; ++y)
 		for (int x = 1; x <= 6; ++x)
@@ -82,6 +83,16 @@ static bool nativePositions(ResourceType edition) {
 		std::copy(bank.begin(), bank.end(), res._bankData);
 		res._bankBuffers[0] = {0, res._bankData};
 		res._bankBuffersCount = 1;
+		if (res.isSegaCD()) {
+			// The CD flash lives in a separate, raw object MBK. The background
+			// directory deliberately cannot supply it, catching wrong-bank reads.
+			Bytes objects(6);
+			be32(objects, 0, 6);
+			be16(objects, 4, 0xffff);
+			objects.insert(objects.end(), bank.begin(), bank.end());
+			res._objectMbk = owned(objects);
+			res._objectMbkSize = objects.size();
+		}
 	}
 	res._spc = owned(source);
 	res._spcSize = source.size();
@@ -129,10 +140,15 @@ static bool nativePositions(ResourceType edition) {
 				if (game->effectivePistolStyle() != style)
 					return false;
 				for (int color = 0; color < 5; ++color) {
+					res.selectObjectBank((color & 1) != 0);
+					const bool originalBank = res._usingObjectBank;
+					const auto *originalMbk = res._mbk;
 					game->_preferences.laserColor = weapon::LaserColor(color);
 					game->_weaponFx.clear();
 					effect.anim_number = 287;
 					game->updateConradShot(&effect, 299);
+					if (res._usingObjectBank != originalBank || res._mbk != originalMbk)
+						return false;
 					if (game->_weaponFx.next != 1 || !game->_weaponFx.nativeFlashMatched)
 						return false;
 					const auto &shot = game->_weaponFx.shots[0];
@@ -183,8 +199,9 @@ static bool nativePositions(ResourceType edition) {
 }
 
 int main() {
-	if (!nativePositions(kResourceTypeDOS) || !nativePositions(kResourceTypeMac)) {
-		std::cerr << "Native DOS/Mac shot geometry or laser height failed\n";
+	if (!nativePositions(kResourceTypeDOS) || !nativePositions(kResourceTypeMac) ||
+	    !nativePositions(kResourceTypeSega)) {
+		std::cerr << "Native DOS/Mac/Sega CD shot geometry or laser height failed\n";
 		return 16;
 	}
 	weapon::State fx;

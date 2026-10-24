@@ -142,7 +142,7 @@ bool Game::handleConfigPanel(bool recovery) {
 	session.assetSources = _assetSources;
 	session.musicSources = _musicSources;
 	session.assetIndex = _assetIndex;
-	session.experimentalPistolAvailable = _res.isAmiga() || _res.isDOS() || _res.isMac();
+	session.experimentalPistolAvailable = _res.isAmiga() || _res.isDOS() || _res.isMac() || _res.isSegaCD();
 	session.recovery = recovery;
 	session.browseLevel = _currentLevel;
 	session.autosaves = progress::scan(_savePath, _res._type);

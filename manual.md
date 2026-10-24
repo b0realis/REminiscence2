@@ -353,10 +353,10 @@ aim and his actual position stay unchanged; recoil is a drawing offset. Choose
 **Original** restores the normal presentation. The beam is a cosmetic trace,
 not a new projectile or a change to the original hit calculation.
 
-Heavy and Laser work with **Amiga, GOG/DOS and Macintosh assets**. Their position
+Heavy and Laser work with **Amiga, GOG/DOS, Macintosh and Sega CD assets**. Their position
 and starting frame follow that edition's original shot flash. The laser stays at
 its launch height as it travels, including Macintosh's native pixel resolution.
-PC-98 and Sega retain their original pistol presentation for now. All imported
+PC-98 and experimental Sega cartridge assets retain their original pistol presentation. All imported
 game files stay untouched; effects are generated in memory while playing.
 
 At startup, saved menu preferences override their corresponding `fb.cfg`

@@ -1198,7 +1198,7 @@ void Game::drawAnimBuffer(uint8_t stateNum, AnimBufferState *state) {
 					if (pge == &_pgeLive[0]) {
 						const int width = ((state->dataPtr[2] >> 7) + 1) * 16;
 						const int height = state->dataPtr[2] & 0x7F;
-						appearance::markAmigaTshirt(_res._scratchBuffer, width, height, Resource::kScratchBufferSize);
+						appearance::markSharedTshirt(_res._scratchBuffer, width, height, Resource::kScratchBufferSize);
 					}
 					drawCharacter(_res._scratchBuffer, state->x, state->y, state->h, state->w,
 					              displayFlags, pge == &_pgeLive[0]);
@@ -1218,6 +1218,9 @@ void Game::drawAnimBuffer(uint8_t stateNum, AnimBufferState *state) {
 					if ((_res.isSegaCD() ? decodeSegaCDCharacter : decodeSegaCharacter)(
 					        state->dataPtr, _res._sprDataSizes[pge->anim_number],
 					        _res._scratchBuffer, Resource::kScratchBufferSize)) {
+						if (_res.isSegaCD() && pge == &_pgeLive[0])
+							appearance::markSharedTshirt(_res._scratchBuffer, 32, 48,
+							                              Resource::kScratchBufferSize);
 						drawCharacter(_res._scratchBuffer, state->x, state->y, state->h, state->w,
 						              displayFlags, pge == &_pgeLive[0]);
 					} else {

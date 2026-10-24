@@ -1,6 +1,17 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 # Changes
 
+## 1.25
+
+- Enable gameplay T-shirt choices and Heavy/Laser pistol styles for Sega CD,
+  including all five laser colours. Select the CD object bank and tile decoder
+  when finding the native muzzle position; restore the caller's bank afterward.
+- Share the selective undershirt mask with Amiga. Preserve the jacket, footwear,
+  equipment, source palettes and imported files; Original keeps native colours.
+- Audit all 70 MCD files against an independent disc extraction and all 17754
+  indexed frames against the original 68000 decompressor. Their dithering is
+  original artwork. Add patterned tile/palette and CD cosmetic regressions.
+
 ## 1.24
 
 - Fix Sega CD movie timing after focus/background pauses: video waits for the

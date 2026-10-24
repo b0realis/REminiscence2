@@ -96,6 +96,36 @@ int main(int argc, char **argv) {
 		std::filesystem::create_directories(root);
 		std::array<uint8_t, 32768> image{};
 		std::array<uint8_t, 768> palette{};
+		// A solid frame cannot catch swapped tile axes, nibble order or palette
+		// channels. Use nonuniform pixels at every tile and within every tile.
+		std::vector<uint8_t> pattern;
+		for (unsigned ty = 0; ty < 16; ++ty)
+			for (unsigned tx = 0; tx < 32; ++tx)
+				for (unsigned y = 0; y < 8; ++y)
+					for (unsigned x = 0; x < 8; x += 2) {
+						const unsigned c = (tx + 2 * ty + x + 3 * y) & 15;
+						pattern.push_back((c << 4) | ((c + 1) & 15));
+					}
+		for (auto codec : {mcd::Codec::Lsb, mcd::Codec::Msb, mcd::Codec::Split}) {
+			std::vector<uint8_t> frame(36);
+			frame[32] = 1;
+			frame[2] = 0x04;
+			frame[3] = 0x6e; // Colour 1: red 7/7, green 3/7, blue 2/7.
+			if (codec == mcd::Codec::Split)
+				be16(frame, pattern.size() * 9 / 8);
+			for (size_t offset = 0; offset < pattern.size(); offset += 8) {
+				frame.push_back(0xff);
+				frame.insert(frame.end(), pattern.begin() + offset, pattern.begin() + offset + 8);
+			}
+			check(mcd::decodeFrame(frame.data(), frame.size(), codec, image.data(), palette.data()),
+			      "patterned movie frame");
+			for (unsigned y = 0; y < 128; ++y)
+				for (unsigned x = 0; x < 256; ++x)
+					check(image[y * 256 + x] == ((x / 8 + 2 * (y / 8) + x % 8 + 3 * (y % 8)) & 15),
+					      "movie row-major tile and nibble placement");
+			check(palette[3] == 255 && palette[4] == 109 && palette[5] == 72,
+			      "Sega BGR333 movie palette channels");
+		}
 		int n = 0;
 		for (auto codec : {mcd::Codec::Lsb, mcd::Codec::Msb, mcd::Codec::Split}) {
 			std::vector<uint8_t> frame(36);

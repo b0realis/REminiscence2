@@ -643,24 +643,26 @@ int main(int argc, char **argv) {
 			          settings::load(profile, restored, reason) && restored == saved,
 			      "each shirt style persists and restores with the complete profile");
 		}
-		check(appearance::shirtPixel(kResourceTypeAmiga, 0x47, true) == 0x47 &&
-		          appearance::shirtPixel(kResourceTypeAmiga, 0x42, true) == 0x42,
+		check(appearance::shirtPixel(true, 0x47, true) == 0x47 &&
+		          appearance::shirtPixel(true, 0x42, true) == 0x42,
 		      "Amiga jacket and shared hair/outline colours remain intact");
 		for (auto edition : {kResourceTypeAmiga, kResourceTypeDOS, kResourceTypePC98,
 		                     kResourceTypeSega, kResourceTypeMac}) {
 			for (int color = 0; color < 256; ++color)
-				check(appearance::shirtPixel(edition, color, false) == color,
+				check(appearance::shirtPixel(edition == kResourceTypeAmiga, color, false) == color,
 				      "other sprites keep every palette index");
 			std::array<Color, 2> native{{{153, 17, 68}, {187, 34, 85}}};
-			const auto original = appearance::shirtColors(edition, Shirt::Original, native);
+			const auto original = appearance::shirtColors(Shirt::Original, native);
 			check(memcmp(native.data(), original.data(), sizeof(native)) == 0,
 			      "Original keeps exact asset RGB");
 			FileSystem files(saveRoot.c_str());
 			HeadlessSystem platform;
 			Resource resource(&files, edition, LANG_EN);
+			resource._isSegaCD = edition == kResourceTypeSega;
+			const bool shared = resource.isAmiga() || resource.isSegaCD();
 			Video video(&resource, &platform, kWidescreenNone);
-			const int source = edition == kResourceTypeAmiga ? 1 : 13;
-			const Color fill = edition == kResourceTypeAmiga ? Color{204, 204, 204} : native[1];
+			const int source = shared ? 1 : 13;
+			const Color fill = shared ? Color{204, 204, 204} : native[1];
 			platform.palette[0x40 + source] = fill;
 			platform.palette[0x4C] = native[0];
 			platform.palette[0x45] = {136, 136, 136};
@@ -682,7 +684,7 @@ int main(int argc, char **argv) {
 			}
 			if (edition == kResourceTypeMac)
 				continue;
-			const uint8_t pixel = edition == kResourceTypeAmiga ? appearance::ShirtLight : source;
+			const uint8_t pixel = shared ? appearance::ShirtLight : source;
 			const uint8_t npcPixel = source;
 			using Draw = void (Video::*)(const uint8_t *, uint8_t *, int, int, int, uint8_t, bool);
 			for (Draw draw : {&Video::drawSpriteSub3, &Video::drawSpriteSub4,
@@ -709,7 +711,7 @@ int main(int argc, char **argv) {
 			mask[y * 7 + 2] = mask[y * 7 + 3] = 1;
 		for (int turn = 0; turn < 4; ++turn) {
 			auto tagged = pose;
-			check(appearance::markAmigaTshirt(tagged.data(), 7, 7, tagged.size()) == 6,
+			check(appearance::markSharedTshirt(tagged.data(), 7, 7, tagged.size()) == 6,
 			      "only undershirt fabric is tagged in each rotated pose");
 			for (size_t i = 0; i < tagged.size(); ++i) {
 				const uint8_t expected =
@@ -727,12 +729,12 @@ int main(int argc, char **argv) {
 			pose = nextPose;
 			mask = nextMask;
 		}
-		check(appearance::markAmigaTshirt(pose.data(), 7, 7, 48) == 0,
+		check(appearance::markSharedTshirt(pose.data(), 7, 7, 48) == 0,
 		      "short decoded frames are rejected without accessing beyond capacity");
 		const std::array<Color, 2> dark{{{77, 9, 34}, {94, 17, 43}}};
 		const std::array<Color, 2> bright{{{153, 17, 68}, {187, 34, 85}}};
-		check(appearance::shirtColors(kResourceTypeDOS, Shirt::White, dark)[1].r <
-		          appearance::shirtColors(kResourceTypeDOS, Shirt::White, bright)[1].r,
+		check(appearance::shirtColors(Shirt::White, dark)[1].r <
+		          appearance::shirtColors(Shirt::White, bright)[1].r,
 		      "white shirt retains dark-room shading");
 		settings::Preferences oldConfig;
 		Options legacy;

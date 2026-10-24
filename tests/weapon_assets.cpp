@@ -12,18 +12,20 @@
 #include <vector>
 
 Options g_options;
-const char *g_caption = "DOS asset tests";
+const char *g_caption = "Edition weapon asset tests";
 static void check(bool ok, const char *message) {
 	if (!ok)
 		throw std::runtime_error(message);
 }
 static void init(Game &game) {
 	game.initCutsceneResources();
-	game._res.load("GLOBAL", Resource::OT_ICN);
-	game._res.load("GLOBAL", Resource::OT_SPC);
-	game._res.load("PERSO", Resource::OT_SPR);
-	game._res.load_SPR_OFF("PERSO", game._res._spr1);
-	game._res.load_FIB("GLOBAL");
+	if (!game._res.isSegaCD()) {
+		game._res.load("GLOBAL", Resource::OT_ICN);
+		game._res.load("GLOBAL", Resource::OT_SPC);
+		game._res.load("PERSO", Resource::OT_SPR);
+		game._res.load_SPR_OFF("PERSO", game._res._spr1);
+		game._res.load_FIB("GLOBAL");
+	}
 	game._mix.init();
 	game._preferences.diskAutosave = false;
 	game._randSeed = 1337;
@@ -33,10 +35,12 @@ static void init(Game &game) {
 }
 
 int main(int argc, char **argv) {
-	if (argc != 3)
+	if (argc != 4)
 		return 1;
 	try {
 		setDefaultOptions(g_options);
+		const auto edition =
+		    std::string(argv[3]) == "segacd" ? kResourceTypeSega : kResourceTypeDOS;
 		FileSystem files(argv[1]);
 		const std::filesystem::path output(argv[2]);
 		std::filesystem::create_directories(output);
@@ -44,9 +48,8 @@ int main(int argc, char **argv) {
 		std::vector<std::array<int, 3>> origins(220, {-1, -1, 0});
 		for (int variant = 0; variant < 7; ++variant) {
 			HeadlessSystem platform;
-			auto game =
-			    std::make_unique<Game>(&platform, &files, &files, argv[2], 0, kResourceTypeDOS,
-				                       LANG_EN, kWidescreenNone, false, 0);
+			auto game = std::make_unique<Game>(&platform, &files, &files, argv[2], 0, edition,
+			                                   LANG_EN, kWidescreenNone, false, 0);
 			init(*game);
 			game->_preferences.pistolStyle = static_cast<weapon::Style>(std::min(variant, 2));
 			game->_preferences.laserColor =
@@ -86,18 +89,18 @@ int main(int argc, char **argv) {
 									top = std::min(top, y);
 									bottom = std::max(bottom, y);
 								}
-						check(left <= right, "DOS native flash rendered no pixels");
+						check(left <= right, "Native flash rendered no pixels");
 						origins[tick] = {(effect.flags & 1) ? left : right, (top + bottom) / 2,
 						                 (effect.flags & 1) ? 1 : -1};
 						game->_eraseBackground = erase;
 						std::copy(frame.begin(), frame.end(), game->_vid._frontLayer);
 					} else {
 						const auto &fx = game->_weaponFx;
-						check(fx.next && fx.poseAge < 2, "DOS native flash was not replaced");
+						check(fx.next && fx.poseAge < 2, "Native flash was not replaced");
 						const auto &shot = fx.shots[(fx.next - 1) % fx.shots.size()];
 						check(shot.flashX == origins[tick][0] && shot.flashY == origins[tick][1] &&
 						          shot.direction == origins[tick][2],
-						      "DOS replacement origin differs from native pixels");
+						      "Replacement origin differs from native pixels");
 						directions |= 1u << ((tick >= 130 ? 2 : 0) + (shot.direction < 0 ? 1 : 0));
 					}
 				}
@@ -123,7 +126,7 @@ int main(int argc, char **argv) {
 							          << int(baseline[tick][pos]) << '\n';
 							break;
 						}
-					throw std::runtime_error("Cosmetic choice changed DOS gameplay state");
+					throw std::runtime_error("Cosmetic choice changed gameplay state");
 				}
 				if (tick == 56 || tick == 106 || tick == 146 || tick == 201) {
 					uint8_t colors[768];
@@ -131,10 +134,10 @@ int main(int argc, char **argv) {
 					const auto name = output / ("shot-" + std::to_string(variant) + "-" +
 					                            std::to_string(tick) + ".bmp");
 					check(saveBMP(name.string().c_str(), game->_vid._frontLayer, colors, 256, 224),
-					      "Could not capture DOS shot");
+					      "Could not capture shot");
 				}
 			}
-			check(!variant || (directions == 15 && styledSound), "Missing DOS shot pose or sound");
+			check(!variant || (directions == 15 && styledSound), "Missing shot pose or sound");
 			if (variant == 0) {
 				int rooms = 0;
 				for (int level = 0; level < 7; ++level) {
@@ -149,12 +152,13 @@ int main(int argc, char **argv) {
 						}
 					}
 				}
-				std::cout << "DOS: seven levels, " << rooms << " room backgrounds.\n";
+				std::cout << "Asset set: seven levels, " << rooms << " room backgrounds.\n";
 			}
 			game->_mix.free();
 		}
-		std::cout << "DOS: native/Heavy/five laser colours, four shot poses, native source audio "
-		             "and identical gameplay state across 7 x 220 ticks.\n";
+		std::cout
+		    << "Asset set: native/Heavy/five laser colours, four shot poses, native source audio "
+		       "and identical gameplay state across 7 x 220 ticks.\n";
 	} catch (const std::exception &e) {
 		std::cerr << e.what() << '\n';
 		return 2;

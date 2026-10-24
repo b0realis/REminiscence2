@@ -1,5 +1,30 @@
 # REminiscence2 validation
 
+## Patch 1.25 — Sega CD cosmetics and independent movie audit
+
+Real CD assets now exercise Original, Heavy and all five Laser colours through
+four standing/crouching and left/right firing poses. Replacement flashes match
+the native rendered muzzle coordinates; laser traces retain their launch height.
+The seven variants produce identical saved gameplay state over 220 ticks each.
+Separate synthetic fixtures check object-bank selection and restoration, while
+live shirt changes and 550 decoded poses check the shared-colour undershirt mask.
+Original and White retain the CD's native white shirt; Red/Pink changes the
+undershirt while preserving the brown jacket and other palette entries.
+
+All 27 CTest suites pass in pinned-SDL Release and Debug/UBSan with the supplied
+Amiga, GOG/DOS and Sega CD assets. Gameplay captures were visually inspected.
+The local launcher uses the rebuilt 1.25 executable. Public CI checks and all
+six release targets are verified against the tagged commit before publication.
+
+An independent libarchive ISO9660 extraction matches all 70 MCD files byte for
+byte. Executing the original US SUB.BIN decompression routines in Unicorn's
+M68000 emulator matches all 17754 indexed frames (290881536 packed pixel bytes)
+against this engine's decoder. The visible checkerboard dithering is in the
+original image data. New patterned fixtures check tile placement, nibble order
+and BGR333 palette conversion. See [Sega CD](SEGA_CD.md#movie-picture-quality)
+for routine offsets and scope. Full playthrough and physical-console A/V timing
+checks remain outstanding.
+
 ## Patch 1.24 — Sega CD bug pass and release preparation
 
 Focused review fixed movie video racing ahead after focus/background pauses and

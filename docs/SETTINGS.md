@@ -149,9 +149,9 @@ player uses the same preferences; Escape also exits that player.
 **Enhancements → Pistol style** selects Original (default), Heavy / red, or
 Laser. Save settings persists `pistol_style=0`, `1` or `2` respectively.
 Invalid values retain the previous setting. These preferences do not change the
-save-state format. These experiments support Amiga, GOG/DOS and Macintosh assets,
+save-state format. These experiments support Amiga, GOG/DOS, Macintosh and Sega CD assets,
 using each edition's own shot position. Original remains the default. PC-98 and
-Sega retain their original pistol presentation for now.
+experimental Sega cartridge assets retain their original pistol presentation.
 
 With Laser selected, **Laser colour** offers **Orange (default), Red, Green, Blue
 and Purple**. The flash, beam and pistol light use the same hue, with a darker
@@ -179,8 +179,10 @@ animation. Heavy adds a drawing-only recoil offset without shifting the shot ori
 pause with simulation and clear on restore, level/room transitions and style changes.
 Game palette entries 0x60–0x65 are private effect colors. Sprite/resource buffers
 and imported files are never edited. Missing or invalid geometry leaves the
-native flash visible. DOS and Macintosh positioning has synthetic format/render
-coverage; their actual commercial assets still need visual validation.
+native flash visible. Amiga, GOG/DOS and Sega CD have real-asset firing and render
+regressions; Macintosh has synthetic coverage and still needs actual assets.
+Sega CD reads its separate object MBK using column-major tile decoding, then
+restores the active bank after inspecting the flash.
 
 ## Conrad's T-shirt
 
@@ -195,7 +197,7 @@ brightness adjusted for the room's native sprite palette. His jacket keeps its
 original brown tones. Skin, hair, trousers, shoes, equipment, scenery, other
 characters, polygon cutscenes and prerecorded movies retain their artwork.
 
-Amiga sprites share their light T-shirt shades with shoe soles and equipment.
+Amiga and Sega CD sprites share their light T-shirt shades with shoe soles and equipment.
 The engine identifies light fabric components bordered by the jacket in each
 decoded pose, before clipping or mirroring, and routes those pixels to private
 colours. It never recolours the jacket's brown pixels. DOS-style sprites use
@@ -274,7 +276,7 @@ live action lookup, colored caps and callouts; it delegates rebinding to the
 existing overlay validation and capture path. `game_settings.cpp` connects the model to the engine.
 The SDL boundary handles input capture, presentation and texture replacement.
 The UI does not advance the game simulation. `appearance.cpp` contains the
-T-shirt colour rules and Amiga fabric segmentation; sprite drawing routes
+T-shirt colour rules and shared-shade fabric segmentation; sprite drawing routes
 only Conrad’s T-shirt pixels to two
 private palette entries (0x6C/0x6D), leaving the shared source palette unchanged.
 

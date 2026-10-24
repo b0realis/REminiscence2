@@ -491,7 +491,7 @@ void enhancementsPage(settings::Session &s, const char *query) {
 			}
 		} else
 			hint("This edition keeps its original pistol graphics and sound. "
-			     "Heavy and Laser are available with Amiga, DOS and Macintosh assets.");
+			     "Heavy and Laser are available with Amiga, DOS, Macintosh and Sega CD assets.");
 		hint("Cosmetic experiment: Heavy adds red flame/casings, visual recoil and bass. Laser "
 		     "adds a coloured moving beam, pistol light and laser sound, without casings. "
 		     "Damage, aim, movement and firing speed stay original.");

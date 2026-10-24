@@ -61,6 +61,31 @@ its publisher/developer logos inside SC1; there is no separate DOS/Amiga-style
 logo movie. The normal launch plays SC1, then the title menu. Default keyboard
 and mouse skipping works, and Esc opens QoL settings during startup.
 
+## Gameplay appearance
+
+QoL → Enhancements supports the Original/Red-Pink/White T-shirt and
+Original/Heavy/Laser pistol styles. Laser offers Orange, Red, Green, Blue and
+Purple. Only the gameplay undershirt changes; the jacket, shoes and equipment
+retain their original colours. Prerecorded movies keep their original artwork.
+Pistol effects use the CD edition's native flash coordinates and original sound
+samples, with cosmetic bass processing. Simulation and imported files stay unchanged.
+
+## Movie picture quality
+
+The original movies store **256×128 pixels and 16 palette colours per frame**.
+Their regular checkerboard texture is encoded dithering, most visible when
+nearest-neighbour scaling enlarges the pixels. It is not an added engine overlay.
+
+The supplied disc's 70 extracted MCD files match an independent libarchive
+ISO9660 extraction byte for byte. All **17754 indexed frames** also match the
+original US program's 68000 decompression output byte for byte. The validation
+ran the original routines from the user's private SUB.BIN in Unicorn's M68000
+CPU emulator: file offsets `0x14fd6` (LSB), `0x152ca` (MSB), and `0x15f98`
+(split stream). The original program is never shipped with the engine. This
+checks decompression; physical-console display and A/V timing remain separate
+validation tasks. Synthetic tests check nonuniform tile placement, nibble order
+and RGB palette conversion to guard against display-layout regressions.
+
 ## CUE/BIN and ISO9660 subset
 
 Implementation: [extract_segacd.py](../tools/extract_segacd.py).

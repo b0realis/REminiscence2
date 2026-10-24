@@ -10,6 +10,7 @@
 #include <iostream>
 #include <memory>
 #include <stdexcept>
+#include <algorithm>
 Options g_options;
 const char *g_caption = "Sega CD integration tests";
 static void check(bool ok, const std::string &why) {
@@ -82,6 +83,66 @@ int main(int argc, char **argv) {
 			        game->_vid._frontLayer, palette.data(), 256, 224);
 			std::cout << "Level " << level + 1 << " simulated\n";
 		}
+		// Exercise the production shirt path, including live preference changes.
+		game->_currentLevel = 0;
+		game->loadLevelData();
+		game->resetGameState();
+		game->_cut._id = 0xffff;
+		for (int tick = 0; tick < 33; ++tick) {
+			stub._pi.dirMask = tick >= 30 ? PlayerInput::DIR_RIGHT : 0;
+			game->mainLoop();
+		}
+		stub._pi.dirMask = 0;
+		check(std::count(game->_vid._frontLayer, game->_vid._frontLayer + game->_vid._layerSize,
+		                 appearance::ShirtLight) >= 10,
+		      "CD undershirt visible and tagged");
+		std::array<uint8_t, 768> native{};
+		stub.getPalette(native.data(), 256);
+		for (auto style :
+		     {appearance::Shirt::Original, appearance::Shirt::RedPink, appearance::Shirt::White}) {
+			auto preferences = game->_preferences;
+			preferences.conradShirt = style;
+			std::string reason;
+			check(game->applyPreferences(preferences, reason), "apply CD shirt: " + reason);
+			stub.getPalette(palette.data(), 256);
+			for (int color = 0; color < 256; ++color)
+				if (color != appearance::ShirtShadow && color != appearance::ShirtLight)
+					check(!memcmp(palette.data() + color * 3, native.data() + color * 3, 3),
+					      "shirt option preserves other palette entries");
+			const auto *light = palette.data() + appearance::ShirtLight * 3;
+			if (style == appearance::Shirt::RedPink)
+				check(light[0] > light[2] && light[2] > light[1], "CD shirt uses pink ramp");
+			else
+				check(!memcmp(light, native.data() + 0x41 * 3, 3),
+				      "CD native white shirt exact RGB");
+			const std::string name = style == appearance::Shirt::Original ? "original"
+			                         : style == appearance::Shirt::White  ? "white"
+			                                                              : "pink";
+			check(saveBMP((std::string(argv[2]) + "/shirt-" + name + ".bmp").c_str(),
+			              game->_vid._frontLayer, palette.data(), 256, 224),
+			      "capture CD shirt");
+		}
+		unsigned marked = 0;
+		for (int frame = 0; frame < 550; ++frame) {
+			if (!game->_res._sprData[frame])
+				continue;
+			std::array<uint8_t, 1536> original{}, tagged{};
+			check(decodeSegaCDCharacter(game->_res._sprData[frame], game->_res._sprDataSizes[frame],
+			                            original.data(), original.size()),
+			      "CD shirt source frame");
+			tagged = original;
+			marked += appearance::markSharedTshirt(tagged.data(), 32, 48, tagged.size());
+			for (unsigned i = 0; i < tagged.size(); ++i)
+				check(tagged[i] == original[i] ||
+				          (original[i] == 1 && tagged[i] == appearance::ShirtLight) ||
+				          (original[i] == 5 && tagged[i] == appearance::ShirtShadow),
+				      "CD jacket, skin, hair and trousers are never tagged");
+			if (frame == 5) {
+				for (unsigned i = 40 * 32; i < tagged.size(); ++i)
+					check(tagged[i] == original[i], "CD footwear retains shared white pixels");
+			}
+		}
+		check(marked > 1000, "CD clothing coverage across decoded poses");
 		game->_currentLevel = 1;
 		game->loadLevelData();
 		game->resetGameState();

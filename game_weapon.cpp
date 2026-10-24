@@ -2,6 +2,7 @@
 #include "game.h"
 #include "systemstub.h"
 #include "decode_mac.h"
+#include "decode_sega.h"
 #include <algorithm>
 
 bool Game::isConradShotEffect(const LivePGE *effect) const {
@@ -17,11 +18,23 @@ bool Game::isConradShotEffect(const LivePGE *effect) const {
 }
 weapon::Style Game::effectivePistolStyle() const {
 	// Each supported edition supplies its own native flash geometry.
-	return (_res.isAmiga() || _res.isDOS() || _res.isMac()) ? _preferences.pistolStyle
-	                                                        : weapon::Style::Original;
+	return (_res.isAmiga() || _res.isDOS() || _res.isMac() || _res.isSegaCD())
+	           ? _preferences.pistolStyle
+	           : weapon::Style::Original;
 }
 
 namespace {
+// CD rooms and object sprites have different MBKs. Geometry inspection must
+// use the native flash bank, then restore the caller's active bank. Switching
+// banks invalidates cached tiles so they cannot leak into the other bank.
+struct ObjectBankScope {
+	Resource &resource;
+	bool previous;
+	explicit ObjectBankScope(Resource &r) : resource(r), previous(r._usingObjectBank) {
+		resource.selectObjectBank(true);
+	}
+	~ObjectBankScope() { resource.selectObjectBank(previous); }
+};
 struct FlashBounds {
 	int left = 32767, right = -32768, top = 32767, bottom = -32768;
 	void include(const uint8_t *pixels, int width, int height, int x, int y, bool flip) {
@@ -54,7 +67,8 @@ bool Game::conradFlashOrigin(const LivePGE *effect, int &x, int &y) {
 		positionMacSprite(image, mirror, left, top);
 		bounds.include(image.pixels.data(), image.width, image.height, left, top, mirror);
 	} else {
-		if ((!_res.isAmiga() && !_res.isDOS()) || effect->anim_number >= _res._numSpc ||
+		if ((!_res.isAmiga() && !_res.isDOS() && !_res.isSegaCD()) ||
+		    effect->anim_number >= _res._numSpc ||
 		    size_t(effect->anim_number) * 2 + 2 > _res._spcSize)
 			return false;
 		const size_t offset = READ_BE_UINT16(_res._spc + effect->anim_number * 2);
@@ -66,6 +80,7 @@ bool Game::conradFlashOrigin(const LivePGE *effect, int &x, int &y) {
 		if (size_t(count) * 4 > _res._spcSize - offset - header || object[0] >= sizeof(_res._rp))
 			return false;
 		const int bank = _res._rp[object[0]];
+		ObjectBankScope objectBank(_res);
 		const uint8_t *data = _res.findBankData(bank);
 		if (!data)
 			data = _res.loadBankData(bank);
@@ -85,7 +100,11 @@ bool Game::conradFlashOrigin(const LivePGE *effect, int &x, int &y) {
 				return false;
 			if (_res.isAmiga())
 				_vid.AMIGA_decodeSpc(data + bankOffset, width, height, _res._scratchBuffer);
-			else
+			else if (_res.isSegaCD()) {
+				if (!decodeSegaTiles(data + bankOffset, bankSize - bankOffset, width, height,
+				                     _res._scratchBuffer, Resource::kScratchBufferSize))
+					return false;
+			} else
 				_vid.DOS_decodeSpc(data + bankOffset, width, height, _res._scratchBuffer);
 			const int tileX = originX + (mirror ? -int(tile[1]) - width : int(tile[1]));
 			const int tileY = originY + tile[2];

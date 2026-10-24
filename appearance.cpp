@@ -4,11 +4,11 @@
 #include <array>
 
 namespace appearance {
-uint8_t shirtPixel(ResourceType edition, uint8_t color, bool conrad) {
+uint8_t shirtPixel(bool sharedShades, uint8_t color, bool conrad) {
 	if (conrad) {
-		// Amiga clothing is tagged in the decoded frame. Index 7 is the jacket
+		// Shared-shade clothing is tagged in the decoded frame. Index 7 is the jacket
 		// and must stay brown; untagged light pixels include shoes/equipment.
-		if (edition == kResourceTypeAmiga) {
+		if (sharedShades) {
 			if (color == 0x7C)
 				return ShirtShadow;
 			if (color == 0x7D)
@@ -22,7 +22,7 @@ uint8_t shirtPixel(ResourceType edition, uint8_t color, bool conrad) {
 	}
 	return color;
 }
-size_t markAmigaTshirt(uint8_t *pixels, int width, int height, size_t capacity) {
+size_t markSharedTshirt(uint8_t *pixels, int width, int height, size_t capacity) {
 	if (!pixels || width <= 0 || height <= 0 || width > 32 || height > 127 ||
 	    size_t(width) * height > capacity)
 		return 0;
@@ -69,8 +69,7 @@ size_t markAmigaTshirt(uint8_t *pixels, int width, int height, size_t capacity) 
 	}
 	return tagged;
 }
-std::array<Color, 2> shirtColors(ResourceType edition, Shirt choice,
-                                 const std::array<Color, 2> &original) {
+std::array<Color, 2> shirtColors(Shirt choice, const std::array<Color, 2> &original) {
 	if (choice == Shirt::Original)
 		return original;
 	std::array<Color, 2> colors = choice == Shirt::White

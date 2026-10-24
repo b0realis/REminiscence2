@@ -309,7 +309,7 @@ int main(int argc, char **argv) {
 		game->_vid.AMIGA_decodeSpm(source, game->_res._scratchBuffer);
 		std::vector<uint8_t> original(game->_res._scratchBuffer,
 		                              game->_res._scratchBuffer + width * height);
-		shirtPixels += appearance::markAmigaTshirt(game->_res._scratchBuffer, width, height,
+		shirtPixels += appearance::markSharedTshirt(game->_res._scratchBuffer, width, height,
 		                                           Resource::kScratchBufferSize);
 		for (size_t pixel = 0; pixel < original.size(); ++pixel) {
 			if (original[pixel] != game->_res._scratchBuffer[pixel] &&

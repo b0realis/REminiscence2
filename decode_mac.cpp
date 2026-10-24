@@ -219,7 +219,7 @@ void blitMacImage(const MacImage &image, const DecodeBuffer &dst) {
 					continue;
 				}
 			}
-			row[x] = appearance::shirtPixel(kResourceTypeMac, color, dst.conrad);
+			row[x] = appearance::shirtPixel(false, color, dst.conrad);
 		}
 	}
 }
