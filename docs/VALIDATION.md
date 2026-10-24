@@ -13,6 +13,9 @@ Local validation on 24 October 2026:
 - Production overlay/shortcut checks preserve protected-save failure reasons;
   disconnect pause retains the composed frame; shortcut rewind prepares the
   destination room and collision caches before another simulation tick.
+- Hosted pre-release runs exposed a missing standard-library include on Windows
+  and a scheduler-sensitive audio-pause test on macOS. The test now compares
+  callback progress with measured foreground time and reports failed check IDs.
 
 The release publisher requires successful Build and test and Release packages
 workflows for the exact commit before tagging. It validates all six target

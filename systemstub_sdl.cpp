@@ -8,6 +8,7 @@
 #error REminiscence2 requires SDL 2.0.18 or newer for the settings renderer.
 #endif
 #include "resource.h"
+#include <algorithm>
 #include <chrono>
 #include <vector>
 #include "scaler.h"

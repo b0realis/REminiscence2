@@ -8,6 +8,7 @@
 #include "screenshot.h"
 #include "decode_sgd.h"
 #include "headless_system.h"
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <iostream>

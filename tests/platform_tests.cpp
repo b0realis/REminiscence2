@@ -308,12 +308,15 @@ static int checkRate(int rate) {
 	platform->sleep(80);
 	if (platform->audioOutputAvailable() || frames <= beforeSilent)
 		return 42;
-	const auto beforePause = frames.load();
+	int pausedFrames = 0;
+	uint32_t resumeStamp = 0;
 	SDL_Event background{};
 	background.type = SDL_APP_WILLENTERBACKGROUND;
 	SDL_PushEvent(&background);
-	std::thread silentResume([] {
+	std::thread silentResume([&] {
 		SDL_Delay(90);
+		pausedFrames = frames.load();
+		resumeStamp = SDL_GetTicks();
 		SDL_Event e{};
 		e.type = SDL_APP_DIDENTERFOREGROUND;
 		SDL_PushEvent(&e);
@@ -321,7 +324,10 @@ static int checkRate(int rate) {
 	platform->processEvents();
 	silentResume.join();
 	platform->sleep(20);
-	if (frames - beforePause > rate / 20)
+	// SDL_Delay is a minimum wait. A busy runner can oversleep arbitrarily;
+	// compare with actual foreground time, while still excluding the pause.
+	const uint64_t foregroundMs = SDL_GetTicks() - resumeStamp;
+	if (uint64_t(frames - pausedFrames) > (foregroundMs + 5) * rate / 1000)
 		return 44;
 	lost.type = SDL_AUDIODEVICEADDED;
 	lost.adevice.which = 0;
