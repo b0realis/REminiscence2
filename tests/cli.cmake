@@ -24,7 +24,11 @@ if(NOT "${last_cli_output}" STREQUAL "${long_help}" OR NOT "${last_cli_errors}" 
 endif()
 # Help must remain usable before configuration, assets or devices are opened.
 check_cli(0 "CONFIGURATION SWITCHES" "--config=${TEST_ROOT}/missing.cfg" -h)
-check_cli(0 "REminiscence2 0.1.0-dev" --version)
+if(NOT DEFINED ENGINE_VERSION)
+    message(FATAL_ERROR "ENGINE_VERSION must match the version.h build metadata")
+endif()
+string(REPLACE "." "\\." escaped_version "${ENGINE_VERSION}")
+check_cli(0 "REminiscence2 ${escaped_version}" --version)
 check_cli(1 "Usage:" --not-a-real-option)
 check_cli(1 "Invalid level" --levelnum=-1)
 check_cli(1 "Invalid level" --levelnum=7)

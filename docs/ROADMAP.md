@@ -7,11 +7,14 @@ or presentation should be explicit options.
 
 ## Foundation
 
-The initial development pass imports the selected repository with its history,
+The initial development pass imports the selected source snapshot with preserved provenance,
 adds CMake and asset-free regression tests, fixes confirmed startup defects,
 and records architecture, credits and license provenance. Local Apple Silicon
-Release and UBSan Debug tests pass. Linux and macOS CI is configured; hosted
-results remain to be collected.
+Release and UBSan Debug tests pass. Linux and macOS hosted CI also passes.
+The public project starts with a fresh root commit. The current
+[release-readiness audit](RELEASE_READINESS.md) supersedes completed items in
+the original priority list and covers Win64, Linux64, Steam Deck, macOS arm64
+and Intel, and a Quest flat-panel APK.
 
 The [0.5.6 integration ledger](UPSTREAM_056.md) records the approved enhancement
 implementation. Amiga, GOG DOS/Windows and Macintosh CD are asset targets;

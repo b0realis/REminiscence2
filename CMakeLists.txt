@@ -1,6 +1,23 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 cmake_minimum_required(VERSION 3.20)
-project(REminiscence2 VERSION 0.1.0 LANGUAGES C CXX)
+# Keep the CLI, overlay and build/package metadata on the same version source.
+# Player versions use major.patch-counter (1.01, 1.02, ...); numeric packaging
+# metadata uses major.0.patch-counter (1.0.1, 1.0.2, ...).
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/version.h" _release_version_line
+    REGEX "^#define REMINISCENCE2_VERSION ")
+if(NOT _release_version_line MATCHES "REMINISCENCE2_VERSION \"([0-9]+)\\.([0-9][0-9]+)\"")
+    message(FATAL_ERROR "version.h must define a version such as 1.01")
+endif()
+set(REMINISCENCE2_DISPLAY_VERSION "${CMAKE_MATCH_1}.${CMAKE_MATCH_2}")
+set(_release_major "${CMAKE_MATCH_1}")
+set(_release_patch "${CMAKE_MATCH_2}")
+string(REGEX REPLACE "^0+" "" _release_patch "${_release_patch}")
+if(_release_patch STREQUAL "")
+    set(_release_patch 0)
+endif()
+project(REminiscence2 VERSION "${_release_major}.0.${_release_patch}" LANGUAGES C CXX)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/version.h")
 
 option(REMINISCENCE2_FLUIDSYNTH "Enable optional FluidSynth PRF backend" OFF)
 option(REMINISCENCE2_MT32EMU "Enable optional MT-32 PRF backend" OFF)
@@ -126,6 +143,7 @@ if(BUILD_TESTING)
     endif()
     add_test(NAME cli COMMAND "${CMAKE_COMMAND}"
         "-DENGINE=$<TARGET_FILE:reminiscence2>"
+        "-DENGINE_VERSION=${REMINISCENCE2_DISPLAY_VERSION}"
         "-DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/cli-fixtures"
         -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/cli.cmake")
     set_tests_properties(core cli PROPERTIES TIMEOUT 20)

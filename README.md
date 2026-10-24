@@ -9,7 +9,9 @@ Our aim is faithful gameplay with easier setup, dependable saves, accessible
 controls, and support for current hardware and operating systems. Enhancements
 that change the experience should be optional.
 
-This is an early development tree, version `0.1.0-dev`. It builds on
+This is an early development tree. Its current version is defined in
+[version.h](version.h) and printed by `reminiscence2 --version`. Patch versions
+advance as `1.01`, `1.02`, and so on. It builds on
 [chermenin/REminiscence](https://github.com/chermenin/REminiscence) at
 `2200e18c6e5eb710b05c5095a751882591c21cf8`. REminiscence2 starts with one
 fresh root commit; the upstream repository retains the earlier history.
@@ -36,6 +38,10 @@ See the [0.5.6 integration ledger](docs/UPSTREAM_056.md),
 [validation record](docs/VALIDATION.md), and [roadmap](docs/ROADMAP.md).
 Linux and macOS CI is configured. Windows packaging and a native SDL3 backend
 remain future work.
+
+The [release-readiness audit](docs/RELEASE_READINESS.md) ranks the next fixes
+and covers Win64, Linux x86-64, Steam Deck, macOS Apple Silicon/Intel, and
+a sideloaded Quest flat-panel Android app.
 
 The [reference index](docs/reference/README.md) contains project-written format
 research notes. Supplied third-party images and PDFs are kept in ignored local
