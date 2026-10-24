@@ -493,8 +493,6 @@ void File::writeUint32BE(uint32_t n) {
 }
 
 void dumpFile(const char *filename, const uint8_t *p, int size) {
-	char path[MAXPATHLEN];
-	snprintf(path, sizeof(path), "DUMP/%s", filename);
 	FILE *fp = fopen(filename, "wb");
 	if (fp) {
 		const int count = fwrite(p, 1, size, fp);

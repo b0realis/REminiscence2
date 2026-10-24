@@ -1,0 +1,8 @@
+Copy your original, prepared Flashback game files into this folder.
+Use one edition at a time. Subdirectories are searched automatically.
+Amiga WHDLoad .lha archives must first be prepared with tools/extract_amiga.py.
+DOS/GOG: copy the original DOS resource files, not the installer/executable.
+Macintosh: provide FLASHBACK.BIN or FLASHBACK.RSRC preserving resource data.
+REminiscence2 includes the engine only; no commercial game files are included.
+Saves and preferences use your writable user-data folder by default.
+See manual.md and RELEASES.md in the package for details.

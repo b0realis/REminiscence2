@@ -1,0 +1,175 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""Build/test a native release and assemble a relocatable package with no game data."""
+import argparse
+import hashlib
+import io
+import json
+import os
+from pathlib import Path
+import plistlib
+import re
+import shutil
+import subprocess
+import sys
+import tarfile
+import urllib.request
+import zipfile
+
+ROOT = Path(__file__).resolve().parent.parent
+PINS = json.loads((ROOT / 'packaging/dependencies.json').read_text())
+VERSION = re.search(r'REMINISCENCE2_VERSION "([0-9.]+)"', (ROOT / 'version.h').read_text()).group(1)
+
+
+def run(*args, **kwargs):
+    subprocess.run([str(x) for x in args], check=True, cwd=ROOT, **kwargs)
+
+
+def prepare_dependency(name):
+    """Retrieve exact sources, checking content before extraction or execution."""
+    pin = PINS[name]
+    archive = ROOT / 'deps' / f'{name}.tar.gz'
+    archive.parent.mkdir(exist_ok=True)
+    data = archive.read_bytes() if archive.exists() else urllib.request.urlopen(pin['url'], timeout=120).read()
+    if hashlib.sha256(data).hexdigest() != pin['sha256']:
+        raise RuntimeError(f'{name}: source SHA-256 mismatch')
+    archive.write_bytes(data)
+    output = ROOT / 'deps' / name
+    if not output.exists():
+        staging = output.with_suffix('.extracting')
+        staging.mkdir(exist_ok=False)
+        try:
+            links = []
+            with tarfile.open(fileobj=io.BytesIO(data), mode='r:gz') as source:
+                for entry in source.getmembers():
+                    parts = Path(entry.name).parts[1:]
+                    if not parts:
+                        continue
+                    if any(p in ('..', '') for p in parts) or entry.islnk() or not (entry.isfile() or entry.isdir() or entry.issym()):
+                        raise RuntimeError('Unsafe dependency archive member')
+                    destination = staging.joinpath(*parts)
+                    if entry.issym():
+                        target = (destination.parent / entry.linkname).resolve()
+                        if not target.is_relative_to(staging.resolve()): raise RuntimeError('Unsafe dependency symlink')
+                        links.append((target, destination))
+                        continue
+                    if entry.isdir():
+                        destination.mkdir(parents=True, exist_ok=True)
+                    else:
+                        destination.parent.mkdir(parents=True, exist_ok=True)
+                        destination.write_bytes(source.extractfile(entry).read())
+                        destination.chmod(entry.mode & 0o777)
+            # Materialize safe internal aliases on Windows as well as POSIX.
+            for target, destination in links:
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                if target.is_dir(): shutil.copytree(target, destination)
+                else: shutil.copy2(target, destination)
+            staging.rename(output)
+        finally:
+            if staging.exists():
+                shutil.rmtree(staging)
+    return output
+
+
+def common_files(package, build):
+    (package / 'assets').mkdir()
+    shutil.copy2(ROOT / 'packaging/desktop/ASSETS.txt', package / 'assets/README.txt')
+    for name in ('README.md', 'manual.md', 'LICENSE', 'CREDITS.md', 'fb.cfg'):
+        if (ROOT / name).exists(): shutil.copy2(ROOT / name, package / name)
+    shutil.copy2(ROOT / 'docs/RELEASES.md', package / 'RELEASES.md')
+    shutil.copytree(ROOT / 'tools', package / 'tools', ignore=shutil.ignore_patterns('__pycache__'))
+    licenses = package / 'licenses'; licenses.mkdir()
+    for source in (ROOT / 'third_party').glob('**/*'):
+        if source.is_file() and ('license' in source.name.lower() or 'copying' in source.name.lower()):
+            relative = source.relative_to(ROOT / 'third_party')
+            target = licenses / relative; target.parent.mkdir(parents=True, exist_ok=True); shutil.copy2(source, target)
+    shutil.copy2(prepare_dependency('SDL2') / 'LICENSE.txt', licenses / 'SDL2.txt')
+    shutil.copy2(prepare_dependency('zlib') / 'LICENSE', licenses / 'zlib.txt')
+    (package / 'dependency-manifest.json').write_text(json.dumps({'version': VERSION, 'dependencies': PINS, 'music': 'internal MOD, AdLib/OPL3; no ROMs or soundfonts'}, indent=2) + '\n')
+
+
+def archive_directory(directory, output):
+    if output.suffix == '.zip':
+        with zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as archive:
+            for path in sorted(directory.rglob('*')):
+                archive.write(path, path.relative_to(directory.parent))
+    else:
+        with tarfile.open(output, 'w:gz') as archive:
+            archive.add(directory, arcname=directory.name)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--target', required=True, choices=['win64', 'linux64', 'steamdeck', 'macos-arm64', 'macos-x86_64', 'quest'])
+    parser.add_argument('--build-dir', type=Path)
+    parser.add_argument('--output', type=Path, default=ROOT / 'build/dist')
+    parser.add_argument('--quest-debug', action='store_true', help='Build a separate experimental debug APK when release credentials are unavailable')
+    args = parser.parse_args()
+    args.output = args.output.resolve(); args.output.mkdir(parents=True, exist_ok=True)
+    build = (args.build_dir or ROOT / 'build' / ('package-' + args.target)).resolve()
+    if args.target == 'quest':
+        prepare_dependency('SDL2')
+        if not args.quest_debug and not os.environ.get('REMINISCENCE2_KEYSTORE'):
+            parser.error('Quest release requires REMINISCENCE2_KEYSTORE and signing passwords; use --quest-debug for a separate experimental app')
+        run('gradle', '--no-daemon', '-p', ROOT / 'packaging/android', 'assembleDebug' if args.quest_debug else 'assembleRelease')
+        variant = 'debug' if args.quest_debug else 'release'
+        apk = ROOT / f'packaging/android/app/build/outputs/apk/{variant}/app-{variant}.apk'
+        destination = args.output / f'REminiscence2-{VERSION}-quest-arm64{("-experimental" if args.quest_debug else "")}.apk'
+        shutil.copy2(apk, destination)
+        print(destination); return
+    options = ['-DCMAKE_BUILD_TYPE=Release', '-DREMINISCENCE2_BUNDLED_DEPS=ON', '-DREMINISCENCE2_USE_MODPLUG=OFF', '-DCMAKE_POLICY_VERSION_MINIMUM=3.5']
+    for dependency in ('SDL2', 'zlib'):
+        offline = ROOT / 'third_party_src' / dependency
+        if offline.is_dir(): options += [f'-DFETCHCONTENT_SOURCE_DIR_{dependency.upper()}={offline}']
+    if args.target.startswith('macos-'):
+        options += ['-DCMAKE_OSX_DEPLOYMENT_TARGET=11.0', '-DCMAKE_OSX_ARCHITECTURES=' + args.target.removeprefix('macos-')]
+    if args.target == 'win64': options += ['-G', 'Ninja']
+    run('cmake', '-S', ROOT, '-B', build, *options)
+    run('cmake', '--build', build, '--parallel', os.environ.get('CMAKE_BUILD_PARALLEL_LEVEL', '3'))
+    run('ctest', '--test-dir', build, '--output-on-failure')
+    name = f'REminiscence2-{VERSION}-{args.target}'
+    staging = build / 'distribution' / name
+    if staging.exists(): shutil.rmtree(staging)
+    staging.mkdir(parents=True)
+    common_files(staging, build)
+    binary = staging / ('reminiscence2.exe' if args.target == 'win64' else 'reminiscence2')
+    shutil.copy2(build / binary.name, binary)
+    if args.target.startswith('macos-'):
+        dependencies = subprocess.check_output(['otool', '-L', str(binary)], text=True)
+        if any(line.strip().startswith(('/opt/', '/usr/local/', '@rpath/')) for line in dependencies.splitlines()[1:]):
+            raise RuntimeError('Non-system macOS dependency remains in package')
+        app = staging / 'REminiscence2.app'; macos = app / 'Contents/MacOS'; macos.mkdir(parents=True)
+        shutil.copy2(binary, macos / 'reminiscence2')
+        numeric = VERSION.split('.')[0] + '.0.' + str(int(VERSION.split('.')[1]))
+        info = {'CFBundleIdentifier': 'org.b0realis.reminiscence2', 'CFBundleName': 'REminiscence2', 'CFBundleExecutable': 'Play', 'CFBundlePackageType': 'APPL', 'CFBundleShortVersionString': numeric, 'CFBundleVersion': numeric, 'LSMinimumSystemVersion': '11.0', 'NSHighResolutionCapable': True}
+        (app / 'Contents/Info.plist').write_bytes(plistlib.dumps(info))
+        run('clang', '-arch', args.target.removeprefix('macos-'), '-mmacosx-version-min=11.0', ROOT / 'packaging/desktop/mac_launcher.m', '-framework', 'Cocoa', '-o', macos / 'Play')
+        for target in (binary, macos / 'reminiscence2', app): run('codesign', '--force', '--sign', '-', target)
+        shutil.copy2(ROOT / 'packaging/desktop/Play.command', staging / 'Play.command')
+        (staging / 'native-dependencies.txt').write_text(dependencies)
+    elif args.target == 'win64':
+        (staging / 'play.cmd').write_text('@echo off\r\ncd /d "%~dp0"\r\n"%~dp0reminiscence2.exe" %*\r\nif errorlevel 1 pause\r\n')
+        # Only toolchain runtime DLLs may accompany this statically built engine.
+        imports = subprocess.check_output(['objdump', '-p', str(binary)], text=True)
+        runtime_names = {'libwinpthread-1.dll', 'libgcc_s_seh-1.dll', 'libstdc++-6.dll'}
+        for dll in re.findall(r'DLL Name: (\S+)', imports):
+            if dll.lower() in runtime_names:
+                source = shutil.which(dll)
+                if not source: raise RuntimeError(f'Missing runtime DLL {dll}')
+                shutil.copy2(source, staging / dll)
+        (staging / 'native-dependencies.txt').write_text(imports)
+    else:
+        shutil.copy2(ROOT / 'packaging/desktop/play.sh', staging / 'play.sh')
+        dependencies = subprocess.check_output(['ldd', str(binary)], text=True)
+        forbidden = ('libSDL', 'libz.so', 'libmodplug', 'libstdc++', 'libgcc_s')
+        if any(value in dependencies for value in forbidden): raise RuntimeError('Non-system Linux dependency remains: ' + dependencies)
+        (staging / 'native-dependencies.txt').write_text(dependencies)
+        if args.target == 'steamdeck':
+            (staging / 'STEAM-DECK.txt').write_text('Add play.sh as a Non-Steam Game in Desktop Mode, then launch from Gaming Mode.\nUse the Gamepad layout. Start opens QoL; D-pad/stick and A navigate.\nHardware sleep/resume and Touch-controller mappings need device testing.\n')
+    # Smoke-test the relocated engine, independent of the source/build CWD.
+    subprocess.run([str(binary), '--version'], cwd=staging / 'assets', check=True, stdout=subprocess.DEVNULL)
+    archive = args.output / (name + ('.zip' if args.target == 'win64' or args.target.startswith('macos-') else '.tar.gz'))
+    archive_directory(staging, archive)
+    print(archive)
+
+if __name__ == '__main__': main()

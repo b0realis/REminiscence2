@@ -56,4 +56,10 @@ deps/
 *.out
 *.app
 fb
-reminiscence2
+/reminiscence2
+
+/packaging/android/.gradle/
+/packaging/android/.cxx/
+/packaging/android/app/build/
+/packaging/android/app/.cxx/
+/packaging/android/local.properties

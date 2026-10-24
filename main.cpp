@@ -334,7 +334,7 @@ int main(int argc, char *argv[]) {
 	}
 	const auto paths = runtimePaths(portable);
 	if (!explicitData) dataPath = paths.data.c_str();
-	if (!explicitTunes) tunePath = paths.tunes.c_str();
+	if (!explicitTunes) tunePath = explicitData ? dataPath : paths.tunes.c_str();
 	if (!explicitSaves) savePath = paths.saves.c_str();
 	if (!explicitConfig) configPath = paths.config.c_str();
 	setDefaultOptions(g_options);

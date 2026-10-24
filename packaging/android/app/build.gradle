@@ -1,0 +1,42 @@
+plugins { id 'com.android.application' }
+def repositoryRoot = file('../../..')
+def versionText = new File(repositoryRoot, 'version.h').text.find(/REMINISCENCE2_VERSION "([0-9]+\.[0-9]+)"/)
+def displayVersion = versionText.split('"')[1]
+def versionParts = displayVersion.tokenize('.')
+android {
+    namespace 'org.b0realis.reminiscence2'
+    compileSdk 35
+    ndkVersion '28.2.13676358'
+    defaultConfig {
+        applicationId 'org.b0realis.reminiscence2'
+        minSdk 29
+        targetSdk 35
+        versionCode versionParts[0].toInteger() * 1000000 + versionParts[1].toInteger()
+        versionName displayVersion
+        ndk { abiFilters 'arm64-v8a' }
+        externalNativeBuild {
+            cmake {
+                arguments '-DREMINISCENCE2_BUNDLED_DEPS=ON', '-DREMINISCENCE2_USE_MODPLUG=OFF', '-DBUILD_TESTING=OFF', '-DCMAKE_POLICY_VERSION_MINIMUM=3.5', '-DANDROID_STL=c++_static'
+                targets 'main', 'SDL2'
+            }
+        }
+    }
+    externalNativeBuild { cmake { path new File(repositoryRoot, 'CMakeLists.txt'); version '3.22.1' } }
+    sourceSets.main.java.srcDirs += new File(repositoryRoot, 'deps/SDL2/android-project/app/src/main/java')
+    signingConfigs {
+        release {
+            storeType 'pkcs12'
+            if (System.getenv('REMINISCENCE2_KEYSTORE')) {
+                storeFile file(System.getenv('REMINISCENCE2_KEYSTORE'))
+                storePassword System.getenv('REMINISCENCE2_STORE_PASSWORD')
+                keyAlias System.getenv('REMINISCENCE2_KEY_ALIAS')
+                keyPassword System.getenv('REMINISCENCE2_KEY_PASSWORD')
+            }
+        }
+    }
+    buildTypes {
+        release { if (System.getenv('REMINISCENCE2_KEYSTORE')) signingConfig signingConfigs.release }
+        debug { applicationIdSuffix '.experimental'; versionNameSuffix '-experimental' }
+    }
+    lint { abortOnError true }
+}
