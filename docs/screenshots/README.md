@@ -6,6 +6,24 @@ Select an image to view its full resolution. The new sections use synthetic
 session data and original preview patterns; the older gameplay captures below
 were made with player-supplied Amiga assets in `0.1.0-dev`.
 
+## Display modes and xBRZ (1.30)
+
+Production-overlay captures with synthetic session data. Windowed, borderless,
+exclusive fullscreen and monitor resolution choices work alongside Point,
+Linear, ScaleNx, xBRZ and whole-native-pixel fitting. The compact layout scrolls
+its controls while keeping Resume and EXIT GAME visible.
+
+![Desktop Graphics controls](qol-graphics-1.30.png)
+![Original-resolution Graphics controls](qol-native-graphics-1.30.png)
+
+## Sega CD release captures (1.25)
+
+Preserved from the 1.25 release: real Sega CD gameplay with nearest-neighbour
+enlargement and the production keyboard action guide.
+
+![Sega CD gameplay](segacd-gameplay-1.25.png)
+![Keyboard guide from 1.25](qol-keyboard-1.25.png)
+
 ## Recovery, manual milestones and objectives (1.10)
 
 Verified production-overlay captures with synthetic save metadata and original

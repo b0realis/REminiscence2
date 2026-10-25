@@ -173,6 +173,10 @@ progress::Snapshot Game::captureSnapshot() {
 	return snapshot;
 }
 bool Game::saveManualState(int slot, const std::string &label, bool protect, std::string &reason) {
+	if (_demoBin != -1) {
+		reason = "Demo playback cannot be saved.";
+		return false;
+	}
 	if (!_res._pgeNum || _pgeLive[0].life <= 0 || _deathCutsceneCounter) {
 		reason = "Save after returning to living gameplay.";
 		return false;

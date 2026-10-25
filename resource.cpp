@@ -198,16 +198,29 @@ void Resource::load_DEM(const char *filename) {
 	}
 	File f;
 	if (f.open(filename, "rb", _fs)) {
-		_demLen = f.size();
-		_dem = (uint8_t *)malloc(_demLen);
-		if (_dem) {
-			f.read(_dem, _demLen);
+		// A byte is one simulation input, so 4 MiB already spans over 38 hours.
+		// Bound the unsigned file size before allocation/conversion to _demLen,
+		// and never play uninitialized inputs following a short or failed read.
+		const uint32_t size = f.size();
+		if (!size || size > 4 * 1024 * 1024 || f.ioErr())
+			return;
+		_dem = (uint8_t *)malloc(size);
+		if (!_dem)
+			return;
+		if (f.read(_dem, size) != size || f.ioErr()) {
+			free(_dem);
+			_dem = nullptr;
+			return;
 		}
+		_demLen = static_cast<int>(size);
 	} else if (_archive) {
-		uint32_t size;
+		uint32_t size = 0;
 		_dem = _archive->loadEntry(filename, &size);
-		if (_dem) {
-			_demLen = size;
+		if (_dem && size && size <= 4 * 1024 * 1024) {
+			_demLen = static_cast<int>(size);
+		} else {
+			free(_dem);
+			_dem = nullptr;
 		}
 	}
 }

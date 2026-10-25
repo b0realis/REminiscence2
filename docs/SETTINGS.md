@@ -19,10 +19,10 @@ menu, save browser, graphics settings and original-resolution 256×224 layout.
 
 | Page | Available controls |
 | --- | --- |
-| Session | Game edition selection; default-off automatic resume of the latest compatible save; Continue latest autosave, disk autosave settings and optional contextual hints; health, score, room and rewind count; rewind; clean screenshot capture; restart level; return to title; preference save/undo/defaults; focus pause, FPS and shortcut visibility. |
+| Session | Game edition selection; original gameplay demo picker; default-off automatic resume of the latest compatible save; Continue latest autosave, disk autosave settings and optional contextual hints; health, score, room and rewind count; rewind; clean screenshot capture; restart level; return to title; preference save/undo/defaults; focus pause, FPS and shortcut visibility. |
 | Rewind | Captured-frame timeline with active age, room and health; restores the selected moment after confirmation. |
 | Save / Load | Manual slots 1–99, occupied-slot browser with room and modification time, checkpoint loading, refresh, overwrite and load confirmation. |
-| Graphics | Fullscreen, VSync, point/linear/ScaleNx sampling, window scale, widescreen side content, compact layout and menu text scale. |
+| Graphics | Windowed/borderless/exclusive fullscreen, window size and reported fullscreen resolution, integer fit, VSync, point/linear/ScaleNx/xBRZ sampling, scaler factor, widescreen side content, compact layout and menu text scale. |
 | Audio | Independent soundtrack selection with native fallback; master, music and effects volume, mute, save-confirmation sound, current output rate and PRF fallback information. |
 | Enhancements | Conrad’s Original/Red-Pink/White T-shirt, rewind, inventory insertion order, transition style, save sound, additional MEMO content, text/SEQ choices and optional cutscene switches. |
 | Controls | Live keyboard diagram with colored action keys and arrow callouts; rebind the nine primary actions; view fixed shortcuts, menu navigation and controller bindings. |
@@ -36,6 +36,17 @@ The search field finds controls across pages. Some choices affect the next
 relevant event: new-item placement does not reorder existing inventory, and
 cutscene options apply to future scenes with the required resources. Turning
 rewind off discards its in-memory history.
+
+Session → Gameplay demos lists the three original replay slots when their
+recording and level resources exist in the current edition. Search `demo` to
+reach it quickly in the compact layout. Watch demo starts directly from title
+settings and confirms before replacing a paused game. Save first: that switch
+discards unsaved progress and rewind history. Esc returns to the title; F10 or
+the controller menu shortcut opens QoL settings during playback. Demo playback
+cannot be saved, does not accumulate autosaves or journal progress, and exits to
+the title on replay exhaustion or death. The supplied GOG set contains all three;
+the supplied Amiga/Sega CD sets have no compatible recordings. Native Macintosh
+and PC-98 replay loaders remain available but lack private-asset validation.
 
 Display changes replace game textures while retaining the window and renderer.
 The menu automatically uses a compact single-column layout in small windows,
@@ -253,8 +264,29 @@ Startup chooses values in this order:
 Paths, output sample rate, game language, MIDI driver, ROMs and soundfonts remain
 startup options. The overlay offers working engine controls; it does not expose
 unsupported shaders, MSAA, renderer APIs or simulation-rate changes. External
-scaler plugins use `--scaler` at launch; the overlay offers the three built-in
-filter choices.
+scaler plugins use `--scaler` at launch. Both overlay layouts offer Point,
+Linear, ScaleNx (2–4×) and built-in xBRZ (2–6×). xBRZ is saved as `filter=3`;
+existing filter IDs and the default ScaleNx remain unchanged. Switching between
+ScaleNx and xBRZ applies immediately, including at the same scale. The CLI accepts
+`--scaler=xbrz@3` and the historical `xbr` alias. Higher xBRZ factors cost more CPU.
+
+Display preferences retain the old `fullscreen` boolean: `fullscreen=1` with
+`exclusive_fullscreen=0` is borderless desktop; enabling both selects exclusive
+fullscreen. `window_width`/`window_height` and `fullscreen_width`/`fullscreen_height`
+store separate dimensions. A zero pair means automatic window size / desktop
+fullscreen resolution, respectively. Partial pairs reset to automatic on load.
+`integer_scaling=1` fits whole multiples of the native canvas, independently of
+the CPU scaler factor. Too-small drawables fit down without cropping. Pair with
+Point for unchanged sharp pixels; the overlay always uses normal UI coordinates.
+
+`display_modes.cpp` enumerates the current monitor's modes and stages window
+changes with rollback. Unsupported exclusive sizes are rejected before changing
+the display, and old startup profiles fall back to automatic display settings.
+Borderless uses desktop resolution; window sizes are SDL desktop units (Retina
+drawable pixels can differ). Graphics changes retain the renderer and ImGui state;
+fixed window sizes survive filter and native-canvas changes. `Alt+Enter` remembers
+the last fullscreen kind; `--maximized` overrides a stored fixed window size for
+that launch. Android/Quest owns its panel geometry, so those controls are disabled.
 
 To ignore saved preferences for one launch:
 

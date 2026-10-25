@@ -391,7 +391,7 @@ static int checkRate(int rate) {
 	    session.action != settings::Action::Resume)
 		return 13;
 	for (auto action : {settings::Action::ContinueLatest, settings::Action::LoadAutosave,
-	                    settings::Action::Rewind}) {
+	                    settings::Action::Rewind, settings::Action::WatchDemo}) {
 		session.action = action;
 		bool called = false;
 		session.command = [&](settings::Action received, int, std::string &) {
@@ -486,7 +486,47 @@ static int checkRate(int rate) {
 	platform->destroy();
 	return 0;
 }
+static bool checkXbrz() {
+	for (int width : {256, 512}) {
+	for (const char *name : {"xbrz", "xbr"}) {
+		auto platform = std::unique_ptr<SystemStub>(SystemStub_SDL_create());
+		auto scaler = ScalerParameters::defaults();
+		strcpy(scaler.name, name);
+		scaler.factor = 3;
+		platform->init(g_caption, width, width * 224 / 256, false, kWidescreenNone, &scaler);
+		settings::Preferences p;
+		platform->readPreferences(p);
+		bool ok = p.filter == settings::Filter::Xbrz && p.scale == 3;
+		std::string reason;
+		// Both are internal filters. A type/size-only comparison would miss
+		// this change and silently keep the old algorithm/texture contents.
+		for (auto filter : {settings::Filter::Scale, settings::Filter::Xbrz,
+		                    settings::Filter::Linear, settings::Filter::Xbrz}) {
+			p.filter = filter;
+			ok = platform->applyPreferences(p, reason) && ok;
+			settings::Preferences actual;
+			platform->readPreferences(actual);
+			ok = actual.filter == filter && actual.scale == 3 && ok;
+			platform->updateScreen(0);
+		}
+		SDL_Event reset{};
+		reset.type = SDL_RENDER_DEVICE_RESET;
+		SDL_PushEvent(&reset);
+		platform->processEvents();
+		platform->updateScreen(0);
+		platform->readPreferences(p);
+		ok = p.filter == settings::Filter::Xbrz && ok;
+		platform->destroy();
+		if (!ok) return false;
+	}
+	}
+	return true;
+}
 int main() {
+	if (!checkXbrz()) {
+		std::cerr << "Built-in xBRZ selection, live switching or renderer reset failed\n";
+		return 60;
+	}
 	for (int rate : {8000, 44100, 48000}) {
 		const int result = checkRate(rate);
 		if (result) {

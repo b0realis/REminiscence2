@@ -40,13 +40,19 @@ std::vector<Field> fields(Preferences &p) {
 		    {name, 0, 1, [&value] { return int(value); }, [&value](int n) { value = n != 0; }});
 	};
 	boolean("fullscreen", p.fullscreen);
+	boolean("exclusive_fullscreen", p.exclusiveFullscreen);
+	boolean("integer_scaling", p.integerScale);
+	integer("window_width", p.windowWidth, 0, 16384);
+	integer("window_height", p.windowHeight, 0, 16384);
+	integer("fullscreen_width", p.fullscreenWidth, 0, 16384);
+	integer("fullscreen_height", p.fullscreenHeight, 0, 16384);
 	boolean("vsync", p.vsync);
 	boolean("pause_on_focus_loss", p.pauseOnFocusLoss);
 	boolean("show_fps", p.showFps);
 	boolean("show_menu_button", p.showMenuButton);
 	integer("menu_layout", p.menuLayout, 0, 1);
 	result.push_back(
-	    {"filter", 0, 2, [&p] { return int(p.filter); }, [&p](int n) { p.filter = Filter(n); }});
+	    {"filter", 0, int(Filter::Xbrz), [&p] { return int(p.filter); }, [&p](int n) { p.filter = Filter(n); }});
 	integer("window_scale", p.scale, 1, 6);
 	integer("widescreen", p.widescreen, 0, 5);
 	integer("menu_scale", p.uiScale, 75, 175);
@@ -172,8 +178,13 @@ bool load(const std::string &path, Preferences &preferences, std::string &diagno
 			diagnostic = "Ignored an out-of-range preferences value: " + field.name;
 		}
 	}
-	if (parsed.filter == Filter::Scale) {
-		parsed.scale = std::max(2, std::min(4, parsed.scale));
+	parsed.scale = std::clamp(parsed.scale, filterMinScale(parsed.filter), filterMaxScale(parsed.filter));
+	for (auto pair : {std::make_pair(&parsed.windowWidth, &parsed.windowHeight),
+	                  std::make_pair(&parsed.fullscreenWidth, &parsed.fullscreenHeight)}) {
+		if ((*pair.first || *pair.second) && (*pair.first < 160 || *pair.second < 120)) {
+			*pair.first = *pair.second = 0;
+			diagnostic = "Incomplete display resolution reset to Automatic.";
+		}
 	}
 	std::string reason;
 	if (!validate(parsed, reason)) {

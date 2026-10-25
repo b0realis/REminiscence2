@@ -8,6 +8,8 @@
 #include "decode_mac.h"
 #include "appearance.h"
 #include "resource_mac.h"
+#include "resource.h"
+#include "fs.h"
 #include "mixer.h"
 #include "headless_system.h"
 #include <filesystem>
@@ -91,6 +93,28 @@ int main(int argc, char **argv) {
 	}
 	const auto root = std::filesystem::path(argv[1]);
 	std::filesystem::create_directories(root);
+	{
+		const auto demos = root / "demo-inputs";
+		std::filesystem::create_directories(demos);
+		const uint8_t inputs[] = {0, 1, 15, 16, 32, 64, 128, 255};
+		std::ofstream valid(demos / "demo1.bin", std::ios::binary);
+		valid.write(reinterpret_cast<const char *>(inputs), sizeof(inputs));
+		valid.close();
+		std::ofstream(demos / "empty.bin", std::ios::binary).close();
+		std::ofstream(demos / "oversized.bin", std::ios::binary).close();
+		std::filesystem::resize_file(demos / "oversized.bin", 4 * 1024 * 1024 + 1);
+		FileSystem files(demos.string().c_str());
+		Resource resources(&files, kResourceTypeDOS, LANG_EN);
+		for (const char *invalid : {"empty.bin", "oversized.bin", "missing.bin"}) {
+			resources.load_DEM("demo1.bin");
+			check(resources._demLen == int(sizeof(inputs)) && resources._dem &&
+			          std::equal(std::begin(inputs), std::end(inputs), resources._dem),
+			      "valid demo loads all input bits and recovers after rejection");
+			resources.load_DEM(invalid);
+			check(!resources._dem && resources._demLen == 0,
+			      "invalid demo leaves neither stale bytes nor a playable length");
+		}
+	}
 	const uint8_t bytes[] = {0x12, 0x34};
 	ByteReader reader(bytes, 2);
 	check(reader.be16() == 0x1234, "bounded endian read");

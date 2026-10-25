@@ -136,6 +136,10 @@ static void renderPages(const std::filesystem::path &root, const char *assets) {
 	session.score = 1250;
 	session.outputRate = 22050;
 	session.values.fullscreen = false;
+	session.displayWidth = 1920;
+	session.displayHeight = 1080;
+	session.windowResolutions = {{256, 224}, {768, 672}, {1280, 720}, {1920, 1080}};
+	session.fullscreenResolutions = {{1280, 720}, {1920, 1080}};
 	session.values.rewind = true;
 	session.canRewind = true;
 	session.canLoad = true;
@@ -227,7 +231,7 @@ static void renderPages(const std::filesystem::path &root, const char *assets) {
 		static const char *const pages[] = {"session",      "saves",    "graphics", "audio",
 		                                    "enhancements", "controls", "cheats",   "levels",
 		                                    "journal",      "joypad"};
-		for (int capture = 0; capture < 48; ++capture) {
+		for (int capture = 0; capture < 54; ++capture) {
 			const bool native = (capture >= 28 && capture % 2) || capture == 26 || capture == 27 ||
 			                    (capture >= 10 && capture < 20) || capture == 21;
 			const bool small = capture == 8 || capture == 9 || capture == 23;
@@ -246,7 +250,8 @@ static void renderPages(const std::filesystem::path &root, const char *assets) {
 			session.startup = capture >= 32 && capture < 34;
 			session.assetPicker = capture >= 44 && capture < 46;
 			session.recovery = capture == 34 || capture == 35;
-			const int page = capture >= 46            ? 3
+			const int page = capture >= 48            ? 2
+			                 : capture >= 46          ? 3
 			                 : capture >= 44          ? 0
 			                 : capture >= 42          ? 4
 			                 : capture >= 40          ? 12
@@ -287,7 +292,17 @@ static void renderPages(const std::filesystem::path &root, const char *assets) {
 			if (capture >= 44)
 				name = std::string(capture % 2 ? "native-" : "") +
 				       (capture >= 46 ? "music-sources" : "asset-picker");
+			if (capture >= 48)
+				name = std::string(capture % 2 ? "native-" : "") +
+				       (capture >= 52 ? "integer-scaling" : capture >= 50 ? "exclusive" : "borderless");
+			session.values.fullscreen = capture >= 48 && capture < 52;
+			session.values.exclusiveFullscreen = capture == 50 || capture == 51;
+			session.values.integerScale = capture >= 52;
 			journal::State story;
+			// Capture the new choice at desktop and original game resolution.
+			session.values.filter = capture >= 52 ? settings::Filter::Point
+			                       : page == 2 ? settings::Filter::Xbrz : settings::Filter::Scale;
+			session.values.scale = 3;
 			story.chapter(0);
 			session.journalEntries = story.entries();
 			session.objectives = journal::objectives(story, 0);
@@ -472,6 +487,70 @@ static void renderPages(const std::filesystem::path &root, const char *assets) {
 				      "confirmed native EXIT GAME queues quit");
 			}
 		}
+		// Drive the actual demo button and bounded confirmation in both layouts.
+		for (bool native : {false, true}) {
+			SDL_SetWindowSize(window, native ? 256 : 1280, native ? 224 : 800);
+			session.action = settings::Action::None;
+			session.startup = true;
+			session.demoAvailable = {true, false, true};
+			session.demoIndex = 1; // A missing replay must fall back to an available one.
+			overlay.open(session.values);
+			overlay.selectPage(0);
+			frame();
+			frame();
+			ImGuiWindow *content = nullptr;
+			for (auto *candidate : ImGui::GetCurrentContext()->Windows)
+				if (candidate->Active && strstr(candidate->Name, "Page content"))
+					content = candidate;
+			check(content && session.demoIndex == 0, "Demo picker chooses an available replay");
+			if (!content)
+				continue;
+			ImGui::ActivateItemByID(content->GetID("Watch demo"));
+			frame();
+			check(session.action == settings::Action::WatchDemo,
+			      "Title demo button queues playback in both layouts");
+			session.action = settings::Action::None;
+			session.startup = false;
+			frame();
+			ImGui::ActivateItemByID(content->GetID("Watch demo..."));
+			frame();
+			frame();
+			auto *popup = ImGui::FindWindowByName("Watch demo?");
+			check(popup && popup->Active && session.action == settings::Action::None,
+			      "Watching a demo asks before replacing gameplay");
+			if (popup && popup->Active) {
+				check(popup->Size.x <= (native ? 256 : 1280) &&
+				          popup->Size.y <= (native ? 224 : 800),
+				      "Demo confirmation fits the original resolution");
+				frame(true);
+				SDL_Surface *surface = SDL_CreateRGBSurfaceWithFormatFrom(
+				    captured.data(), capturedWidth, capturedHeight, 32, capturedWidth * 4,
+				    SDL_PIXELFORMAT_ARGB8888);
+				check(surface && SDL_SaveBMP(surface, (root / (native ? "demo-native.bmp"
+				                                                     : "demo-desktop.bmp"))
+				                                          .string().c_str()) == 0,
+				      "Capture demo controls and confirmation for visual review");
+				SDL_FreeSurface(surface);
+				ImGui::ActivateItemByID(popup->GetID("Cancel"));
+				frame();
+				frame();
+				check(session.action == settings::Action::None, "Cancel preserves paused game");
+				ImGui::ActivateItemByID(content->GetID("Watch demo..."));
+				frame();
+				frame();
+				ImGui::ActivateItemByID(popup->GetID("Watch"));
+				frame();
+				frame();
+				check(session.action == settings::Action::WatchDemo,
+				      "Confirmed demo request reaches the host");
+			}
+			session.demoAvailable = {};
+			session.action = settings::Action::None;
+			ImGui::ActivateItemByID(content->GetID("Watch demo..."));
+			frame();
+			check(session.action == settings::Action::None,
+			      "Missing recordings cannot start playback");
+		}
 		// The preview cache must survive the same renderer resets as the game.
 		session.action = settings::Action::None;
 		overlay.selectPage(10);
@@ -574,6 +653,12 @@ int main(int argc, char **argv) {
 	p.musicSource = "music:Music \"quoted\"";
 	p.skipLogosWithKeyboard = p.skipCutscenesWithKeyboard = false;
 	p.fullscreen = false;
+	p.exclusiveFullscreen = true;
+	p.integerScale = true;
+	p.windowWidth = 1280;
+	p.windowHeight = 720;
+	p.fullscreenWidth = 1920;
+	p.fullscreenHeight = 1080;
 	p.filter = settings::Filter::Point;
 	p.scale = 5;
 	p.masterVolume = 73;
@@ -600,6 +685,53 @@ int main(int argc, char **argv) {
 	check(settings::save(path, p, reason), "save settings atomically");
 	settings::Preferences loaded;
 	check(settings::load(path, loaded, reason) && loaded == p, "all preferences round-trip");
+	{
+		settings::Preferences legacy;
+		write(root / "legacy-display.cfg", "version=1\nfullscreen=1\nwindow_scale=3\n");
+		check(settings::load((root / "legacy-display.cfg").string(), legacy, reason) &&
+		          legacy.fullscreen && !legacy.exclusiveFullscreen && !legacy.integerScale &&
+		          !legacy.windowWidth && !legacy.fullscreenWidth,
+		      "old fullscreen profiles remain borderless with automatic sizing");
+		for (const auto size : {settings::Resolution{1280, 0}, {-1, 720}, {20000, 1080}, {0, 720}}) {
+			auto invalid = p;
+			invalid.windowWidth = size.width;
+			invalid.windowHeight = size.height;
+			check(!settings::validate(invalid, reason), "incomplete/oversized resolution rejected");
+		}
+		write(root / "broken-display.cfg", "version=1\nwindow_width=1280\nwindow_height=0\n");
+		check(settings::load((root / "broken-display.cfg").string(), legacy, reason) &&
+		          !legacy.windowWidth && !legacy.windowHeight,
+		      "incomplete stored resolution safely falls back to automatic");
+	}
+	for (int filter = 0; filter <= 3; ++filter) {
+		auto selected = p;
+		selected.filter = settings::Filter(filter);
+		for (int scale = settings::filterMinScale(selected.filter);
+		     scale <= settings::filterMaxScale(selected.filter); ++scale) {
+			selected.scale = scale;
+			settings::Preferences restored;
+			check(settings::validate(selected, reason) &&
+			          settings::save((root / "filters.cfg").string(), selected, reason) &&
+			          settings::load((root / "filters.cfg").string(), restored, reason) && restored == selected,
+			      "legacy filter IDs and every xBRZ scale round-trip");
+		}
+	}
+	check(settings::filterFromScalerName("xbr") == settings::Filter::Xbrz &&
+	          settings::filterFromScalerName("xbrz") == settings::Filter::Xbrz &&
+	          std::string(settings::filterScalerName(settings::Filter::Xbrz)) == "xbrz",
+	      "CLI aliases and persisted xBRZ selection agree");
+	{
+		auto selected = p;
+		selected.filter = settings::Filter::Xbrz;
+		for (int scale : {0, 1, 7}) {
+			selected.scale = scale;
+			check(!settings::validate(selected, reason), "invalid xBRZ scale rejected");
+		}
+		write(root / "xbrz-minimum.cfg", "version=1\nfilter=3\nwindow_scale=1\n");
+		check(settings::load((root / "xbrz-minimum.cfg").string(), selected, reason) &&
+		          selected.filter == settings::Filter::Xbrz && selected.scale == 2,
+		      "loaded xBRZ preferences clamp to minimum scale");
+	}
 	for (int color = 0; color < 5; ++color) {
 		auto selected = p;
 		selected.laserColor = weapon::LaserColor(color);

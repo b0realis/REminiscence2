@@ -19,6 +19,7 @@
 #include "input_state.h"
 #include "controller_profile.h"
 #include "user_notice.h"
+#include "display_modes.h"
 #include <memory>
 
 static const char *kIconBmp = "icon.bmp";
@@ -187,6 +188,8 @@ struct SystemStub_SDL : SystemStub {
 	void restoreTextures();
 	void updateWide(const SDL_Rect *area, const uint32_t *pixels, int pitch);
 	void prepareGraphics();
+	int presentationFactor() const { return _preferences.integerScale ? 1 : _scaleFactor; }
+	void renderCoordinates(bool overlay = false);
 	void cleanupGraphics();
 	void changeGraphics(bool fullscreen, int scaleFactor);
 	void setScaler(const ScalerParameters *parameters);
@@ -216,6 +219,13 @@ void SystemStub_SDL::init(const char *title, int w, int h, bool fullscreen, int 
 	_screenBuffer = 0;
 	_fadeOnUpdateScreen = false;
 	_fullscreen = fullscreen;
+	_preferences.fullscreen = fullscreen;
+#ifdef __ANDROID__
+	_fullscreen = _preferences.fullscreen = true;
+	_preferences.exclusiveFullscreen = false;
+	_preferences.windowWidth = _preferences.windowHeight = 0;
+	_preferences.fullscreenWidth = _preferences.fullscreenHeight = 0;
+#endif
 	_scalerType = kScalerTypeInternal;
 	_scaleFactor = CLIP(scalerParameters->factor, _internalScaler.factorMin, _internalScaler.factorMax);
 	_scaler = &_internalScaler;
@@ -683,11 +693,13 @@ void SystemStub_SDL::restoreTextures() {
 	SDL_DestroyTexture(_texture);
 	_texture = SDL_CreateTexture(_renderer, kPixelFormat, SDL_TEXTUREACCESS_STREAMING, _texW, _texH);
 	if (!_texture) error("Cannot restore game texture: %s", SDL_GetError());
+	SDL_SetTextureScaleMode(_texture, _scalerType == kScalerTypePoint ? SDL_ScaleModeNearest : SDL_ScaleModeLinear);
 	_frameDirty = true;
 	if (_widescreenTexture) {
 		SDL_DestroyTexture(_widescreenTexture);
 		_widescreenTexture = SDL_CreateTexture(_renderer, kPixelFormat, SDL_TEXTUREACCESS_STREAMING, _wideWidth, _screenH);
 		if (!_widescreenTexture) error("Cannot restore side texture: %s", SDL_GetError());
+		SDL_SetTextureScaleMode(_widescreenTexture, _scalerType == kScalerTypePoint ? SDL_ScaleModeNearest : SDL_ScaleModeLinear);
 		if (!_widePixels.empty()) SDL_UpdateTexture(_widescreenTexture, nullptr, _widePixels.data(), _wideWidth * sizeof(uint32_t));
 	}
 }
@@ -706,6 +718,7 @@ void SystemStub_SDL::fadeScreen() {
 }
 
 bool SystemStub_SDL::drawGameFrame(int shakeOffset) {
+	renderCoordinates();
 	if (_frameDirty) {
 		if (_texW != _screenW || _texH != _screenH) {
 			void *dst = nullptr;
@@ -720,6 +733,7 @@ bool SystemStub_SDL::drawGameFrame(int shakeOffset) {
 			return false;
 		_frameDirty = false; // Failed uploads stay dirty and are retried on the next presentation.
 	}
+	SDL_SetRenderDrawColor(_renderer, 0, 0, 0, 255);
 	SDL_RenderClear(_renderer);
 	if (_widescreenMode != kWidescreenNone) {
 		if (_enableWidescreen) {
@@ -728,15 +742,10 @@ bool SystemStub_SDL::drawGameFrame(int shakeOffset) {
 		}
 		// game screen
 		SDL_Rect r;
-		r.y = shakeOffset * _scaleFactor;
+		r.y = shakeOffset * presentationFactor();
 		SDL_RenderGetLogicalSize(_renderer, &r.w, &r.h);
-		if (_scalerType == kScalerTypeLinear || _scalerType == kScalerTypePoint) {
-			r.x = (r.w - _texW * _scaleFactor) / 2;
-			r.w = _texW * _scaleFactor;
-		} else {
-			r.x = (r.w - _texW) / 2;
-			r.w = _texW;
-		}
+		r.x = (r.w - _screenW * presentationFactor()) / 2;
+		r.w = _screenW * presentationFactor();
 		SDL_RenderCopy(_renderer, _texture, &_texRect, &r);
 	} else {
 		if (_fadeOnUpdateScreen) {
@@ -757,7 +766,7 @@ bool SystemStub_SDL::drawGameFrame(int shakeOffset) {
 		}
 		SDL_Rect r;
 		r.x = 0;
-		r.y = shakeOffset * _scaleFactor;
+		r.y = shakeOffset * presentationFactor();
 		SDL_RenderGetLogicalSize(_renderer, &r.w, &r.h);
 		SDL_RenderCopy(_renderer, _texture, &_texRect, &r);
 	}
@@ -776,7 +785,7 @@ void SystemStub_SDL::updateScreen(int shakeOffset) {
 	     (_gameplayActive &&
 	      (_preferences.showMenuButton || _journalNotice || !_contextHint.empty()))) &&
 	    _overlay && !_settingsSession) {
-		SDL_RenderSetLogicalSize(_renderer, 0, 0);
+		renderCoordinates(true);
 		_overlay->beginFrame(_preferences);
 		if (_overlay->drawHud(_preferences, _gameplayActive, _journalNotice, _contextHint,
 		                      noticeVisible ? _notice.text : std::string(), _notice.error))
@@ -784,7 +793,7 @@ void SystemStub_SDL::updateScreen(int shakeOffset) {
 		_overlay->render();
 	}
 	SDL_RenderPresent(_renderer);
-	SDL_RenderSetLogicalSize(_renderer, _logicalW, _logicalH);
+	renderCoordinates();
 	if (!_settingsSession && !_menuInputEnabled && _pointerVisible &&
 	    SDL_GetTicks() - _lastPointer > 2000) {
 		SDL_ShowCursor(SDL_DISABLE);
@@ -923,7 +932,7 @@ void SystemStub_SDL::processEvent(const SDL_Event &raw, bool &paused) {
 			// SDL has already removed window letterboxing/HiDPI scaling. Remove
 			// renderer scaling and the centred widescreen borders exactly once.
 			const int gameWidth =
-			    _widescreenMode == kWidescreenNone ? _logicalW : _screenW * _scaleFactor;
+			    _widescreenMode == kWidescreenNone ? _logicalW : _screenW * presentationFactor();
 			const int left = (_logicalW - gameWidth) / 2;
 			const int px = x < left ? -1 : (x - left) * _screenW / gameWidth;
 			const int py = y < 0 ? -1 : y * _screenH / _logicalH;
@@ -1055,15 +1064,11 @@ void SystemStub_SDL::processEvent(const SDL_Event &raw, bool &paused) {
 				break;
 			case SDLK_KP_PLUS:
 			case SDLK_PAGEUP:
-				if (_scalerType == kScalerTypeInternal || _scalerType == kScalerTypeExternal) {
-					changeGraphics(_fullscreen, _scaleFactor + 1);
-				}
+				changeGraphics(_fullscreen, _scaleFactor + 1);
 				break;
 			case SDLK_KP_MINUS:
 			case SDLK_PAGEDOWN:
-				if (_scalerType == kScalerTypeInternal || _scalerType == kScalerTypeExternal) {
-					changeGraphics(_fullscreen, _scaleFactor - 1);
-				}
+				changeGraphics(_fullscreen, _scaleFactor - 1);
 				break;
 			case SDLK_s: {
 					const auto timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -1251,6 +1256,19 @@ void SystemStub_SDL::unlockAudio() {
 	}
 }
 
+void SystemStub_SDL::renderCoordinates(bool overlay) {
+	const int factor = presentationFactor();
+	_logicalW = display::canvasWidth(_screenW, _screenH, _widescreenMode) * factor;
+	_logicalH = _screenH * factor;
+	int width = 0, height = 0;
+	SDL_GetRendererOutputSize(_renderer, &width, &height);
+	// SDL's integer viewport can crop when the drawable is smaller than 1x.
+	// Fit down only in that case; the preference remains enabled for larger sizes.
+	SDL_RenderSetIntegerScale(_renderer, !overlay && _preferences.integerScale &&
+	                                         width >= _logicalW && height >= _logicalH
+	                                     ? SDL_TRUE : SDL_FALSE);
+	SDL_RenderSetLogicalSize(_renderer, overlay ? 0 : _logicalW, overlay ? 0 : _logicalH);
+}
 
 void SystemStub_SDL::prepareGraphics() {
 	_frameDirty = true;
@@ -1274,26 +1292,26 @@ void SystemStub_SDL::prepareGraphics() {
 	_texRect.y = 0;
 	_texRect.w = _texW;
 	_texRect.h = _texH;
-	int windowW = _screenW * _scaleFactor;
+	int windowW = display::canvasWidth(_screenW, _screenH, _widescreenMode) * _scaleFactor;
 	int windowH = _screenH * _scaleFactor;
-	int flags = SDL_WINDOW_ALLOW_HIGHDPI;
-	if (_fullscreen) {
-		flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
-	} else {
-		flags |= SDL_WINDOW_RESIZABLE;
-		if (_options.maximized) {
-			flags |= SDL_WINDOW_MAXIMIZED;
-		}
-	}
-	if (_widescreenMode == kWidescreenCDi) {
-		windowW = (_screenW + kWidescreenBorderCDiW * 2) * _scaleFactor;
-	} else if (_widescreenMode != kWidescreenNone) {
-		windowW = windowH * 16 / 9;
-	}
-	_logicalW = windowW;
-	_logicalH = windowH;
+	const int flags = SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIDDEN;
 	_window = SDL_CreateWindow(_caption, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, windowW, windowH, flags);
 	if (!_window) error("Cannot create game window: %s", SDL_GetError());
+	std::string displayError;
+	_preferences.fullscreen = _fullscreen;
+	if (!display::apply(_window, _preferences, windowW, windowH, displayError)) {
+		warning("%s Using automatic display settings.", displayError.c_str());
+		_preferences.exclusiveFullscreen = false;
+		_preferences.windowWidth = _preferences.windowHeight = 0;
+		_preferences.fullscreenWidth = _preferences.fullscreenHeight = 0;
+		if (!display::apply(_window, _preferences, windowW, windowH, displayError)) {
+			_fullscreen = _preferences.fullscreen = false;
+			display::apply(_window, _preferences, windowW, windowH, displayError);
+		}
+	}
+	SDL_ShowWindow(_window);
+	if (!_fullscreen && _options.maximized && !_preferences.windowWidth)
+		SDL_MaximizeWindow(_window);
 	SDL_Surface *icon = SDL_LoadBMP(kIconBmp);
 	if (icon) {
 		SDL_SetWindowIcon(_window, icon);
@@ -1302,7 +1320,7 @@ void SystemStub_SDL::prepareGraphics() {
 	_renderer = SDL_CreateRenderer(_window, -1, SDL_RENDERER_ACCELERATED);
 	if (!_renderer) _renderer = SDL_CreateRenderer(_window, -1, SDL_RENDERER_SOFTWARE);
 	if (!_renderer) error("Cannot create renderer: %s", SDL_GetError());
-	SDL_RenderSetLogicalSize(_renderer, _logicalW, _logicalH);
+	renderCoordinates();
 	if (SDL_RenderSetVSync(_renderer, _preferences.vsync ? 1 : 0) != 0 && _preferences.vsync) {
 		warning("VSync unavailable on this renderer: %s", SDL_GetError());
 		_preferences.vsync = false;
@@ -1364,6 +1382,12 @@ void SystemStub_SDL::readPreferences(settings::Preferences &p) const {
 	p.storyJournal = _preferences.storyJournal;
 	p.journalNotifications = _preferences.journalNotifications;
 	p.fullscreen = _fullscreen;
+	p.exclusiveFullscreen = _preferences.exclusiveFullscreen;
+	p.integerScale = _preferences.integerScale;
+	p.windowWidth = _preferences.windowWidth;
+	p.windowHeight = _preferences.windowHeight;
+	p.fullscreenWidth = _preferences.fullscreenWidth;
+	p.fullscreenHeight = _preferences.fullscreenHeight;
 	p.vsync = _preferences.vsync;
 	p.pauseOnFocusLoss = _preferences.pauseOnFocusLoss;
 	p.showFps = _preferences.showFps;
@@ -1372,9 +1396,10 @@ void SystemStub_SDL::readPreferences(settings::Preferences &p) const {
 	p.uiScale = _preferences.uiScale;
     p.keys = _preferences.keys;
     p.filter = _scalerType == kScalerTypePoint ? settings::Filter::Point :
-               _scalerType == kScalerTypeLinear ? settings::Filter::Linear : settings::Filter::Scale;
+               _scalerType == kScalerTypeLinear ? settings::Filter::Linear :
+               _scaler == &scaler_xbr ? settings::Filter::Xbrz : settings::Filter::Scale;
     p.scale = _scaleFactor;
-    if (p.filter == settings::Filter::Scale) p.scale = CLIP(p.scale, 2, 4);
+    p.scale = CLIP(p.scale, settings::filterMinScale(p.filter), settings::filterMaxScale(p.filter));
     p.widescreen = _widescreenMode;
 }
 
@@ -1382,68 +1407,76 @@ bool SystemStub_SDL::applyPreferences(const settings::Preferences &p, std::strin
     if (!settings::validate(p, reason)) return false;
     const ScalerType type = p.filter == settings::Filter::Point ? kScalerTypePoint :
                             p.filter == settings::Filter::Linear ? kScalerTypeLinear : kScalerTypeInternal;
-    const bool displayChanged = p.fullscreen != _fullscreen || type != _scalerType ||
-                                p.scale != _scaleFactor || p.widescreen != _widescreenMode;
-    SDL_Texture *gameTexture = nullptr, *wideTexture = nullptr;
-    const int texW = _screenW * (type == kScalerTypeInternal ? p.scale : 1);
-    const int texH = _screenH * (type == kScalerTypeInternal ? p.scale : 1);
-    int wideW = _screenH * 16 / 9;
-    if (p.widescreen == kWidescreenBlur) wideW = _screenW;
-    else if (p.widescreen == kWidescreenCDi) wideW = _screenW + 2 * kWidescreenBorderCDiW;
-    if (displayChanged) {
-        // Allocate replacement game textures first. The window, renderer and
-        // ImGui resources stay alive, including keyboard focus and font atlas.
-        gameTexture = SDL_CreateTexture(_renderer, kPixelFormat, SDL_TEXTUREACCESS_STREAMING, texW, texH);
-        if (p.widescreen != kWidescreenNone)
-            wideTexture = SDL_CreateTexture(_renderer, kPixelFormat, SDL_TEXTUREACCESS_STREAMING, wideW, _screenH);
-        if (!gameTexture || (p.widescreen != kWidescreenNone && !wideTexture)) {
-            reason = std::string("Display change could not allocate textures: ") + SDL_GetError();
-            if (gameTexture) SDL_DestroyTexture(gameTexture);
-            if (wideTexture) SDL_DestroyTexture(wideTexture);
-            return false;
-        }
-        SDL_SetTextureScaleMode(gameTexture, type == kScalerTypePoint ? SDL_ScaleModeNearest : SDL_ScaleModeLinear);
-        if (wideTexture) clearTexture(wideTexture, _screenH, _fmt);
-        if (p.fullscreen != _fullscreen && SDL_SetWindowFullscreen(_window, p.fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0) != 0) {
-            reason = std::string("Fullscreen change was rejected: ") + SDL_GetError();
-            SDL_DestroyTexture(gameTexture);
-            if (wideTexture) SDL_DestroyTexture(wideTexture);
-            return false;
-        }
-    }
-    if (p.vsync != _preferences.vsync && SDL_RenderSetVSync(_renderer, p.vsync ? 1 : 0) != 0) {
-        reason = std::string("This renderer cannot change VSync: ") + SDL_GetError();
-        if (p.fullscreen != _fullscreen)
-            SDL_SetWindowFullscreen(_window, _fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
-        if (gameTexture) SDL_DestroyTexture(gameTexture);
-        if (wideTexture) SDL_DestroyTexture(wideTexture);
-        return false;
-    }
-    if (displayChanged) {
-        SDL_DestroyTexture(_texture);
-        if (_widescreenTexture) SDL_DestroyTexture(_widescreenTexture);
-        _texture = gameTexture;
-        _frameDirty = true;
-        _widescreenTexture = wideTexture;
-        _wideWidth = wideW;
-        _widePixels.assign(size_t(wideW) * _screenH, 0);
-        _fullscreen = p.fullscreen;
-        _scalerType = type;
-        _scaler = type == kScalerTypeInternal ? &_internalScaler : nullptr;
-        _scaleFactor = p.scale;
-        _widescreenMode = p.widescreen;
-        _enableWidescreen = p.widescreen != kWidescreenNone;
-        _wideMargin = (wideW - _screenW) / 2;
-        _texW = texW;
-        _texH = texH;
-        _texRect = {0, 0, _texW, _texH};
-        _logicalH = _screenH * p.scale;
-        _logicalW = _screenW * p.scale;
-        if (p.widescreen == kWidescreenCDi) _logicalW = (_screenW + 2 * kWidescreenBorderCDiW) * p.scale;
-        else if (p.widescreen != kWidescreenNone) _logicalW = _logicalH * 16 / 9;
-        if (!_fullscreen) SDL_SetWindowSize(_window, _logicalW, _logicalH);
-        SDL_RenderSetLogicalSize(_renderer, _settingsSession ? 0 : _logicalW, _settingsSession ? 0 : _logicalH);
-    }
+    const Scaler *scaler = type == kScalerTypeInternal ?
+        (p.filter == settings::Filter::Xbrz ? &scaler_xbr : &_internalScaler) : nullptr;
+	const bool texturesChanged = type != _scalerType || scaler != _scaler ||
+	                             p.scale != _scaleFactor || p.widescreen != _widescreenMode;
+	const bool windowChanged = p.fullscreen != _fullscreen ||
+	                           p.exclusiveFullscreen != _preferences.exclusiveFullscreen ||
+	                           p.windowWidth != _preferences.windowWidth ||
+	                           p.windowHeight != _preferences.windowHeight ||
+	                           p.fullscreenWidth != _preferences.fullscreenWidth ||
+	                           p.fullscreenHeight != _preferences.fullscreenHeight ||
+	                           (!p.fullscreen && !p.windowWidth &&
+	                            (p.scale != _scaleFactor || p.widescreen != _widescreenMode));
+	SDL_Texture *gameTexture = nullptr, *wideTexture = nullptr;
+	const int texW = _screenW * (type == kScalerTypeInternal ? p.scale : 1);
+	const int texH = _screenH * (type == kScalerTypeInternal ? p.scale : 1);
+	const int canvasW = display::canvasWidth(_screenW, _screenH, p.widescreen);
+	const int wideW = p.widescreen == kWidescreenBlur ? _screenW : canvasW;
+	auto discard = [&] {
+		SDL_DestroyTexture(gameTexture);
+		SDL_DestroyTexture(wideTexture);
+	};
+	if (texturesChanged) {
+		// Stage textures before touching the display. Keep the renderer and
+		// ImGui resources alive across mode and filter changes.
+		gameTexture = SDL_CreateTexture(_renderer, kPixelFormat, SDL_TEXTUREACCESS_STREAMING, texW, texH);
+		if (p.widescreen != kWidescreenNone)
+			wideTexture = SDL_CreateTexture(_renderer, kPixelFormat, SDL_TEXTUREACCESS_STREAMING, wideW, _screenH);
+		if (!gameTexture || (p.widescreen != kWidescreenNone && !wideTexture)) {
+			reason = std::string("Display change could not allocate textures: ") + SDL_GetError();
+			discard();
+			return false;
+		}
+		const auto sampling = type == kScalerTypePoint ? SDL_ScaleModeNearest : SDL_ScaleModeLinear;
+		SDL_SetTextureScaleMode(gameTexture, sampling);
+		if (wideTexture) {
+			SDL_SetTextureScaleMode(wideTexture, sampling);
+			clearTexture(wideTexture, _screenH, _fmt);
+		}
+	}
+	const bool vsyncChanged = p.vsync != _preferences.vsync;
+	if (vsyncChanged && SDL_RenderSetVSync(_renderer, p.vsync ? 1 : 0) != 0) {
+		reason = std::string("This renderer cannot change VSync: ") + SDL_GetError();
+		discard();
+		return false;
+	}
+	if (windowChanged && !display::apply(_window, p, canvasW * p.scale, _screenH * p.scale, reason)) {
+		if (vsyncChanged)
+			SDL_RenderSetVSync(_renderer, _preferences.vsync ? 1 : 0);
+		discard();
+		return false;
+	}
+	if (texturesChanged) {
+		SDL_DestroyTexture(_texture);
+		SDL_DestroyTexture(_widescreenTexture);
+		_texture = gameTexture;
+		_frameDirty = true;
+		_widescreenTexture = wideTexture;
+		_wideWidth = wideW;
+		_widePixels.assign(size_t(wideW) * _screenH, 0);
+		_scalerType = type;
+		_scaler = scaler;
+		_scaleFactor = p.scale;
+		_widescreenMode = p.widescreen;
+		_enableWidescreen = p.widescreen != kWidescreenNone;
+		_wideMargin = (wideW - _screenW) / 2;
+		_texW = texW;
+		_texH = texH;
+		_texRect = {0, 0, _texW, _texH};
+	}
+	_fullscreen = p.fullscreen;
 	if (_preferences.inputBuffer != p.inputBuffer || _preferences.stickyAction != p.stickyAction ||
 	    _preferences.keys != p.keys || _preferences.padButtons != p.padButtons ||
 	    _preferences.joystickButtons != p.joystickButtons ||
@@ -1451,6 +1484,7 @@ bool SystemStub_SDL::applyPreferences(const settings::Preferences &p, std::strin
 	    _preferences.rightStickMovement != p.rightStickMovement)
 		_input.clear(_pi);
 	_preferences = p;
+	renderCoordinates(_settingsSession != nullptr);
 	reason.clear();
 	return true;
 }
@@ -1499,10 +1533,11 @@ SDL_Keycode SystemStub_SDL::remapKey(const SDL_KeyboardEvent &event) const {
 
 void SystemStub_SDL::showSettings(settings::Session &s) {
     auto applied = s.values;
+	int displayIndex = -2, choiceWidescreen = -1;
 	unsigned generation = _inputGeneration;
 	_settingsSession = &s;
 	_input.clear(_pi);
-	SDL_RenderSetLogicalSize(_renderer, 0, 0);
+	renderCoordinates(true);
 	_overlay->open(s.values);
 	while (!_pi.quit && s.action != settings::Action::Resume &&
 	       s.action != settings::Action::Title && s.action != settings::Action::Quit) {
@@ -1515,6 +1550,12 @@ void SystemStub_SDL::showSettings(settings::Session &s) {
 		s.controllerName = _controllerName;
 		s.controllerProfile = _controllerProfile;
 		s.controllerDisconnected = _controllerDisconnected;
+		const int currentDisplay = SDL_GetWindowDisplayIndex(_window);
+		if (currentDisplay != displayIndex || choiceWidescreen != s.values.widescreen) {
+			display::choices(_window, display::canvasWidth(_screenW, _screenH, s.values.widescreen), _screenH, s);
+			displayIndex = currentDisplay;
+			choiceWidescreen = s.values.widescreen;
+		}
 		if (generation != _inputGeneration) {
 			controller::copyBindings(s.values, _preferences);
 			controller::copyBindings(applied, _preferences);
@@ -1522,9 +1563,9 @@ void SystemStub_SDL::showSettings(settings::Session &s) {
 		}
 		_overlay->beginFrame(s.values);
 		_overlay->draw(s);
-		SDL_RenderSetLogicalSize(_renderer, _logicalW, _logicalH);
+		renderCoordinates();
 		drawGameFrame(0);
-		SDL_RenderSetLogicalSize(_renderer, 0, 0);
+		renderCoordinates(true);
         _overlay->render();
         SDL_RenderPresent(_renderer);
         if (s.applyRequested) {
@@ -1567,7 +1608,7 @@ void SystemStub_SDL::showSettings(settings::Session &s) {
 		    s.action == settings::Action::UpdateSaveDetails ||
 		    s.action == settings::Action::Rewind || s.action == settings::Action::Heal ||
 		    s.action == settings::Action::Screenshot || s.action == settings::Action::StartLevel ||
-		    s.action == settings::Action::SwitchAssets ||
+		    s.action == settings::Action::SwitchAssets || s.action == settings::Action::WatchDemo ||
 		    s.action == settings::Action::ContinueLatest ||
 		    s.action == settings::Action::LoadAutosave) {
 			const auto command = s.action;
@@ -1580,6 +1621,7 @@ void SystemStub_SDL::showSettings(settings::Session &s) {
 			                    command == settings::Action::Rewind ||
 			                    command == settings::Action::StartLevel ||
 			                    command == settings::Action::SwitchAssets ||
+			                    command == settings::Action::WatchDemo ||
 			                    command == settings::Action::ContinueLatest ||
 			                    command == settings::Action::LoadAutosave;
 			s.action = success && resume ? settings::Action::Resume : settings::Action::None;
@@ -1592,20 +1634,32 @@ void SystemStub_SDL::showSettings(settings::Session &s) {
 	_controllerDisconnected = false;
 	_pauseRequested = false;
 	_input.clear(_pi);
-	SDL_RenderSetLogicalSize(_renderer, _logicalW, _logicalH);
+	renderCoordinates();
 	SDL_ShowCursor(SDL_DISABLE);
 }
 
 void SystemStub_SDL::changeGraphics(bool fullscreen, int scaleFactor) {
-	const int factor = _scaler ? CLIP(scaleFactor, _scaler->factorMin, _scaler->factorMax) : scaleFactor;
+	const int factor = _scaler ? CLIP(scaleFactor, _scaler->factorMin, _scaler->factorMax) : CLIP(scaleFactor, 1, 6);
 	if (fullscreen == _fullscreen && factor == _scaleFactor) {
 		// no change
 		return;
 	}
-	_fullscreen = fullscreen;
-	_scaleFactor = factor;
-	cleanupGraphics();
-	prepareGraphics();
+	if (_scalerType != kScalerTypeExternal &&
+	    (!_scaler || _scaler == &_internalScaler || _scaler == &scaler_xbr)) {
+		auto p = _preferences;
+		readPreferences(p);
+		p.fullscreen = fullscreen;
+		p.scale = factor;
+		std::string reason;
+		if (!applyPreferences(p, reason))
+			notify(reason, true);
+	} else {
+		// Keep legacy plugin scalers rather than substituting a built-in filter.
+		_fullscreen = _preferences.fullscreen = fullscreen;
+		_scaleFactor = factor;
+		cleanupGraphics();
+		prepareGraphics();
+	}
 }
 
 void SystemStub_SDL::setScaler(const ScalerParameters *parameters) {
@@ -1617,10 +1671,11 @@ void SystemStub_SDL::setScaler(const ScalerParameters *parameters) {
 		{ "point", kScalerTypePoint, 0 },
 		{ "linear", kScalerTypeLinear, 0 },
 		{ "scale", kScalerTypeInternal, &_internalScaler },
+		{ "xbrz", kScalerTypeInternal, &scaler_xbr },
+		{ "xbr", kScalerTypeInternal, &scaler_xbr }, // historical plugin name
 #ifdef USE_STATIC_SCALER
 		{ "nearest", kScalerTypeInternal, &scaler_nearest },
 		{ "tv2x", kScalerTypeInternal, &scaler_tv2x },
-		{ "xbr", kScalerTypeInternal, &scaler_xbr },
 #endif
 		{ 0, -1, 0 }
 	};
@@ -1667,6 +1722,16 @@ void SystemStub_SDL::setScaler(const ScalerParameters *parameters) {
 }
 
 void SystemStub_SDL::changeScaler(int scalerNum) {
+	if (scalerNum >= 0 && scalerNum <= 2) {
+		auto p = _preferences;
+		readPreferences(p);
+		p.filter = static_cast<settings::Filter>(scalerNum);
+		p.scale = CLIP(p.scale, settings::filterMinScale(p.filter), settings::filterMaxScale(p.filter));
+		std::string reason;
+		if (!applyPreferences(p, reason))
+			notify(reason, true);
+		return;
+	}
 	ScalerType type = kScalerTypeInternal;
 	const Scaler *scaler = 0;
 	switch (scalerNum) {

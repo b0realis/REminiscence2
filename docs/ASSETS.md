@@ -68,7 +68,7 @@ ID should use separate `--savepath` directories to retain independent slot names
 | Movie text | `ENGCINE.BIN` + `ENGCINE.TXT`; language prefixes `FR_`, `GER`, `SPA`, `ITA`, `RUS` as supplied |
 | PC CD movies | `INTRO.SEQ` and the event-specific names in `SeqPlayer::_namesTable`; selected by the SEQ option |
 | Native DOS music | `.PRF` records, the `.MID` names referenced by them, and referenced `.INS` patches for AdLib |
-| Demo playback | `DEMO*.BIN` named by the game demo table |
+| Demo playback | `DEMO1.BIN` (Jungle / level 1), `DEMO51.BIN` (Alien World / level 6), `DEMO3.BIN` (Death Tower / level 3), plus the corresponding level data |
 | Optional credits | `CREDITS.CRD` (validated text/control stream; built-in fallback) |
 
 | Game chapter | Background stem | Logic/text stem |

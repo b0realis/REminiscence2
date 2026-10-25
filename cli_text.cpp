@@ -185,25 +185,35 @@ FILES AND CONFIGURATION
 DISPLAY
   --window
       Start in a resizable window; overrides saved display preferences.
-      Without saved preferences the default is fullscreen.
+      Without saved preferences the default is borderless desktop fullscreen.
+      QoL > Graphics selects Windowed, Borderless windowed or exclusive
+      Fullscreen, and remembers window size and fullscreen resolution separately.
+      Borderless uses the desktop resolution; exclusive lists reported modes.
 
   --maximized
       Start with the resizable window maximized; also enables windowed mode.
       Alt+Enter toggles between windowed and fullscreen play.
 
   --scaler=NAME@X                        Default: scale@3
-      Select pixel scaling and the initial window size multiplier X.
+      Select pixel scaling and the automatic window size multiplier X.
+      A fixed window size chosen in Graphics is retained across filter changes.
       Use a whole-number X from 1 to 64; omitting @X keeps the default of 3.
       Built-in names:
         point   Sharp nearest-neighbor sampling by the graphics renderer.
         linear  Smooth linear sampling by the graphics renderer.
         scale   ScaleNx edge-aware pixel scaling at 2x, 3x or 4x.
+        xbrz    xBRZ pixel-art edge smoothing at 2x through 6x (alias: xbr).
       The scale factor is clamped to the scaler's supported range (1-6 for
-      point/linear, 2-4 for scale). Fullscreen output is fitted to the display. Examples:
-      --scaler=point@3, --scaler=linear@2, --scaler=scale@4.
+      point/linear, 2-4 for scale, 2-6 for xbrz). Fullscreen fits the display.
+      Graphics > Integer scaling fits whole multiples of native pixels, with
+      borders. Pair it with point for unaltered sharp pixels. Very small windows
+      fit down instead of cropping; this does not change the saved preference.
+      Examples: --scaler=point@3, --scaler=scale@4, --scaler=xbrz@3.
+      Higher xBRZ factors use more CPU; start with 2x or 3x. The live
+      Graphics > Pixel filter menu offers these same built-in choices.
       Other names require a compiled-in scaler or a matching plugin in the
       working directory: scaler_NAME.so (scaler_NAME.dll on Windows).
-      xBR and other external scalers are not included in the default build.
+      Other external scaler plugins are not included in the default build.
 
   --widescreen=MODE                      Default: none
       Choose the content outside the original playfield. These modes do

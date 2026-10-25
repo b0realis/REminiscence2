@@ -136,6 +136,72 @@ bool Game::startSettingsLevel(int level, int skill, std::string &reason) {
 	return true;
 }
 
+bool Game::demoAvailable(int index) {
+	// These replays contain edition-specific simulation inputs, not video.
+	// Do not offer DOS recordings against Amiga or Sega CD level data.
+	if (index < 0 || index >= int(ARRAYSIZE(_demoInputs)) ||
+	    (!_res.isDOS() && !_res.isMac() && !_res.isPC98()) ||
+	    !settingsLevelAvailable(_demoInputs[index].level))
+		return false;
+	if (_res.isMac()) {
+		const std::string name = std::string("Demo Level ") + _demoInputs[index].name[4];
+		return _res._mac && _res._mac->findEntry(name.c_str());
+	}
+	return _res.fileExists(_demoInputs[index].name);
+}
+
+bool Game::startDemo(int index, std::string &reason) {
+	if (!demoAvailable(index)) {
+		reason = "That demo recording or its level is unavailable in this edition.";
+		return false;
+	}
+	// Loading a missing/empty recording must not disrupt an existing replay.
+	auto *previous = _res._dem;
+	const int previousSize = _res._demLen;
+	_res._dem = nullptr;
+	_res.load_DEM(_demoInputs[index].name);
+	const int firstInput = !_res.isMac() && _demoInputs[index].room == 255 ? 1 : 0;
+	if (!_res._dem || _res._demLen <= firstInput) {
+		free(_res._dem);
+		_res._dem = previous;
+		_res._demLen = previousSize;
+		reason = "The selected demo recording is empty or could not be read.";
+		return false;
+	}
+	free(previous);
+	clearStateRewind();
+	_mix.stopMusic();
+	_demoBin = index;
+	_currentLevel = _demoInputs[index].level;
+	_skillLevel = kSkillNormal;
+	_randSeed = 0;
+	static const int ranges[] = {19, 11, 17};
+	_demoRandCounter = 0;
+	_demoRandRange = ranges[index];
+	_score = 0;
+	_journal = {};
+	_hints = {};
+	_playTicks = _lastPersistentTick = 0;
+	_vid._unkPalSlot1 = _vid._unkPalSlot2 = 0;
+	loadLevelData();
+	resetGameState();
+	_pge_opGunVar = 0;
+	_endLoop = false;
+	_vid.setPalette0xF();
+	_vid.setTextPalette();
+	_stub->setOverscanColor(0xE0);
+	if (_stub->hasWidescreen())
+		_stub->clearWidescreen();
+	// Let the normal first tick resolve the demo's room, including missing maps.
+	// Clear the previous session's image while waiting for a drawable room.
+	memset(_vid._frontLayer, 0, _vid._layerSize);
+	memset(_vid._backLayer, 0, _vid._layerSize);
+	_vid.fullRefresh();
+	_frameTimestamp = _saveTimestamp = _stub->getTimeStamp();
+	reason = "Demo started. Esc returns to the title; F10 opens the QoL menu.";
+	return true;
+}
+
 bool Game::handleConfigPanel(bool recovery) {
 	settings::Session session;
 	session.startup = _startupMenu;
@@ -143,6 +209,12 @@ bool Game::handleConfigPanel(bool recovery) {
 	session.musicSources = _musicSources;
 	session.assetIndex = _assetIndex;
 	session.experimentalPistolAvailable = _res.isAmiga() || _res.isDOS() || _res.isMac() || _res.isSegaCD();
+	session.demoPlaying = _demoBin >= 0 && !_startupMenu;
+	for (int i = 2; i >= 0; --i) {
+		session.demoAvailable[i] = demoAvailable(i);
+		if (session.demoAvailable[i])
+			session.demoIndex = i;
+	}
 	session.recovery = recovery;
 	session.browseLevel = _currentLevel;
 	session.autosaves = progress::scan(_savePath, _res._type);
@@ -208,7 +280,7 @@ bool Game::handleConfigPanel(bool recovery) {
 		    "Level " + std::to_string(i + 1) + ": " +
 		    (session.levelAvailable[i] ? "primary resources found" : "not found in these assets"));
 	session.canSave =
-	    !_startupMenu && _res._pgeNum && _pgeLive[0].life > 0 && !_deathCutsceneCounter;
+	    !_startupMenu && _demoBin == -1 && _res._pgeNum && _pgeLive[0].life > 0 && !_deathCutsceneCounter;
 	session.canRewind = !_startupMenu && _rewindLen > 0;
 	session.apply = [&](const settings::Preferences &p, std::string &reason) {
 		const bool applied = applyPreferences(p, reason);
@@ -279,6 +351,12 @@ bool Game::handleConfigPanel(bool recovery) {
 			if (loaded && _startupMenu)
 				_continued = true;
 			return loaded;
+		}
+		if (action == settings::Action::WatchDemo) {
+			const bool started = startDemo(session.demoIndex, message);
+			if (started && _startupMenu)
+				_continued = true;
+			return started;
 		}
 		if (action == settings::Action::Screenshot) {
 			static unsigned serial = 0;

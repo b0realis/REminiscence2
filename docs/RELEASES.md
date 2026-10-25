@@ -1,6 +1,9 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 # Release packages and reproducible recipes
 
+See the [1.30 preview notes](RELEASE_NOTES_1.30.md) for the combined feature
+summary, validation and screenshots.
+
 Every desktop download includes a precreated **assets** folder. Put prepared
 original game files there, with each edition in its own subfolder. A picker
 remembers your edition; QoL Session changes it later. Music defaults to that

@@ -372,21 +372,20 @@ int main(int argc, char *argv[]) {
 	}
 	if (explicitWindow) preferences.fullscreen = fullscreen;
 	else fullscreen = preferences.fullscreen;
+	if (runtime.maximized)
+		preferences.windowWidth = preferences.windowHeight = 0;
 	if (explicitRewind) preferences.rewind = autoSave;
 	else autoSave = preferences.rewind;
 	if (explicitWidescreen) preferences.widescreen = widescreen;
 	else widescreen = static_cast<WidescreenMode>(preferences.widescreen);
 	if (!explicitScaler) {
-		const char *name = preferences.filter == settings::Filter::Point ? "point" :
-		                   preferences.filter == settings::Filter::Linear ? "linear" : "scale";
+		const char *name = settings::filterScalerName(preferences.filter);
 		strncpy(scalerParameters.name, name, sizeof(scalerParameters.name) - 1);
 		scalerParameters.factor = preferences.scale;
 	} else {
-		if (strcmp(scalerParameters.name, "point") == 0) preferences.filter = settings::Filter::Point;
-		else if (strcmp(scalerParameters.name, "linear") == 0) preferences.filter = settings::Filter::Linear;
-		else preferences.filter = settings::Filter::Scale;
-		preferences.scale = CLIP(scalerParameters.factor, preferences.filter == settings::Filter::Scale ? 2 : 1,
-		                        preferences.filter == settings::Filter::Scale ? 4 : 6);
+		preferences.filter = settings::filterFromScalerName(scalerParameters.name);
+		preferences.scale = CLIP(scalerParameters.factor, settings::filterMinScale(preferences.filter),
+		                        settings::filterMaxScale(preferences.filter));
 	}
 	if (diskInterval >= 0) {
 		preferences.diskAutosave = diskInterval != 0;
@@ -567,9 +566,7 @@ int main(int argc, char *argv[]) {
 		selected = next;
 		continueRequested = false;
 		rememberEdition(library.games[selected].id);
-		const char *filter = preferences.filter == settings::Filter::Point    ? "point"
-		                     : preferences.filter == settings::Filter::Linear ? "linear"
-		                                                                      : "scale";
+		const char *filter = settings::filterScalerName(preferences.filter);
 		snprintf(scalerParameters.name, sizeof(scalerParameters.name), "%s", filter);
 		scalerParameters.factor = preferences.scale;
 		autoSave = preferences.rewind;

@@ -1,6 +1,43 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 # Changes
 
+## 1.30
+
+- Audit the new demo and graphics features. Reject oversized or incompletely
+  read DOS/PC-98 demo recordings before playback, retaining the previous live
+  session on a rejected launch. Add public malformed-input and private-session
+  preservation regressions.
+- Prepare a combined multiplatform preview with xBRZ, QoL demo selection,
+  window/resolution/integer-scaling controls and reusable movie upscaling tools;
+  retain the Sega CD features and release notes from 1.25.
+
+## 1.29
+
+- Add windowed, borderless desktop and exclusive fullscreen choices to Graphics,
+  with independent window-size and reported fullscreen-resolution selectors.
+  Preserve old fullscreen profiles as borderless and keep fixed window sizes
+  across filter changes. Reject unavailable fullscreen modes without replacing
+  the current display settings; fall back safely for obsolete startup profiles.
+- Add whole-native-pixel integer fitting with borders and a downscale fallback
+  for tiny windows. Keep Point sampling sharp after renderer resets. Document
+  Ctrl+S / Ctrl+L quick save/load and the distinction between size and filtering.
+
+## 1.28
+
+- Add Session → Gameplay demos to both QoL layouts. Select an available original
+  Jungle, Alien World or Death Tower replay from DOS/GOG or Macintosh assets.
+  Confirm before replacing gameplay; unavailable editions explain missing replays.
+- Share the launcher with the original title's Demo item. Keep recordings out of
+  manual saves and autosaves; end recorded death at the title instead of recovery.
+
+## 1.27
+
+- Bundle xBRZ in standard desktop and Quest builds, with a live Graphics filter
+  choice in both QoL layouts and `--scaler=xbrz@2` through `@6` (`xbr` alias).
+  Preserve existing filter preferences and fix padded-row handling in the adapter.
+- Add a DOS demo regression for a missing LEVEL3 room39 map: demo input continues,
+  valid-room loading recovers, and ordinary gameplay retains its death path.
+
 ## 1.26
 
 - Save reusable offline Sega CD movie upscaling tools: export through the engine

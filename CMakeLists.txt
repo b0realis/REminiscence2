@@ -69,11 +69,12 @@ target_link_libraries(dear_imgui PUBLIC SDL2::SDL2 PRIVATE reminiscence2_build_o
 add_library(reminiscence2_engine STATIC
     collision.cpp config.cpp cpc_player.cpp cutscene.cpp cutscene_assets.cpp cutscene_tool.cpp decode_mac.cpp decode_sega.cpp decode_seq.cpp decode_sgd.cpp file.cpp
     atomic_file.cpp asset_library.cpp fs.cpp game.cpp game_settings.cpp game_progress.cpp progress_store.cpp controller_profile.cpp context_hints.cpp graphics.cpp menu.cpp mixer.cpp mod_player.cpp ogg_player.cpp
-    settings.cpp settings_store.cpp settings_overlay.cpp keyboard_diagram.cpp save_catalog.cpp appearance.cpp weapon_fx.cpp game_weapon.cpp
+    settings.cpp settings_store.cpp settings_overlay.cpp display_modes.cpp keyboard_diagram.cpp save_catalog.cpp appearance.cpp weapon_fx.cpp game_weapon.cpp
     music_midi.cpp music_prf.cpp music_synth.cpp object_data.cpp journal.cpp wav_stream.cpp mcd_player.cpp
     piege.cpp protection.cpp resource.cpp resource_aba.cpp resource_mac.cpp
     resource_paq.cpp resource_segacd.cpp scaler.cpp screenshot.cpp seq_player.cpp sfx_player.cpp
-    staticres.cpp staticres_controllers.cpp systemstub_sdl.cpp unpack.cpp util.cpp video.cpp)
+    staticres.cpp staticres_controllers.cpp systemstub_sdl.cpp unpack.cpp util.cpp video.cpp
+    scalers/xbr/scaler_xbr.cpp scalers/xbr/xbrz.cpp)
 target_include_directories(reminiscence2_engine PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 target_compile_definitions(reminiscence2_engine PRIVATE USE_STB_VORBIS USE_ZLIB)
 target_link_libraries(reminiscence2_engine PUBLIC reminiscence2_build_options SDL2::SDL2 ZLIB::ZLIB PRIVATE dear_imgui)
@@ -135,6 +136,20 @@ configure_file(fb.cfg fb.cfg COPYONLY)
 
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(display_tests tests/display_tests.cpp)
+    target_link_libraries(display_tests PRIVATE reminiscence2_engine)
+    add_test(NAME display COMMAND display_tests)
+    set_tests_properties(display PROPERTIES TIMEOUT 30 ENVIRONMENT "SDL_VIDEODRIVER=dummy;SDL_AUDIODRIVER=dummy;SDL_RENDER_DRIVER=software")
+    add_executable(scaler_tests tests/scaler_tests.cpp)
+    target_link_libraries(scaler_tests PRIVATE reminiscence2_engine)
+    add_test(NAME scalers COMMAND scaler_tests)
+    add_executable(demo_assets tests/demo_assets.cpp)
+    target_link_libraries(demo_assets PRIVATE reminiscence2_engine)
+    if(REMINISCENCE2_DOS_DATA)
+        add_test(NAME demo_missing_map COMMAND demo_assets "${REMINISCENCE2_DOS_DATA}"
+            "${CMAKE_CURRENT_BINARY_DIR}/demo-fixtures")
+        set_tests_properties(demo_missing_map PROPERTIES TIMEOUT 20)
+    endif()
     add_executable(segacd_media_tests tests/segacd_media_tests.cpp)
     target_link_libraries(segacd_media_tests PRIVATE reminiscence2_engine)
     add_test(NAME segacd_media COMMAND segacd_media_tests "${CMAKE_CURRENT_BINARY_DIR}/segacd-media-fixtures")
@@ -260,7 +275,7 @@ if(BUILD_TESTING)
     endif()
     get_property(test_targets DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
     foreach(test_target IN LISTS test_targets)
-        if(test_target MATCHES "_tests$|^amiga_assets$")
+        if(test_target MATCHES "_tests$|^amiga_assets$|^demo_assets$")
             target_compile_definitions(${test_target} PRIVATE SDL_MAIN_HANDLED)
         endif()
     endforeach()

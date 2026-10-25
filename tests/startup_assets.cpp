@@ -96,6 +96,9 @@ int main(int argc, char **argv) {
 				++menus;
 				check(s.startup && !s.canSave && !s.canRewind, "Title exposes in-game save/rewind");
 				check(s.levelAvailable[0] && s.levelAvailable[6], "Title cannot browse levels");
+				for (bool available : s.demoAvailable)
+					check(available == (type == kResourceTypeDOS),
+					      "Replay availability does not match this edition's private assets");
 				if (scenario == 10) {
 					s.assetIndex = 1;
 					std::string reason;

@@ -151,6 +151,8 @@ struct Game {
 	bool applyPreferences(const settings::Preferences &preferences, std::string &reason);
 	bool settingsLevelAvailable(int level);
 	bool startSettingsLevel(int level, int skill, std::string &reason);
+	bool demoAvailable(int index);
+	bool startDemo(int index, std::string &reason);
 
 	void run();
 	void initCutsceneResources();

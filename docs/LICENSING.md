@@ -44,7 +44,7 @@ notice or obtain confirmation from the relevant rights holders.
 | Component | Evidence retained in the source | Treatment |
 | --- | --- | --- |
 | Engine and REinforced changes | Original headers, linked upstream history, pinned revision and `LICENSE` | Preserve attribution and GPLv3 distribution obligations |
-| xBRZ | Notices in `scalers/xbr/xbrz.cpp`, `xbrz.h` and `config.h` name Zenju, GPLv3 and a MAME linking exception | Preserve those notices; verify the version range before a later-version claim; currently excluded from CMake builds |
+| xBRZ | Notices in `scalers/xbr/xbrz.cpp`, `xbrz.h` and `config.h` name Zenju, GPLv3 and a MAME linking exception | Linked into standard builds; original core sources remain unchanged. Packages carry `xBRZ-NOTICE.txt` and GPLv3 text. No broader version grant is implied. |
 | stb Vorbis | `stb_vorbis.c` contains Sean Barrett's MIT and public-domain alternatives | Preserve the full embedded notices, including when packaging binaries |
 | Nuked OPL3 | Unmodified source and LGPL-2.1-or-later notices in `third_party/nuked-opl3`; commit pinned in its README | Keep full source, license and provenance with distributions |
 | Dear ImGui | Unmodified v1.91.9b core/SDL2 backends in `third_party/imgui`, pinned commit and file hashes in its README/manifest; MIT license and embedded font/stb notices retained | Include the MIT license and retained source notices; no reference game screenshot or commercial font is bundled |

@@ -164,6 +164,45 @@ void sessionPage(settings::Session &s, const char *query) {
 			hint("Choose a level in Levels, load progress in Saves, or return to the title menu.");
 		}
 	}
+	if (match(query, "Watch demo recorded gameplay demonstration playback")) {
+		ImGui::SeparatorText("Gameplay demos");
+		const bool available = std::any_of(s.demoAvailable.begin(), s.demoAvailable.end(),
+		                                   [](bool found) { return found; });
+		if (available) {
+			static const char *const labels[] = {"Jungle (level 1)", "Alien world (level 6)",
+			                                     "Death Tower (level 3)"};
+			if (s.demoIndex < 0 || s.demoIndex >= 3 || !s.demoAvailable[s.demoIndex])
+				s.demoIndex = int(std::find(s.demoAvailable.begin(), s.demoAvailable.end(), true) -
+				                  s.demoAvailable.begin());
+			ImGui::SetNextItemWidth(-1);
+			if (ImGui::BeginCombo("##demo", labels[s.demoIndex])) {
+				for (int i = 0; i < 3; ++i) {
+					ImGui::BeginDisabled(!s.demoAvailable[i]);
+					if (ImGui::Selectable(labels[i], s.demoIndex == i))
+						s.demoIndex = i;
+					ImGui::EndDisabled();
+				}
+				ImGui::EndCombo();
+			}
+			if (wideButton(s.startup ? "Watch demo" : "Watch demo...")) {
+				if (s.startup)
+					s.action = settings::Action::WatchDemo;
+				else
+					ImGui::OpenPopup("Watch demo?");
+			}
+			confirmation("Watch demo?",
+			             "Leave this session to watch recorded gameplay? Save first: unsaved "
+			             "progress and rewind history will be lost. Demos cannot be saved.",
+			             "Watch", [&] { s.action = settings::Action::WatchDemo; });
+			hint(compactLayout ? "Esc: title. F10: menu."
+			                   : "Original recorded gameplay. Esc returns to the title; F10 opens "
+			                     "this menu. Playback does not write progress or saves.");
+		} else {
+			hint("No compatible demo recordings in this edition's assets.");
+		}
+		if (s.demoPlaying)
+			hint("Currently watching a demo.");
+	}
 	ImGui::SeparatorText("Everyday preferences");
 	toggle(s, query, "Quicksave skips title sequence", s.values.quickResume,
 	       "On launch, resume the newest compatible quick/manual save, checkpoint or autosave. "
@@ -400,25 +439,71 @@ void levelsPage(settings::Session &s, const char *query) {
 }
 void graphicsPage(settings::Session &s, const char *query) {
 	ImGui::SeparatorText("Window and display");
-	toggle(s, query, "Fullscreen", s.values.fullscreen,
-	       "Apply immediately. Alt+Enter remains available outside the menu.");
+	if (match(query, "Display mode resolution windowed borderless fullscreen")) {
+		ImGui::BeginDisabled(!s.windowModesAvailable);
+		int mode = !s.values.fullscreen ? 0 : s.values.exclusiveFullscreen ? 2 : 1;
+		const int previous = mode;
+		combo(s, "Display mode", mode, "Windowed\0Borderless windowed\0Fullscreen / exclusive\0");
+		if (mode != previous) {
+			s.values.fullscreen = mode != 0;
+			if (mode != 0)
+				s.values.exclusiveFullscreen = mode == 2;
+		}
+		if (mode == 1) {
+			ImGui::TextWrapped("Desktop resolution: %d x %d", s.displayWidth, s.displayHeight);
+			hint("Borderless fills the current desktop without changing its display mode.");
+		} else {
+			int &width = mode == 0 ? s.values.windowWidth : s.values.fullscreenWidth;
+			int &height = mode == 0 ? s.values.windowHeight : s.values.fullscreenHeight;
+			const auto &sizes = mode == 0 ? s.windowResolutions : s.fullscreenResolutions;
+			const char *automatic = mode == 0 ? "Automatic / scaler factor" : "Desktop resolution";
+			const std::string label = width ? std::to_string(width) + " x " + std::to_string(height) : automatic;
+			ImGui::TextUnformatted(mode == 0 ? "Window resolution" : "Fullscreen resolution");
+			ImGui::SetNextItemWidth(-1);
+			if (ImGui::BeginCombo("##resolution", label.c_str())) {
+				if (ImGui::Selectable(automatic, width == 0)) {
+					width = height = 0;
+					s.applyRequested = true;
+				}
+				for (const auto size : sizes) {
+					const std::string item = std::to_string(size.width) + " x " + std::to_string(size.height);
+					if (ImGui::Selectable(item.c_str(), width == size.width && height == size.height)) {
+						width = size.width;
+						height = size.height;
+						s.applyRequested = true;
+					}
+				}
+				ImGui::EndCombo();
+			}
+			hint(mode == 0 ? "Automatic uses the game canvas times Scaler factor. Fixed sizes keep their dimensions when filters change."
+			               : "Uses a resolution reported by the current display. Unsupported changes keep the previous mode.");
+		}
+		ImGui::EndDisabled();
+		if (!s.windowModesAvailable)
+			hint("Android / Quest controls the app panel's size and window mode.");
+	}
+	toggle(s, query, "Integer scaling", s.values.integerScale,
+	       "Fit using whole multiples of the original pixels, with borders. Choose Point for "
+	       "unaltered sharp pixels. Tiny windows fit down instead of cropping.");
 	toggle(s, query, "Vertical sync", s.values.vsync,
 	       "Ask the renderer to synchronize presentation to the display. Gameplay timing is "
 	       "unchanged.");
-	if (match(query, "Pixel filter point nearest linear ScaleNx")) {
+	if (match(query, "Pixel filter point nearest linear ScaleNx xBR xBRZ")) {
 		int filter = int(s.values.filter);
 		const int previous = filter;
 		combo(s, "Pixel filter", filter,
-		      "Point / sharp pixels\0Linear / smooth pixels\0ScaleNx / edge-aware\0");
+		      "Point / sharp pixels\0Linear / smooth pixels\0ScaleNx / edge-aware\0xBRZ / smooth edges\0");
 		if (filter != previous) {
 			s.values.filter = settings::Filter(filter);
-			if (filter == 2)
-				s.values.scale = std::max(2, std::min(4, s.values.scale));
+			s.values.scale = std::clamp(s.values.scale, settings::filterMinScale(s.values.filter),
+			                            settings::filterMaxScale(s.values.filter));
 		}
+		if (s.values.filter == settings::Filter::Xbrz)
+			hint(compactLayout ? "xBRZ: 2x-6x. Try 2x or 3x."
+			                   : "xBRZ smooths pixel-art edges at 2x-6x. Higher scales use more CPU; try 2x or 3x first.");
 	}
-	slider(s, query, "Window scale", s.values.scale,
-	       s.values.filter == settings::Filter::Scale ? 2 : 1,
-	       s.values.filter == settings::Filter::Scale ? 4 : 6, "%dx");
+	slider(s, query, "Scaler factor", s.values.scale,
+	       settings::filterMinScale(s.values.filter), settings::filterMaxScale(s.values.filter), "%dx");
 	if (match(query, "Widescreen adjacent mirror blur borders")) {
 		combo(s, "Side content", s.values.widescreen,
 		      "Original playfield\0Adjacent rooms\0Adjacent rooms / blur\0Mirrored edges\0Blurred "

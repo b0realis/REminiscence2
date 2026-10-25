@@ -282,10 +282,10 @@ continue for volume adjustments. Move the mouse to reveal the cursor.
 
 | Page | What you can change or do |
 | --- | --- |
-| Session | Game edition selection and automatic resume;  Continue latest autosave, set disk autosave interval and optional contextual hints; view health/score/rewind count, rewind, capture a clean screenshot, restart, return to title, save/undo/reset preferences, and show or hide the shortcut. |
+| Session | Game edition selection and automatic resume; watch original gameplay demos; continue latest autosave, set disk autosave interval and optional contextual hints; view health/score/rewind count, rewind, capture a clean screenshot, restart, return to title, save/undo/reset preferences, and show or hide the shortcut. |
 | Rewind | Preview captured moments, their age, room and health, then restore the selected point. |
 | Save / Load | Browse all levels, previews and names; protect milestones, save/load manual slots 1–99 and restore checkpoint 00. |
-| Graphics | Fullscreen, VSync, point/linear/ScaleNx filtering, window scale, side content, compact layout and menu text size. |
+| Graphics | Windowed/borderless/exclusive fullscreen, window size and fullscreen resolution, integer scaling, VSync, point/linear/ScaleNx/xBRZ filtering, scaler factor, side content, compact layout and menu text size. |
 | Audio | Independent soundtrack selection; separate master/music/effects levels, mute and save-confirmation sound. |
 | Enhancements | Conrad’s Original/Red-Pink/White T-shirt, rewind, inventory ordering, transitions and optional cutscene choices. |
 | Controls | Rebind the nine primary keyboard actions and review fixed shortcuts. |
@@ -468,8 +468,11 @@ There are several kinds of progress recovery. Choose one deliberately:
 | Persistent autosaves | Three recent generations per edition, including a frame preview. | Yes, when a write succeeds. |
 | Rewind through `--autosave` | Recent snapshots from this running session. | No. |
 
-Manual slot 1 is selected initially. Ctrl+S writes it; Ctrl+L loads it. Check the
-slot shown on the Save / Load page before overwriting progress you want to keep.
+**Quick save is Ctrl+S; quick load is Ctrl+L.** Manual slot 1 is selected initially.
+Both shortcuts use the selected manual slot and current level. These are the
+same saves used by the QoL Save / Load browser, and overwrite protection still
+applies. Optional controller shortcuts can be assigned under **QoL → Joypad**.
+Check the slot shown on the Save / Load page before overwriting progress you want to keep.
 New save filenames identify edition, level and slot, such as
 `reminiscence2-0-level1-manual-1.r2m` (edition 0 is Amiga; 1 DOS, 2 Macintosh, 3 PC-98, 4 Sega).
 Version 4 saves also validate the edition, level, entity count and a gameplay-data
@@ -515,6 +518,21 @@ compatible candidate. Continue skips damaged files or different asset revisions
 and tries an older generation. The explicit command-line `--continue` restores
 directly and skips opening/title screens; it reports failure if no candidate
 can be restored.
+
+To watch an original gameplay demonstration, open **QoL → Session → Gameplay
+demos**, choose a recording, and select **Watch demo**. The picker offers Jungle
+(level 1), Alien World (level 6), and Death Tower (level 3) when the selected
+edition supplies their replay and level data. Use the menu search for `demo` in
+the compact layout. **Esc** ends playback at the title; **F10** or the controller
+menu shortcut opens QoL settings. Playback also returns to the title when the
+recording ends or Conrad dies.
+
+Starting a demo during gameplay asks before replacing the current session: save
+first, because unsaved progress and rewind history will be lost. Demos do not
+write saves or story progress. These are recorded game inputs, not extra levels
+or cutscene videos. The supplied GOG data includes all three; the supplied Amiga
+and Sega CD sets have no compatible replay files. Macintosh recordings use the
+existing native loader but have not been tested with private Macintosh assets.
 
 To return directly to saved progress on launch, enable **QoL → Session →
 Quicksave skips title sequence**, then **Save settings**. It is **off by default**.
@@ -576,12 +594,43 @@ Without saved preferences the default launch is fullscreen. `--window` opens a r
 | `--scaler=point@3` | Nearest-neighbor sampling with sharp pixel edges. |
 | `--scaler=linear@3` | Smooth sampling. |
 | `--scaler=scale@3` | ScaleNx edge-aware enlargement; supported factors are 2–4. |
+| `--scaler=xbrz@3` | Built-in xBRZ edge smoothing; supported factors are 2–6. `xbr` is an alias. |
 
-The suffix controls the initial size multiplier. Without a suffix the default
+The suffix controls the scaler factor and automatic window size. Without a suffix the default
 factor is 3. Macintosh rendering keeps its native 512×448 resolution; the
-base playfield for other supported editions is 256×224. External scaler names
-require matching plugins or a build that includes them; default CMake builds
-do not include xBR.
+base playfield for other supported editions is 256×224. All four filters are
+included in standard builds. Choose **Graphics → Pixel filter → xBRZ** in either
+menu layout to switch while playing; the choice and scale are saved with your
+preferences. Start at 2× or 3×: higher xBRZ factors cost more CPU. This display
+filter keeps gameplay timing and original assets unchanged. Other external
+scaler names require matching plugins or a build that includes them.
+
+**QoL → Graphics → Display mode** offers three choices:
+
+| Mode | Size and behavior |
+| --- | --- |
+| Windowed | A resizable desktop window. Choose Automatic to size it from the native game canvas and Scaler factor, or select a fixed window size. |
+| Borderless windowed | Fills the current desktop at its existing resolution. The desktop display mode stays unchanged. |
+| Fullscreen / exclusive | Requests a display mode at the selected fullscreen resolution. The picker lists modes reported by the current display; Desktop resolution is the default. OS/backend support may vary. |
+
+Window size and fullscreen resolution are stored separately. A fixed window size
+stays fixed when changing filters; selecting Automatic makes the scaler factor
+control its size again. On HiDPI/Retina screens, window dimensions are desktop
+coordinate units and the drawable can contain more physical pixels. **Save
+settings** remembers these choices. **Alt+Enter** toggles windowed mode and the
+last chosen borderless/exclusive mode. An unavailable exclusive resolution is
+rejected while keeping the previous mode; an obsolete startup profile falls back
+to automatic display settings. Android/Quest controls its own application panel;
+window-mode and resolution controls are disabled there.
+
+For simple enlarged pixels, choose **Point / sharp pixels** and enable **Integer
+scaling**. The engine uses the largest whole multiple of native pixels that fits
+the drawable, leaving borders around the game. For example, a 256×224 playfield
+fits at 4× (1024×896) in a 1920×1080 drawable. It uses fractional fitting only when
+the window is smaller than the native canvas, to avoid cropping. With integer
+scaling off, it fits the available space while preserving the canvas aspect
+ratio. Linear smooths sampling, while ScaleNx and xBRZ deliberately reshape
+pixel-art edges. None changes the simulation or source assets.
 
 ### Fill a wide display
 

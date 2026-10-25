@@ -76,6 +76,7 @@ def prepare_dependency(name):
 def copy_licenses(licenses):
     licenses.mkdir(parents=True, exist_ok=True)
     shutil.copy2(ROOT / 'LICENSE', licenses / 'REminiscence2-GPL.txt')
+    shutil.copy2(ROOT / 'scalers/xbr/NOTICE.txt', licenses / 'xBRZ-NOTICE.txt')
     for source in (ROOT / 'third_party').glob('**/*'):
         if source.is_file() and ('license' in source.name.lower() or 'copying' in source.name.lower()):
             relative = source.relative_to(ROOT / 'third_party')
@@ -83,7 +84,7 @@ def copy_licenses(licenses):
     shutil.copy2(prepare_dependency('SDL2') / 'LICENSE.txt', licenses / 'SDL2.txt')
     shutil.copy2(prepare_dependency('zlib') / 'LICENSE', licenses / 'zlib.txt')
     shutil.copy2(ROOT / 'packaging/licenses/COPYING.RUNTIME', licenses / 'COPYING.RUNTIME')
-    (licenses / 'README.txt').write_text('REminiscence2: GPL-3.0-or-later. See individual third-party license files.\nGCC-built desktop packages include compiler runtimes under GPLv3 with the\nGCC Runtime Library Exception 3.1 (COPYING.RUNTIME). SDK/system libraries\ncome from the operating system. Corresponding engine/SDL/zlib sources are\nprovided with the same GitHub release. Original game assets are not bundled.\n')
+    (licenses / 'README.txt').write_text('Combined engine: GPLv3; new REminiscence2 contributions: GPL-3.0-or-later.\nSee individual third-party notices, including xBRZ-NOTICE.txt.\nGCC-built desktop packages include compiler runtimes under GPLv3 with the\nGCC Runtime Library Exception 3.1 (COPYING.RUNTIME). SDK/system libraries\ncome from the operating system. Corresponding engine/SDL/zlib sources are\nprovided with the same GitHub release. Original game assets are not bundled.\n')
 
 
 def common_files(package, build):

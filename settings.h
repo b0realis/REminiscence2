@@ -14,13 +14,22 @@
 #include <vector>
 
 namespace settings {
-enum class Filter { Point, Linear, Scale };
+// Stored numeric IDs are stable: append new filters without renumbering old ones.
+enum class Filter { Point = 0, Linear = 1, Scale = 2, Xbrz = 3 };
+const char *filterScalerName(Filter filter);
+Filter filterFromScalerName(const char *name);
+int filterMinScale(Filter filter);
+int filterMaxScale(Filter filter);
 enum class Binding { Left, Right, Up, Down, Action, Use, Weapon, Inventory, Pause, Count };
 constexpr size_t BindingCount = static_cast<size_t>(Binding::Count);
 constexpr size_t PadBindingCount = 8;
 
 struct Preferences {
 	bool fullscreen = true, vsync = false, pauseOnFocusLoss = true, showFps = false;
+	// Retain fullscreen's stored meaning: true used to mean desktop/borderless.
+	bool exclusiveFullscreen = false, integerScale = false;
+	int windowWidth = 0, windowHeight = 0; // Both zero: native canvas times scale.
+	int fullscreenWidth = 0, fullscreenHeight = 0; // Both zero: desktop mode.
 	bool showMenuButton = true;
 	int menuLayout = 0; // 0: automatic, 1: compact; small windows always use compact.
 	Filter filter = Filter::Scale;
@@ -81,6 +90,7 @@ enum class Action {
 	Heal,
 	Screenshot,
 	StartLevel,
+	WatchDemo,
 	SwitchAssets,
 	Title,
 	Quit
@@ -99,13 +109,22 @@ struct RewindPoint {
 	unsigned ageSeconds = 0;
 	int room = 0, health = 0;
 };
+struct Resolution {
+	int width = 0, height = 0;
+};
 struct Session {
 	Preferences values;
+	bool windowModesAvailable = true;
+	int displayWidth = 0, displayHeight = 0;
+	std::vector<Resolution> windowResolutions, fullscreenResolutions;
 	bool startup = false, recovery = false;
 	bool assetPicker = false;
 	std::vector<assets::Source> assetSources, musicSources;
 	int assetIndex = 0;
 	bool experimentalPistolAvailable = false;
+	bool demoPlaying = false;
+	int demoIndex = 0;
+	std::array<bool, 3> demoAvailable{};
 	int autosaveIndex = 0, rewindIndex = 0;
 	std::vector<progress::Snapshot> autosaves;
 	std::vector<RewindPoint> rewindPoints;

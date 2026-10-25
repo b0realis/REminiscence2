@@ -1,5 +1,95 @@
 # REminiscence2 validation
 
+## Patch 1.30 — release audit
+
+Reviewed the 1.27–1.29 changes across scaler strides, live display changes,
+settings persistence, demo launch/exit, save protection and packaging. Hardened
+DOS/PC-98 demo reads: bound size before signed conversion/allocation and expose
+no input length until a complete read succeeds. Public format tests cover valid
+input bits, missing/empty/oversized files and recovery; the private GOG regression
+checks that a rejected oversized replacement retains the prior replay/session.
+
+Local Release and Debug/UBSan builds each pass all 31 CTest suites, using supplied
+Amiga, GOG/DOS and Sega CD fixtures. All 11 release-tool tests pass. The local
+`play-local.sh` launcher reports 1.30. Desktop/native Graphics captures were
+rendered through the production overlay and visually inspected. The combined
+release notes retain the previous Sega CD results and distinguish simulated
+display tests from hardware testing. The publisher requires same-commit public
+CI and all six package builds before tagging; see the release workflow for those
+results. No new physical-device or Macintosh-asset validation is claimed.
+
+## Patch 1.29 — display modes, resolution and integer fitting
+
+The new `display` regression uses the real SDL platform with dummy video and
+software rendering. It checks windowed, borderless and exclusive requests,
+reported-mode selection, rejection/rollback of unavailable sizes, remembered
+fullscreen kind through Alt+Enter, and fallback from obsolete startup profiles.
+Fixed window dimensions survive filter changes and native title/game canvas
+changes. Tests cover 256×224 and 512×448 canvases, largest-whole-multiple fitting,
+small-window downscaling, fractional fit and nearest-only pixel output after a
+renderer reset. Preferences tests check new field round-trips and old fullscreen
+profiles retaining borderless behavior; malformed resolution pairs reset safely.
+
+Bundled SDL2 accepts exclusive mode in this test backend. The locally installed
+SDL2 compatibility backend silently substitutes borderless; the engine now
+detects this, rejects the request, and restores the prior mode. This is tested
+as a supported failure path, not treated as exclusive-mode hardware validation.
+Desktop/borderless/exclusive and integer-scaling UI captures were rendered at
+desktop and native sizes, with representative captures visually reviewed.
+Android/Quest retains its host-managed fullscreen surface; its window-mode and
+resolution controls are disabled. No physical display-mode switches or remote
+target builds were used for this validation.
+
+All 31 suites pass in both Release and Debug/UBSan. The local launcher reports
+1.29, the documentation guard passes, and the manual explains scaler factors,
+integer pixels and existing Ctrl+S / Ctrl+L quick-save/load shortcuts. Changes
+have not been committed or published in this patch.
+
+## Patch 1.28 — QoL gameplay demos
+
+The shared demo launcher is exercised with all three supplied GOG recordings.
+Headless tests drive the actual `Game::run` and QoL command callbacks from an
+interrupted opening, title settings and paused gameplay, and retain the original
+title's Demo item. They verify return to the title through Esc, forced replay
+exhaustion and a recorded death condition; saving is rejected through both the
+menu and storage boundary, and playback leaves save directories empty. Missing
+indices and empty recordings preserve the previous session and replay buffer.
+These are focused launch/exit checks, not full-playthrough replay verification.
+
+Startup tests verify replay availability for the supplied DOS, Amiga and Sega CD
+sets. The latter two offer no recordings. UI tests activate the real demo controls
+at desktop and 256×224 sizes, including confirmation, cancellation and missing
+replay choices; both confirmation layouts were visually reviewed. Macintosh and
+PC-98 retain their inherited replay loaders but have no private-asset validation.
+
+All 30 Release CTest suites and 10 focused Debug/UBSan suites pass. The local
+launcher is rebuilt at 1.28 and the manual documents the controls and save
+behavior. This patch does not publish a release or verify other target hardware.
+
+## Patch 1.27 — built-in xBRZ and missing-map demo regression
+
+xBRZ is linked through the shared CMake engine target, including Android, and
+the legacy Makefile. Existing filter IDs retain their meaning; `filter=3` adds
+xBRZ. CLI aliases, settings persistence, same-scale live switching, renderer
+reset and the desktop/native QoL layouts are checked. The adapter is compared
+against the unchanged packed-row xBRZ core at every factor from 2 to 6, using
+odd widths, one-pixel images, padded strides, guard pixels and invalid geometry.
+Both 256×224 and 512×448 platform paths are exercised. Original scaler copyright
+notices accompany binary packages through the shared license copier.
+
+The new optional `demo_missing_map` test loads the private GOG/DOS assets and
+executes the real `Game::mainLoop` with recorded demo input. Current GOG data
+starts LEVEL3 in room 56; the test explicitly recreates the historical room 39
+start, whose map is absent. Input continues without death, a controlled move to
+a mapped room restores decoding, and ordinary play retains the missing-map death
+path. This checks the exception and recovery, not a complete historical replay.
+Without private DOS assets this test is compiled but not registered with CTest.
+
+All 30 local CTest suites pass in Release and Debug/UBSan; packaging tests and
+documentation checks pass. The local launcher runs the rebuilt 1.27 binary.
+Cross-platform build recipes are updated; no new remote target-build or hardware
+certification is implied by these local checks.
+
 ## Patch 1.26 — offline movie upscaling tools
 
 The saved SC1 intro uses Real-CUGAN Pro 3× with denoise 3 and a tracked repair

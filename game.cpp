@@ -229,26 +229,25 @@ void Game::run() {
 				if (!resumeLoaded)
 					continue; // Closing settings returns to the original title.
 			} else if (_menu._selectedOption == Menu::MENU_OPTION_ITEM_DEMO) {
-				_demoBin = (_demoBin + 1) % ARRAYSIZE(_demoInputs);
-				const char *fn = _demoInputs[_demoBin].name;
-				debug(DBG_DEMO, "Loading inputs from '%s'", fn);
-				_res.load_DEM(fn);
-				if (_res._demLen == 0)
+				std::string reason = "No compatible demo recordings in this edition.";
+				for (int offset = 1; offset <= int(ARRAYSIZE(_demoInputs)); ++offset) {
+					const int index = (_demoBin + offset) % ARRAYSIZE(_demoInputs);
+					if (startDemo(index, reason)) {
+						resumeLoaded = true; // The shared launcher already loaded the level.
+						break;
+					}
+				}
+				if (!resumeLoaded) {
+					_stub->notify(reason, true);
 					continue;
-				_skillLevel = kSkillNormal;
-				_currentLevel = _demoInputs[_demoBin].level;
-				_randSeed = 0;
-				if (_res.isMac()) {
-					static const int ranges[] = {19, 11, 17};
-					_demoRandCounter = 0;
-					_demoRandRange = ranges[_demoBin];
 				}
 			} else {
 				_demoBin = -1;
 				_skillLevel = _menu._skill;
 				_currentLevel = _menu._level;
 			}
-			_mix.stopMusic();
+			if (!resumeLoaded)
+				_mix.stopMusic();
 		}
 		if (_stub->_pi.quit || _requestedAsset >= 0) {
 			break;
@@ -440,6 +439,10 @@ void Game::mainLoop() {
 		return;
 	}
 	if (_deathCutsceneCounter) {
+		if (_demoBin != -1) {
+			_endLoop = true; // Recorded play ends at the title, never in save recovery.
+			return;
+		}
 		--_deathCutsceneCounter;
 		if (_deathCutsceneCounter == 0) {
 			playCutscene(_cut._deathCutsceneId);

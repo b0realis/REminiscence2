@@ -47,6 +47,10 @@ produce local Real-CUGAN Pro MP4s with original timing and audio, plus tracked
 repairs where needed. Results live in the ignored `upscaled` folder; the game
 continues to use original MCD playback.
 
+Standard builds also include live **xBRZ** pixel-art filtering at 2–6×. Choose
+Graphics → Pixel filter in either QoL layout, or launch with `--scaler=xbrz@3`.
+The default remains ScaleNx; higher xBRZ factors require more CPU.
+
 See the [0.5.6 integration ledger](docs/UPSTREAM_056.md),
 [validation record](docs/VALIDATION.md), and [roadmap](docs/ROADMAP.md).
 Linux, macOS and Windows CI runs native builds and tests. See the
@@ -144,8 +148,8 @@ ctest --test-dir build/release --output-on-failure
 ```
 
 To use the inherited internal MOD player, configure with
-`-DREMINISCENCE2_USE_MODPLUG=OFF`; libmodplug is then unnecessary. The external
-xBRZ scaler is retained in `scalers/xbr` but is not built by CMake in this pass.
+`-DREMINISCENCE2_USE_MODPLUG=OFF`; libmodplug is then unnecessary. The inherited
+xBRZ core in `scalers/xbr` is built into the engine; no scaler plugin is needed.
 The inherited Makefile remains available for existing development setups.
 
 AdLib PRF music uses the bundled, pinned Nuked OPL3 dependency. Optional

@@ -222,6 +222,19 @@ shirt/weapon options operate after decoding and do not rewrite PAL or sprites.
 DEMO*.BIN is recorded input bytes consumed one per simulation step; bits encode
 direction/actions, not timestamps. Macintosh `Demo Level N` is LZSS-wrapped and
 remaps bits 4–6 on import. It is neither a video nor an engine save.
+DOS/PC-98 replay payloads are limited to 4 MiB (over 38 hours at 30 inputs/s).
+Loose files must be read completely before a playable length is exposed;
+empty, oversized or failed reads leave no replay buffer. The QoL launcher keeps
+the previous session and recording intact when the replacement is rejected.
+
+`Game::_demoInputs` maps `demo1.bin`, `demo51.bin`, and `demo3.bin` to internal
+levels 0, 5, and 2. Macintosh uses resource names `Demo Level 1`, `Demo Level 5`,
+and `Demo Level 3`. `Game::demoAvailable()` checks the selected edition's replay
+and level presence; `Game::startDemo()` is shared by the title and QoL menu.
+DOS recordings must not be used with Amiga or Sega CD simulation assets. The
+supplied GOG files work with the menu; no private Macintosh fixture is available.
+The inherited PC-98 archive replay path is also retained, without private-asset
+validation; it uses the named `DEMO*.BIN` entries from its archive set.
 
 CD-i `.BOB` borders: u16le width, u16le height, 768 RGB palette bytes, then
 width×height indexed pixels. This implementation accepts **52×224** only and
