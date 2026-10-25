@@ -1,5 +1,10 @@
 # Flashback cutscene player
 
+To prepare enhanced Sega CD movies for an external player, see the
+[offline Real-CUGAN tooling](../tools/MOVIE_UPSCALING.md). It preserves
+playlist names with a method suffix, such as `sc1_cugan_pro_3x.mp4`, and saves
+local results under `upscaled`. This browser continues to play original assets.
+
 Browse and play polygon cutscenes or Sega CD MCD movies from your original Flashback files:
 
 ```sh

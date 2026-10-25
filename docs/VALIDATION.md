@@ -1,5 +1,22 @@
 # REminiscence2 validation
 
+## Patch 1.26 — offline movie upscaling tools
+
+The saved SC1 intro uses Real-CUGAN Pro 3× with denoise 3 and a tracked repair
+for the user-confirmed DOCK 25 warning. The reusable exporter/upscaler reproduced
+all 691 native and upscaled frame pixel arrays, all 76 repaired frame arrays,
+the lossless audio WAV and the timing table exactly against the prototype.
+The saved final MP4 is byte-identical to the previously reviewed final movie;
+rerendering can change the encoded MP4 bytes. Both SC1 and BRIDGE completed
+upscaling and full audio/video decode validation through the new tool.
+
+Five Python tests cover all three MCD codecs with synthetic fixtures, exact RGB
+and PCM output, variable frame holds, malformed input, restoration-recipe bounds
+and output protection. The movie-upscaling, Sega CD media and CLI CTest suites,
+all 11 release-tool tests, and the documentation guard pass. The local exporter
+and engine build successfully. Generated movies, model weights and reference
+art remain private. Enhanced MP4 playback in the engine is not implemented.
+
 ## Patch 1.25 — Sega CD cosmetics and independent movie audit
 
 Real CD assets now exercise Original, Heavy and all five Laser colours through

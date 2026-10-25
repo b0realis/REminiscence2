@@ -42,6 +42,11 @@ See [supported assets and required files](docs/ASSETS.md), the
 [developer format reference](docs/formats/README.md), and
 [Sega CD extraction instructions](docs/SEGA_CD.md).
 
+The optional [offline movie upscaling tools](tools/MOVIE_UPSCALING.md)
+produce local Real-CUGAN Pro MP4s with original timing and audio, plus tracked
+repairs where needed. Results live in the ignored `upscaled` folder; the game
+continues to use original MCD playback.
+
 See the [0.5.6 integration ledger](docs/UPSTREAM_056.md),
 [validation record](docs/VALIDATION.md), and [roadmap](docs/ROADMAP.md).
 Linux, macOS and Windows CI runs native builds and tests. See the

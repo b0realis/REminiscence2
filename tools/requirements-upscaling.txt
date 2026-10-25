@@ -1,0 +1,5 @@
+# Optional offline tooling only; the engine does not import these packages.
+Pillow>=11,<13
+numpy>=2,<3
+imageio-ffmpeg==0.6.0
+opencv-python-headless>=4.10,<6

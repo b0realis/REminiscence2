@@ -8,6 +8,8 @@ CMakeUserPresets.json
 
 # Folders
 /.local/
+# Locally restored movies contain original game artwork and audio.
+/upscaled/
 # Private third-party documentation assets were moved to .local/reference/.
 /docs/manual/images/
 /docs/manual/images.json

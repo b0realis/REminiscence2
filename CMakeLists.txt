@@ -123,6 +123,13 @@ if(WIN32 OR (UNIX AND NOT APPLE AND NOT ANDROID))
 endif()
 set_target_properties(${engine_target} PROPERTIES CXX_EXTENSIONS OFF)
 
+# Offline movie tools reuse the verified decoder; no SDL window is opened.
+# Opt-in target so ordinary game/Android packages do not gain another binary.
+if(NOT ANDROID)
+    add_executable(reminiscence2-export-mcd EXCLUDE_FROM_ALL tools/export_mcd.cpp)
+    target_link_libraries(reminiscence2-export-mcd PRIVATE reminiscence2_engine)
+endif()
+
 # Keep the inherited config beside the executable for running from the build folder.
 configure_file(fb.cfg fb.cfg COPYONLY)
 
@@ -219,6 +226,14 @@ if(BUILD_TESTING)
     set_tests_properties(cutscenes PROPERTIES TIMEOUT 20)
     find_package(Python3 3.9 COMPONENTS Interpreter QUIET)
     if(Python3_Interpreter_FOUND)
+        if(TARGET reminiscence2-export-mcd)
+            add_dependencies(segacd_media_tests reminiscence2-export-mcd)
+            add_test(NAME movie_upscaling COMMAND "${Python3_EXECUTABLE}" -m unittest
+                discover -s tests -p test_upscale_movies.py -v)
+            set_tests_properties(movie_upscaling PROPERTIES
+                WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" TIMEOUT 60
+                ENVIRONMENT "REMINISCENCE2_MCD_EXPORTER=$<TARGET_FILE:reminiscence2-export-mcd>")
+        endif()
         add_test(NAME segacd_extractor COMMAND "${Python3_EXECUTABLE}" tests/test_extract_segacd.py)
         set_tests_properties(segacd_extractor PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" TIMEOUT 30)
         add_test(NAME cutscene_frontend COMMAND "${Python3_EXECUTABLE}" -m unittest

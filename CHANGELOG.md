@@ -1,6 +1,14 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 # Changes
 
+## 1.26
+
+- Save reusable offline Sega CD movie upscaling tools: export through the engine
+  decoder, run Real-CUGAN Pro, preserve original frame holds and audio, validate
+  the MP4, and record source/model hashes. Existing outputs are never replaced.
+- Add optional source-bound tracked-region repairs and the SC1 sign recipe.
+  Keep restored movies, reference images and model binaries in local storage.
+
 ## 1.25
 
 - Enable gameplay T-shirt choices and Heavy/Laser pistol styles for Sega CD,
