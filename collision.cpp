@@ -467,6 +467,15 @@ int Game::col_detectGunHit(LivePGE *pge, int16_t arg2, int16_t arg4, col_Callbac
 	if (_pge_currentPiegeFacingDir) {
 		pos_dx = -pos_dx;
 	}
+	// Observe the existing gun ray; never run a second collision query or send
+	// an extra damage message for cosmetic weapons. Track room wrapping in the
+	// firing room's coordinates so the beam cannot pass a native collision.
+	const bool track = effectivePistolStyle() == weapon::Style::Laser && isConradShotEffect(pge);
+	int roomOffset = 0;
+	auto endpoint = [&](int cell, bool impact) {
+		if (track)
+			_weaponFx.trace((roomOffset + cell * 16 + (pos_dx < 0 ? 16 : 0)) * _vid._layerScale, impact);
+	};
 	int16_t grid_pos_x = (pge->pos_x + 8) >> 4;
 	int16_t grid_pos_y = (pge->pos_y - 8) / 72;
 	if (grid_pos_y >= 0 && grid_pos_y <= 2) {
@@ -481,12 +490,14 @@ int Game::col_detectGunHit(LivePGE *pge, int16_t arg2, int16_t arg4, col_Callbac
 		while (varA <= thr) {
 			if (grid_pos_x < 0) {
 				pge_room = _res._ctData[CT_LEFT_ROOM + pge_room];
-				if (pge_room < 0) return 0;
+				if (pge_room < 0) { endpoint(-1, false); return 0; }
+				roomOffset -= 256;
 				grid_pos_x += 0x10;
 			}
 			if (grid_pos_x >= 0x10) {
 				pge_room = _res._ctData[CT_RIGHT_ROOM + pge_room];
-				if (pge_room < 0) return 0;
+				if (pge_room < 0) { endpoint(16, false); return 0; }
+				roomOffset += 256;
 				grid_pos_x -= 0x10;
 			}
 			int16_t slot = col_findSlot(pge_room * 64 + grid_pos_x + grid_pos_y);
@@ -494,17 +505,19 @@ int Game::col_detectGunHit(LivePGE *pge, int16_t arg2, int16_t arg4, col_Callbac
 				CollisionSlot *cs = _col_slotsTable[slot];
 				while (cs) {
 					int r = (this->*callback1)(cs->live_pge, pge, arg2, arg4);
-					if (r != 0) return r;
+					if (r != 0) { endpoint(grid_pos_x, true); return r; }
 					cs = cs->prev_slot;
 				}
 			}
 			if ((this->*callback2)(pge, var8, varA, arg2) != 0) {
-				break;
+				endpoint(grid_pos_x, true);
+				return 0;
 			}
 			grid_pos_x += pos_dx;
 			++varA;
 			var8 += pos_dy;
 		}
+		endpoint(grid_pos_x, false);
 	}
 	return 0;
 }

@@ -438,6 +438,31 @@ void levelsPage(settings::Session &s, const char *query) {
 	             "Start", [&] { s.action = settings::Action::StartLevel; });
 }
 void graphicsPage(settings::Session &s, const char *query) {
+	if (match(query, "Presentation presets Classic pixels Widescreen scenery Smooth widescreen "
+	                 "Full HD 1080p 4K point xBRZ integer filter adjacent")) {
+		ImGui::SeparatorText("Presentation presets");
+		const float width = (ImGui::GetContentRegionAvail().x - 2 * ImGui::GetStyle().ItemSpacing.x) / 3;
+		int index = 0;
+		for (auto preset : {settings::Presentation::ClassicPixels,
+		                    settings::Presentation::WidescreenScenery,
+		                    settings::Presentation::SmoothWidescreen}) {
+			if (!compactLayout && index++)
+				ImGui::SameLine();
+			const bool selected = settings::presentation(s.values) == preset;
+			if (selected)
+				ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+			if (ImGui::Button(settings::presentationName(preset), ImVec2(compactLayout ? -1 : width, 0))) {
+				settings::applyPresentation(s.values, preset);
+				s.applyRequested = true;
+			}
+			if (selected)
+				ImGui::PopStyleColor();
+		}
+		ImGui::TextWrapped("Current: %s", settings::presentationName(settings::presentation(s.values)));
+		hint(compactLayout ? "Classic: whole pixels. Wide: scenery. Smooth: xBRZ. Save settings to keep."
+		                   : "Classic uses whole pixels and borders. Widescreen adds adjacent-room scenery; "
+		                     "Smooth uses xBRZ 3x. Window mode and fixed resolution stay as selected. Save settings to keep.");
+	}
 	ImGui::SeparatorText("Window and display");
 	if (match(query, "Display mode resolution windowed borderless fullscreen")) {
 		ImGui::BeginDisabled(!s.windowModesAvailable);
@@ -861,6 +886,10 @@ void SettingsOverlay::processEvent(const SDL_Event &event, settings::Session *s)
 			return;
 		}
 	}
+	// A click can be the first event after opening the overlay or changing
+	// display mode. Use its own content-relative position, not a stale hover.
+	if (_attached && (event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP))
+		ImGui::GetIO().AddMousePosEvent(float(event.button.x), float(event.button.y));
 	if (_attached)
 		ImGui_ImplSDL2_ProcessEvent(&event);
 }
@@ -1445,40 +1474,60 @@ void SettingsOverlay::draw(settings::Session &s) {
 	_firstDraw = false;
 }
 bool SettingsOverlay::drawHud(const settings::Preferences &preferences, bool gameplay,
-                              bool newJournal, const std::string &contextHint,
-                              const std::string &notice, bool noticeError) {
+                              float journalOpacity, const std::string &contextHint,
+                              const std::string &notice, bool noticeError, float noticeOpacity) {
 	bool clicked = false;
 	_shortcut = {};
-	if (!notice.empty()) {
-		const auto display = ImGui::GetIO().DisplaySize;
-		ImGui::SetNextWindowPos(ImVec2(4, display.y * 0.25f), ImGuiCond_Always);
-		ImGui::SetNextWindowSize(ImVec2(std::min(display.x - 8, 560.0f), 0));
-		ImGui::SetNextWindowBgAlpha(0.92f);
-		ImGui::Begin("Save and device feedback", nullptr,
-		             ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
-		                 ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoSavedSettings);
-		ImGui::PushStyleColor(ImGuiCol_Text, noticeError ? ImVec4(1, 0.65f, 0.4f, 1) : turquoise);
-		ImGui::TextWrapped("%s", notice.c_str());
+	const auto display = ImGui::GetIO().DisplaySize;
+	const float margin = 4, gap = 4;
+	const float available = std::max(1.0f, display.x - 2 * margin);
+	const ImVec2 padding = _native ? ImVec2(6, 4) : ImVec2(8, 5);
+	float top = margin;
+	// Compact cards share one row at the top. Allocate their widths before
+	// rendering so two messages never overlap or wrap into separate rows.
+	auto naturalWidth = [&](const char *text) {
+		return ImGui::CalcTextSize(text).x + 2 * padding.x;
+	};
+	auto card = [&](const char *id, const char *text, float x, float width, float alpha,
+	                const ImVec4 &color) {
+		const float height = ImGui::CalcTextSize(text, nullptr, false,
+		                                      std::max(1.0f, width - 2 * padding.x)).y + 2 * padding.y;
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, padding);
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2(1, 1));
+		ImGui::PushStyleVar(ImGuiStyleVar_Alpha, std::clamp(alpha, 0.0f, 1.0f));
+		ImGui::SetNextWindowPos(ImVec2(x, top), ImGuiCond_Always);
+		ImGui::SetNextWindowSize(ImVec2(width, height), ImGuiCond_Always);
+		// SetNextWindowBgAlpha overrides the style alpha; fade it explicitly too.
+		ImGui::SetNextWindowBgAlpha(0.85f * std::clamp(alpha, 0.0f, 1.0f));
+		ImGui::Begin(id, nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs |
+		                               ImGuiWindowFlags_NoSavedSettings);
+		ImGui::PushStyleColor(ImGuiCol_Text, color);
+		ImGui::TextWrapped("%s", text);
 		ImGui::PopStyleColor();
 		ImGui::End();
-	}
-	if (gameplay && newJournal) {
-		ImGui::SetNextWindowPos(ImVec2(4, preferences.showFps ? 36 : 4), ImGuiCond_Always);
-		ImGui::SetNextWindowBgAlpha(0.6f);
-		ImGui::Begin("Journal notification", nullptr,
-		             ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
-		                 ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoSavedSettings);
-		ImGui::TextColored(turquoise, "Journal: new entry");
-		ImGui::End();
-	}
+		ImGui::PopStyleVar(3);
+		return height;
+	};
 	if (preferences.showFps) {
-		ImGui::SetNextWindowPos(ImVec2(4, 4), ImGuiCond_Always);
-		ImGui::SetNextWindowBgAlpha(0.6f);
-		ImGui::Begin("Frame rate", nullptr,
-		             ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
-		                 ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoSavedSettings);
-		ImGui::Text("%.1f fps", ImGui::GetIO().Framerate);
-		ImGui::End();
+		char fps[48];
+		snprintf(fps, sizeof(fps), "%.1f fps", ImGui::GetIO().Framerate);
+		top += card("Frame rate", fps, margin, std::min(available, naturalWidth(fps)), 1,
+		            ImGui::GetStyleColorVec4(ImGuiCol_Text)) + gap;
+	}
+	const bool journalVisible = gameplay && journalOpacity > 0;
+	const bool noticeVisible = !notice.empty() && noticeOpacity > 0;
+	float next = margin;
+	if (journalVisible) {
+		const float width = std::min(naturalWidth("Journal: new entry"),
+		                             noticeVisible ? (available - gap) / 2 : available);
+		card("Journal notification", "Journal: new entry", next, width, journalOpacity, turquoise);
+		next += width + gap;
+	}
+	if (noticeVisible) {
+		const float width = std::min({naturalWidth(notice.c_str()), 560.0f,
+		                              std::max(1.0f, display.x - margin - next)});
+		card("Save and device feedback", notice.c_str(), next, width, noticeOpacity,
+		     noticeError ? ImVec4(1, 0.65f, 0.4f, 1) : turquoise);
 	}
 	if (gameplay && preferences.contextualHints && !contextHint.empty()) {
 		const auto display = ImGui::GetIO().DisplaySize;

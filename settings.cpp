@@ -36,6 +36,39 @@ int filterMaxScale(Filter filter) {
 	return filter == Filter::Scale ? 4 : 6;
 }
 
+const char *presentationName(Presentation preset) {
+	switch (preset) {
+	case Presentation::ClassicPixels: return "Classic pixels";
+	case Presentation::WidescreenScenery: return "Widescreen scenery";
+	case Presentation::SmoothWidescreen: return "Smooth widescreen";
+	default: return "Custom";
+	}
+}
+void applyPresentation(Preferences &p, Presentation preset) {
+	switch (preset) {
+	case Presentation::ClassicPixels:
+	case Presentation::WidescreenScenery:
+	case Presentation::SmoothWidescreen:
+		p.filter = preset == Presentation::SmoothWidescreen ? Filter::Xbrz : Filter::Point;
+		p.scale = 3;
+		p.integerScale = preset == Presentation::ClassicPixels;
+		p.widescreen = preset == Presentation::ClassicPixels ? kWidescreenNone : kWidescreenAdjacentRooms;
+		break;
+	default:
+		break;
+	}
+}
+Presentation presentation(const Preferences &p) {
+	for (auto preset : {Presentation::ClassicPixels, Presentation::WidescreenScenery,
+	                    Presentation::SmoothWidescreen}) {
+		auto expected = p;
+		applyPresentation(expected, preset);
+		if (p == expected)
+			return preset;
+	}
+	return Presentation::Custom;
+}
+
 void Preferences::readCompatibility(const Options &o) {
 	conradShirt = o.use_white_tshirt ? appearance::Shirt::White : appearance::Shirt::Original;
 	fadeTransitions = o.fade_out_palette;

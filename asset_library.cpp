@@ -149,8 +149,15 @@ Library discover(const std::string &directory) {
 			bool another = false;
 			for (const auto &[other, unused] : anchors)
 				another |= other != anchor && within(other, parent);
-			for (const auto &pack : packDirs)
-				another |= within(pack, parent) && !within(pack, selected);
+			for (const auto &pack : packDirs) {
+				// A game's own music/ sibling can contain converted CD tracks.
+				// Treating every Ogg directory as an independent pack strands the
+				// marker in DATA/ and hides sibling movies, SUB.BIN and fonts.
+				const bool ownMusic = pack.parent_path() == parent &&
+				                      lower(pack.filename().u8string()) == "music" &&
+				                      !reservedPacks.count(pack);
+				another |= within(pack, parent) && !within(pack, selected) && !ownMusic;
+			}
 			for (const auto &packed : packedDirs)
 				another |= within(packed, parent) && !within(packed, selected);
 			if (another)

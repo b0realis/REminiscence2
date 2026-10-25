@@ -67,6 +67,13 @@ struct Preferences {
 	bool operator!=(const Preferences &other) const { return !(*this == other); }
 };
 
+// Presets expand into existing preferences; no extra persisted state can drift
+// out of sync when a player adjusts individual graphics controls afterward.
+enum class Presentation { Custom, ClassicPixels, WidescreenScenery, SmoothWidescreen };
+const char *presentationName(Presentation preset);
+void applyPresentation(Preferences &preferences, Presentation preset);
+Presentation presentation(const Preferences &preferences);
+
 const char *bindingName(size_t index);
 const char *padBindingName(size_t index);
 const char *padButtonName(int button, int style = 0);

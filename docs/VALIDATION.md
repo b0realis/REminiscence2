@@ -1,5 +1,67 @@
 # REminiscence2 validation
 
+## Patch 1.33 — supplied Mac app icon
+
+The repository JPEG matches the supplied attachment's SHA-256. The private Mac
+builder converts it without cropping or redrawing into all ten standard icon
+representations (16–1024px); extracting the `.icns` verifies each image's size.
+The 256px result was visually inspected. Bundle metadata names the correct icon,
+and the icon hash matches the private manifest. All 14 packaging tests pass.
+
+The rebuilt private arm64 DMG is 146,856,305 bytes. The mounted app passes strict
+signature verification, contains the same icon bytes and detects all three
+editions and their music sources. The disk image verifies and was unmounted
+after checking. Finder/Dock cache appearance was not visually inspected on the
+locked build Mac. No game-resource or gameplay changes are part of this patch.
+
+## Patch 1.32 — compact private Apple Silicon app
+
+Fourteen release-tool tests pass, including native launcher execution from a
+relocated app path with spaces, both bundled and adjacent asset layouts, packed
+Amiga rejection and source-preserving file selection. Seven focused Release
+CTest suites pass across asset discovery, music sources, three-edition startup
+and the CLI. The new native-Ogg discovery regression also passes in Debug/UBSan:
+converting CD WAV tracks must not change the edition ID or hide sibling movies,
+SUB.BIN and fonts. Separate external soundtrack boundaries remain covered.
+
+Built a private arm64-only app with system-library dependencies, ad-hoc signing,
+transparent filesystem compression and an LZMA disk image. Each converted CD
+music track decodes with the original sample count/rate/channels. The disk image
+verifies, mounts read-only, and the app copied out of it passes strict signature
+verification and all 551 asset SHA-256 checks. Its launcher detects exactly the
+three expected game editions and their native soundtrack sources after relocation.
+
+The relocated assets pass Amiga and DOS integration checks, startup for all
+three editions, and the Sega CD audit of 17,754 decoded movie frames, eight
+music tracks, seven level starts and 95 nonempty dialogue segments. The final
+image is 144,910,751 bytes; the relocated app occupies about 167 MB allocated
+on the test APFS filesystem (280 MB logical). Other copy tools/filesystems may
+expand transparent compression. Finder launch started the correct bundled
+engine, but visual desktop inspection was unavailable because the build Mac
+was locked. No physical M5, notarization or public release validation is claimed.
+
+## Patch 1.31 — presentation presets and consistent scenery filtering
+
+All three presets are activated through the production overlay at desktop and
+256×224 sizes. Their settings survive save/load; individual adjustments produce
+the Custom label, and unrelated preferences remain intact. Both final layouts
+were rendered and visually inspected, including the active preset highlight.
+
+The new `presentation` regression uses the real SDL platform with dummy video
+and software rendering. Synthetic scenery exercises Point, Linear, ScaleNx and
+xBRZ across adjacent, blurred-adjacent, mirror, blurred-background and CD-i modes
+on 256×224 and 512×448 canvases. Checks cover comparison with independently
+filtered reference pixels, retained scenery when switching filters, fresh-upload
+equivalence, unchanged-frame caching, renderer reset and clearing. All three
+presets also render at 1920×1080 and 3840×2160, retain the chosen output size and
+check Classic's largest whole-pixel fit. These are simulated output checks;
+physical Full HD/4K displays and Macintosh assets were not tested.
+
+All 32 CTest suites pass in both Release and Debug/UBSan, with the supplied
+Amiga, GOG/DOS and Sega CD fixtures enabled. The local `play-local.sh` launcher
+runs the rebuilt 1.31 binary, and the documentation guard passes. No new remote
+release-target builds or publication were performed for this patch.
+
 ## Patch 1.30 — release audit
 
 Reviewed the 1.27–1.29 changes across scaler strides, live display changes,
@@ -768,3 +830,55 @@ geometry until bindings change, and upload the main texture only when composed
 pixels or texture dimensions change. These are allocation/work reductions; no
 hardware speedup or battery-runtime claim has been measured. Original game
 simulation and the existing T-shirt/jacket regression remain unchanged.
+
+## Local 1.34 follow-up — 2026-10-25
+
+- Release: 35/35 CTest checks passed. Debug with UndefinedBehaviorSanitizer:
+  35/35 passed. Python release-tool suite: 17/17 passed. Documentation boundary
+  and whitespace checks passed. Rebuilt the local arm64 command-line engine.
+- QoL pointer regression clicks the actual rendered turquoise Exit button with
+  SDL button events, deliberately stale hover coordinates, window/fullscreen
+  layouts and 1x/2x framebuffer sizes. The backend now polls window-relative
+  mouse coordinates while hovered. These are automated SDL software/dummy
+  checks; the reported physical Mac fullscreen offset still needs user retesting.
+- Private combat fixtures use original Amiga, GOG/DOS and Sega CD actors,
+  scripts and resources. Each places a real mutant in Conrad's starting room
+  and fires once, in both directions, for Original, Heavy and five laser colours.
+  All 42 encounters damage the enemy; serialized gameplay state and damage timing
+  remain identical across styles. Laser pixels terminate at the native hit.
+  Synthetic DOS/Mac cases check terrain, room exits, room-wrapped hits and 1x/2x
+  beam clipping; Mac original assets are still unavailable.
+- Standalone compaction of the three owned editions produced 551 runtime files,
+  263.0 MiB logical data, including all movies/voices. Ogg music conversion checks
+  original sample counts after a complete decode. Source files were not modified.
+- Built and verified a private 1.34 Apple Silicon app and 147,166,149-byte DMG
+  with the three compact editions. All 551 bundled asset hashes were checked;
+  the relocated native launcher lists Amiga, DOS/GOG and Sega CD correctly.
+- Saved the transparent PNG in packaging/icons, retaining the supplied JPEG.
+  All ten decoded ICNS sizes (16–1024px) have zero-alpha corners and retain the
+  bright interior. The private app's ICNS matches this inspected icon family.
+- The complete public arm64 release recipe produced an asset-free ZIP and DMG.
+  A separate asset-free DMG with the optional transparent icon was also built.
+  Mounted-image signature/inventory checks passed. Publisher tests reject a
+  changed DMG digest and packaging rejects private bundle assets before imaging.
+  The Intel recipe shares this path but was not rebuilt on this arm64 host.
+  These local packages have not been published to GitHub.
+
+## Local 1.35 notification fixes — 2026-10-25
+
+- Rebuilt the arm64 engine: all 35 Release CTest suites passed. Seven focused
+  Debug/UBSan suites passed (progress, settings, platform, input/audio and all
+  three edition startup fixtures). Documentation and whitespace checks passed.
+- Timer regressions cover continuous publication of unread entries, a second
+  new entry, reading/disable dismissal, error priority, expiry and the final
+  750ms fade across the SDL clock wrap. Expiry leaves unread journal bits intact.
+- Software-rendered HUD checks cover 256, 640 and 1280 pixel widths, normal and
+  enlarged text, with/without the FPS counter, solo/simultaneous notices and
+  long feedback. Geometry checks detect overlap, clipping and scrolling;
+  rendered pixel comparisons verify both text and backgrounds fade to nothing.
+  Native and desktop captures were visually inspected. Physical GPU/fullscreen
+  rendering remains for the user's local play-test.
+- Refreshed the private Apple Silicon app/DMG using the existing compact Amiga,
+  DOS/GOG and Sega CD assets, Ogg music and transparent icon. Verified all 551
+  bundled asset hashes, app signature, disk image and launcher edition discovery.
+  The local play script launches 1.35. No GitHub release was published.

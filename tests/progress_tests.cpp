@@ -218,6 +218,31 @@ int main(int argc, char **argv) {
 	notice.push("Autosave stored", false, UINT32_MAX - 50);
 	check(notice.visible(500) && notice.text == "Disk full", "error priority and clock wrap");
 	check(!notice.visible(8000), "error expires");
+	check(notice.opacity(uint32_t(notice.started + 7625)) == 0.5f &&
+	          notice.opacity(uint32_t(notice.started + 8000)) == 0,
+	      "errors fade at the end of their longer lifetime across clock wrap");
+	JournalNotice journalNotice;
+	const uint32_t noticeStart = UINT32_MAX - 100;
+	journalNotice.update(1, noticeStart);
+	for (uint32_t elapsed = 0; elapsed <= 4000; elapsed += 25) {
+		journalNotice.update(1, noticeStart + elapsed);
+		check(journalNotice.toast.visible(noticeStart + elapsed) == (elapsed < 3500),
+		      "publishing an unread entry every frame does not restart its toast");
+	}
+	check(journalNotice.toast.opacity(noticeStart + 2750) == 1 &&
+	          journalNotice.toast.opacity(noticeStart + 3125) == 0.5f &&
+	          journalNotice.toast.opacity(noticeStart + 3500) == 0,
+	      "journal holds then fades over its final 750ms across clock wrap");
+	check(journalNotice.unread == 1, "toast expiration does not mark the journal read");
+	journalNotice.update(3, noticeStart + 5000);
+	check(journalNotice.toast.opacity(noticeStart + 5000) == 1,
+	      "another entry notifies even while the previous entry remains unread");
+	journalNotice.update(2, noticeStart + 6000);
+	check(journalNotice.toast.started == noticeStart + 5000,
+	      "reading one entry does not restart the remaining entry's toast");
+	journalNotice.update(0, noticeStart + 6100);
+	check(!journalNotice.toast.visible(noticeStart + 6100),
+	      "reading all entries or disabling notifications dismisses the toast");
 	journal::State reached;
 	reached.chapter(0);
 	reached.chapter(6);

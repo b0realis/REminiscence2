@@ -7,7 +7,6 @@ import io
 import json
 import os
 from pathlib import Path
-import plistlib
 import re
 import shutil
 import subprocess
@@ -185,13 +184,12 @@ def main():
         dependencies = subprocess.check_output(['otool', '-L', str(binary)], text=True)
         if any(line.strip().startswith(('/opt/', '/usr/local/', '@rpath/')) for line in dependencies.splitlines()[1:]):
             raise RuntimeError('Non-system macOS dependency remains in package')
-        app = staging / 'REminiscence2.app'; macos = app / 'Contents/MacOS'; macos.mkdir(parents=True)
-        shutil.copy2(binary, macos / 'reminiscence2')
-        numeric = VERSION.split('.')[0] + '.0.' + str(int(VERSION.split('.')[1]))
-        info = {'CFBundleIdentifier': 'org.b0realis.reminiscence2', 'CFBundleName': 'REminiscence2', 'CFBundleExecutable': 'Play', 'CFBundlePackageType': 'APPL', 'CFBundleShortVersionString': numeric, 'CFBundleVersion': numeric, 'LSMinimumSystemVersion': '11.0', 'NSHighResolutionCapable': True}
-        (app / 'Contents/Info.plist').write_bytes(plistlib.dumps(info))
-        run('clang', '-arch', args.target.removeprefix('macos-'), '-mmacosx-version-min=11.0', ROOT / 'packaging/desktop/mac_launcher.m', '-framework', 'Cocoa', '-o', macos / 'Play')
-        for target in (binary, macos / 'reminiscence2', app): run('codesign', '--force', '--sign', '-', target)
+        from package_macos import create_app, create_dmg
+        app = create_app(binary, staging / 'REminiscence2.app', args.target.removeprefix('macos-'))
+        run('codesign', '--force', '--sign', '-', binary)
+        dmg = args.output / (name + '.dmg')
+        receipt = create_dmg(app, dmg)
+        (staging / 'dmg-verification.json').write_text(json.dumps(receipt, indent=2) + '\n')
         shutil.copy2(ROOT / 'packaging/desktop/Play.command', staging / 'Play.command')
         (staging / 'native-dependencies.txt').write_text(dependencies)
     elif args.target == 'win64':

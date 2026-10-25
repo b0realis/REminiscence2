@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 # Release packages and reproducible recipes
 
-See the [1.30 preview notes](RELEASE_NOTES_1.30.md) for the combined feature
+See the [1.35 preview notes](RELEASE_NOTES_1.35.md) for the combined feature
 summary, validation and screenshots.
 
 Every desktop download includes a precreated **assets** folder. Put prepared
@@ -27,6 +27,11 @@ finds assets beside itself. Mac packages target macOS 11 or later and contain
 only system framework/dylib dependencies. They are ad-hoc signed, **not Apple
 notarized**: Gatekeeper may require your first-launch approval in Privacy &
 Security. No paid Apple signing identity is assumed.
+
+For a personal, self-contained Apple Silicon app with prepared game editions
+inside its bundle, see the [private Mac package guide](../tools/PRIVATE_MAC_PACKAGE.md).
+That separate builder produces a compact drag-to-Applications DMG. Its outputs
+contain private game data and are excluded from public release publishing.
 
 Linux builds use Ubuntu 22.04 as the glibc baseline (2.35). SDL2/zlib are compiled
 from pinned sources; libc and graphics/audio drivers come from the OS. Steam
@@ -121,9 +126,16 @@ with the normal Build and test workflow. Prepare release notes, then run:
 python3 tools/publish_release.py --run-id RUN_ID --notes /path/to/notes.md --publish
 ```
 
-The publisher checks both workflows against exactly HEAD, downloads the eight
+The publisher checks both workflows against exactly HEAD, downloads the ten
 expected assets, validates archives/architectures/private-file boundaries and
 source versions, writes SHA256SUMS, pushes the annotated `vVERSION` tag and
 publishes a GitHub prerelease. Omit `--publish` for verification only. Physical
 Deck/Quest and full GOG/Macintosh asset playthroughs remain release-test work;
 a passing compiler does not establish those hardware/data combinations.
+
+## Asset-free Mac disk images
+
+From 1.34, both Mac release recipes produce a `.dmg` alongside the CLI ZIP.
+Drag the app to Applications; its first-launch prompt opens
+`~/Library/Application Support/REminiscence2/assets` for your prepared editions.
+See [Mac package and compaction tools](../tools/MAC_PACKAGES.md).

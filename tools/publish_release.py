@@ -24,11 +24,26 @@ def verify_files(directory):
         f'REminiscence2-{VERSION}-win64.zip', f'REminiscence2-{VERSION}-linux64.tar.gz',
         f'REminiscence2-{VERSION}-steamdeck.tar.gz', f'REminiscence2-{VERSION}-macos-arm64.zip',
         f'REminiscence2-{VERSION}-macos-x86_64.zip', f'REminiscence2-{VERSION}-quest-arm64.apk',
-        f'REminiscence2-{VERSION}-quest-arm64-bundle.zip', f'REminiscence2-{VERSION}-source.tar.gz'}
+        f'REminiscence2-{VERSION}-quest-arm64-bundle.zip', f'REminiscence2-{VERSION}-source.tar.gz',
+        f'REminiscence2-{VERSION}-macos-arm64.dmg', f'REminiscence2-{VERSION}-macos-x86_64.dmg'}
     found = {p.name for p in directory.iterdir() if p.is_file()}
     if found != expected: raise RuntimeError(f'Unexpected artifact set. Missing: {expected-found}; extra: {found-expected}')
     for path in sorted(directory.iterdir()):
-        if path.suffix in ('.zip', '.apk'):
+        if path.suffix == '.dmg':
+            # macOS CI mounts and verifies the signed app. Bind its inventory to
+            # the exact image bytes; Linux publication must not silently skip it.
+            with zipfile.ZipFile(path.with_suffix('.zip')) as archive:
+                receipts = [n for n in archive.namelist() if n.endswith('/dmg-verification.json')]
+                if len(receipts) != 1:
+                    raise RuntimeError('Missing macOS DMG verification receipt')
+                receipt = json.loads(archive.read(receipts[0]))
+            from compact_assets import digest
+            if receipt.get('file') != path.name or receipt.get('sha256') != digest(path) or receipt.get('asset_free') is not True:
+                raise RuntimeError('DMG does not match its verified inventory')
+            names = receipt.get('files', [])
+            if not names or not all(isinstance(n, str) for n in names) or not any(n.endswith('/assets/README.txt') for n in names):
+                raise RuntimeError('DMG lacks its asset-free app inventory')
+        elif path.suffix in ('.zip', '.apk'):
             with zipfile.ZipFile(path) as archive:
                 bad = archive.testzip()
                 if bad: raise RuntimeError(f'Corrupt ZIP member: {bad}')

@@ -456,8 +456,9 @@ void Game::mainLoop() {
 	_stub->setGameplayActive(true);
 	if (_demoBin == -1)
 		_journal.chapter(_currentLevel);
-	_stub->setJournalNotice(_preferences.storyJournal && _preferences.journalNotifications &&
-	                        _journal.unread());
+	_stub->setJournalNotice(_preferences.storyJournal && _preferences.journalNotifications
+	                            ? _journal.unlocked & ~_journal.read
+	                            : 0);
 	pge_getInput();
 	if (_stub->consumePauseRequest()) {
 		_stub->setGameplayActive(false);

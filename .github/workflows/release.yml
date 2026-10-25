@@ -28,6 +28,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libsdl2-dev
       - name: Public-source checks
         run: python3 tools/check_release_docs.py
+      - name: Packaging tool tests
+        run: python3 -m unittest discover -s tests -p test_release_tools.py -v
       - name: Build, test and package
         run: python3 tools/build_release.py --target ${{ matrix.target }}
       - uses: actions/upload-artifact@v4

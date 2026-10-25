@@ -85,6 +85,20 @@ void State::followFlash(int x, int y) {
 		shot.flashY = y;
 	}
 }
+void State::trace(int endX, bool impact) {
+	if (!next || poseAge > 6)
+		return;
+	auto &shot = shots[(next - 1) % shots.size()];
+	if (shot.style != Style::Laser)
+		return;
+	const int length = std::max(0, (endX - shot.x) * shot.direction);
+	if (shot.rayLength < 0 || length < shot.rayLength) {
+		shot.rayLength = length;
+		shot.impact = impact;
+	} else if (length == shot.rayLength) {
+		shot.impact |= impact;
+	}
+}
 int State::recoil(int type) const {
 	if (poseAge >= 6 || type != poseType)
 		return 0;
@@ -121,12 +135,18 @@ void State::draw(uint8_t *pixels, int width, int height, int scale, int room) co
 			}
 		}
 		if (laser) {
-			// A moving segment, not a full-screen hitscan flash. It has no hitbox.
-			const int head = s.age * 24;
-			for (int x = 0; x < 15; ++x) {
+			// The original script resolves damage immediately after the flash.
+			// Wait for that ray, then animate only as far as its actual endpoint.
+			const int head = std::max(0, s.age - 2) * 24;
+			for (int x = 0; x < 15 && (head + x) * scale <= s.rayLength; ++x) {
 				dot(s.x + s.direction * (head + x) * scale, s.y - scale, 3);
 				dot(s.x + s.direction * (head + x) * scale, s.y + scale, 3);
 				dot(s.x + s.direction * (head + x) * scale, s.y, x > 10 ? 5 : 4);
+			}
+			if (s.impact && (head + 15) * scale >= s.rayLength && head * scale <= s.rayLength + 24 * scale) {
+				const int end = s.x + s.direction * s.rayLength;
+				for (int y = -2; y <= 2; ++y)
+					dot(end, s.y + y * scale, y == 0 ? 5 : 4);
 			}
 			if (s.age < 3)
 				dot(s.x - s.direction * 5 * scale, s.y + scale, 4);

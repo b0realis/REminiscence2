@@ -449,9 +449,11 @@ entries appear only when you play those chapters. A further entry follows a
 completed memory sequence. Skipping to a level does not reveal the chapters
 between. Future titles and passages remain hidden.
 
-A small **Journal: new entry** notice appears while an entry is unread. Opening
-an entry marks it read. The journal never interrupts a jump, fight or cutscene;
-its text can be read in the paused overlay. The page works at 256×224 and larger
+A small **Journal: new entry** notice appears at the top for 3.5 seconds, fading
+out during the final 0.75 seconds. Autosave feedback uses the same spot; when
+both appear, they sit side by side. The entry stays unread after its notice
+fades; opening the entry marks it read. The journal never interrupts a jump,
+fight or cutscene; its text can be read in the paused overlay. The page works at 256×224 and larger
 resolutions. Both the journal display and notification can be disabled, and the
 choices can be saved as preferences. Save/load and rewind restore the journal's
 unlocked/read state along with your progress. This is project-written companion
@@ -604,6 +606,33 @@ menu layout to switch while playing; the choice and scale are saved with your
 preferences. Start at 2× or 3×: higher xBRZ factors cost more CPU. This display
 filter keeps gameplay timing and original assets unchanged. Other external
 scaler names require matching plugins or a build that includes them.
+
+**QoL → Graphics → Presentation presets** offers three one-click starting points:
+
+| Preset | Filtering and fit | Side content |
+| --- | --- | --- |
+| Classic pixels | Point, integer scaling on | Original playfield with borders |
+| Widescreen scenery | Point, integer scaling off to fit the display | Adjacent-room backgrounds |
+| Smooth widescreen | xBRZ 3×, integer scaling off to fit the display | Adjacent-room backgrounds |
+
+All three set the scaler factor to 3×. Your window mode and fixed resolution are
+retained; Automatic window sizing follows the new canvas and factor. Audio,
+controls and gameplay settings are retained. Presets apply immediately, including
+in the original-resolution menu; select **Save settings** to keep them. Individual
+graphics controls remain available, and **Current: Custom** appears after changing
+a preset's filter, factor, integer fit or side content. The highlighted button
+and current label are derived from the actual settings, including loaded profiles.
+
+Side scenery uses the same selected filter and factor as the playfield. Its
+intentional dimming and blur remain; only the enlargement is shared. Backgrounds
+are cached and refiltered on changes, rather than on every gameplay frame.
+Changing filters or resetting the renderer retains the current scenery. Missing
+neighbor backgrounds leave black margins, and no preset extends the playable area.
+
+These presets work with Full HD (1920×1080) and 4K (3840×2160) output. xBRZ's
+2×–6× processing range does not limit display resolution: the renderer fits its
+filtered result to the drawable. Point with integer scaling uses the largest
+whole native-pixel multiple that fits.
 
 **QoL → Graphics → Display mode** offers three choices:
 
@@ -931,3 +960,11 @@ The engine and dependencies retain their own notices and license terms.
 - [Validation record](docs/VALIDATION.md) and [roadmap](docs/ROADMAP.md).
 - [Documentation provenance](docs/manual/README.md).
 - [Licensing and provenance](docs/LICENSING.md).
+
+### Installing the Mac disk image
+
+Drag the app from the asset-free DMG into Applications. On first launch, choose
+**Open assets folder** and add each prepared edition in its own folder. The
+location is `~/Library/Application Support/REminiscence2/assets`.
+The included `compact_assets.py` can prepare lean Amiga, GOG and Sega CD folders;
+see `MAC_PACKAGES.md` on the disk image or `tools/MAC_PACKAGES.md` in the repo.

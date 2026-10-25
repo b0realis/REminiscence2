@@ -151,6 +151,7 @@ static bool nativePositions(ResourceType edition) {
 						return false;
 					if (game->_weaponFx.next != 1 || !game->_weaponFx.nativeFlashMatched)
 						return false;
+					game->_weaponFx.trace(referenceX + (right ? 1 : -1) * 300 * scale, false);
 					const auto &shot = game->_weaponFx.shots[0];
 					if (shot.x != referenceX || shot.y != referenceY ||
 					    shot.direction != (right ? 1 : -1))
@@ -164,7 +165,7 @@ static bool nativePositions(ResourceType edition) {
 						}
 						std::fill_n(game->_vid._frontLayer, game->_vid._layerSize, 7);
 						game->drawWeaponFx();
-						const int x = shot.x + shot.direction * (age * 24 + 12) * scale;
+						const int x = shot.x + shot.direction * (std::max(0, age - 2) * 24 + 12) * scale;
 						if (style == weapon::Style::Laser && x >= 0 && x < game->_vid._w) {
 							for (int y = 0; y < game->_vid._h; ++y) {
 								const auto pixel = game->_vid._frontLayer[y * game->_vid._w + x];
@@ -198,7 +199,48 @@ static bool nativePositions(ResourceType edition) {
 	return !game->_weaponFx.next && !game->_weaponFx.nativeFlashMatched;
 }
 
+static bool nativeWallTrace() {
+	FileSystem files(".");
+	HeadlessSystem platform;
+	for (auto edition : {kResourceTypeDOS, kResourceTypeMac}) {
+		auto game = std::make_unique<Game>(&platform, &files, &files, ".", 0, edition, LANG_EN, kWidescreenNone, false, 0);
+		auto &res = game->_res;
+		res._pgeNum = 3;
+		res._pgeInit[0].data[0] = 1; res._pgeInit[1].data[0] = 2;
+		res._pgeInit[2].data[3] = 10;
+		auto &effect = game->_pgeLive[2];
+		effect.init_PGE = &res._pgeInit[2]; effect.room_location = 5; effect.pos_y = 41;
+		game->_preferences.pistolStyle = weapon::Style::Laser;
+		game->col_clearState();
+		const int scale = game->_vid._layerScale;
+		for (bool right : {false, true}) for (int scenario = 0; scenario < 3; ++scenario) {
+			std::fill(std::begin(res._ctData), std::end(res._ctData), 0);
+			std::fill_n(res._ctData, 256, -1);
+			const int direction = right ? 1 : -1;
+			effect.pos_x = scenario == 0 ? 64 : right ? 240 : 0;
+			const int grid = (effect.pos_x + 8) / 16;
+			if (scenario == 0)
+				res._ctData[0x100 + 5 * 112 + 16 + grid + direction * 2] = 1;
+			if (scenario == 2) {
+				res._ctData[(right ? Game::CT_RIGHT_ROOM : Game::CT_LEFT_ROOM) + 5] = 4;
+				res._ctData[0x100 + 4 * 112 + 16 + (right ? 1 : 14)] = 1;
+			}
+			game->_pge_currentPiegeFacingDir = right;
+			game->_col_currentPiegeGridPosX = grid; game->_col_currentPiegeGridPosY = 0;
+			game->_weaponFx.clear();
+			game->_weaponFx.fire(weapon::Style::Laser, (effect.pos_x + 8) * scale, 40 * scale, direction, 5, 58);
+			game->col_detectGunHit(&effect, 0, 0, &Game::col_detectGunHitCallback2, &Game::col_detectGunHitCallback1, 1, 0);
+			const auto &shot = game->_weaponFx.shots[0];
+			if (shot.rayLength != (scenario == 1 ? 8 : 24) * scale || shot.impact != (scenario != 1)) return false;
+		}
+	}
+	return true;
+}
+
 int main() {
+	if (!nativeWallTrace()) {
+		std::cerr << "Native wall/room-boundary laser trace failed\n"; return 18;
+	}
 	if (!nativePositions(kResourceTypeDOS) || !nativePositions(kResourceTypeMac) ||
 	    !nativePositions(kResourceTypeSega)) {
 		std::cerr << "Native DOS/Mac/Sega CD shot geometry or laser height failed\n";
@@ -249,6 +291,24 @@ int main() {
 					if (clipped[i] != 0xF7 || clipped[clipped.size() - 1 - i] != 0xF7)
 						return 7;
 			}
+	// Impacts terminate the beam on the collision cell in either direction,
+	// including the high-resolution Macintosh canvas. A later longer ray must
+	// not erase an already observed nearer hit from the same native shot.
+	for (int scale : {1, 2}) for (int direction : {-1, 1}) {
+		fx.clear();
+		fx.fire(weapon::Style::Laser, 100 * scale, 70 * scale, direction, 0, 58);
+		fx.trace((100 + direction * 40) * scale, true);
+		fx.trace((100 + direction * 150) * scale, false);
+		for (int age = 0; age < 12; ++age) {
+			std::vector<uint8_t> frame(256 * 224 * scale * scale, 7);
+			fx.draw(frame.data(), 256 * scale, 224 * scale, scale, 0);
+			for (int x = 0; x < 256 * scale; ++x)
+				if ((x - 100 * scale) * direction > 40 * scale + scale - 1 &&
+				    frame[70 * scale * 256 * scale + x] != 7)
+					return 17;
+			fx.tick();
+		}
+	}
 	// Unsupported edition formats retain their original presentation, including
 	// audio, palette writes, transient recoil or native flash suppression.
 	FileSystem files(".");
@@ -256,6 +316,7 @@ int main() {
 		HeadlessSystem platform;
 		auto game = std::make_unique<Game>(&platform, &files, &files, ".", 0, edition, LANG_EN,
 		                                   kWidescreenNone, false, 0);
+		game->_res._isSegaCD = false; // Synthetic cartridge case, independent of nearby private CD files.
 		for (auto style : {weapon::Style::Heavy, weapon::Style::Laser}) {
 			game->_preferences.pistolStyle = style;
 			game->_weaponFx.fire(style, 100, 70, 1, 0, 58);

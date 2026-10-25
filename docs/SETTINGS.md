@@ -22,7 +22,7 @@ menu, save browser, graphics settings and original-resolution 256×224 layout.
 | Session | Game edition selection; original gameplay demo picker; default-off automatic resume of the latest compatible save; Continue latest autosave, disk autosave settings and optional contextual hints; health, score, room and rewind count; rewind; clean screenshot capture; restart level; return to title; preference save/undo/defaults; focus pause, FPS and shortcut visibility. |
 | Rewind | Captured-frame timeline with active age, room and health; restores the selected moment after confirmation. |
 | Save / Load | Manual slots 1–99, occupied-slot browser with room and modification time, checkpoint loading, refresh, overwrite and load confirmation. |
-| Graphics | Windowed/borderless/exclusive fullscreen, window size and reported fullscreen resolution, integer fit, VSync, point/linear/ScaleNx/xBRZ sampling, scaler factor, widescreen side content, compact layout and menu text scale. |
+| Graphics | Classic pixels/Widescreen scenery/Smooth widescreen presets; windowed/borderless/exclusive fullscreen, window size and reported fullscreen resolution, integer fit, VSync, point/linear/ScaleNx/xBRZ sampling, scaler factor, widescreen side content, compact layout and menu text scale. |
 | Audio | Independent soundtrack selection with native fallback; master, music and effects volume, mute, save-confirmation sound, current output rate and PRF fallback information. |
 | Enhancements | Conrad’s Original/Red-Pink/White T-shirt, rewind, inventory insertion order, transition style, save sound, additional MEMO content, text/SEQ choices and optional cutscene switches. |
 | Controls | Live keyboard diagram with colored action keys and arrow callouts; rebind the nine primary actions; view fixed shortcuts, menu navigation and controller bindings. |
@@ -60,6 +60,25 @@ the full 75–175% range. Scroll or use keyboard/gamepad focus to reach more row
 settings are retained and an error is shown. Widescreen changes rebuild side
 backgrounds while preserving the paused frame. They do not enlarge the world
 or change collisions.
+
+Presentation presets change only `filter`, `window_scale`, `integer_scaling`
+and `widescreen`. Classic selects Point/3×/integer/original; Widescreen scenery
+selects Point/3×/fractional/adjacent; Smooth widescreen selects
+xBRZ/3×/fractional/adjacent. They retain the selected window mode and fixed sizes.
+Automatic window sizing still follows the resulting canvas and factor. There is
+no stored preset ID: the highlighted button/current label are derived from these
+fields, with Custom shown after manual edits. Save settings and Undo use the
+existing preference path; the buttons also work on Android/Quest without
+requesting a desktop window-mode change.
+
+The SDL backend keeps side scenery in a native RGB cache, separate from its
+filtered texture. Neighboring rooms, mirrored edges, blurred backgrounds and
+CD-i borders all use the same `uploadPixels` scaler/sampling path as the main
+playfield. Content updates mark the cache dirty; ordinary frames reuse its
+filtered texture. A filter/factor change or renderer reset retains the original
+pixels and refilters once. A side-content mode change clears the old cache and
+lets the game regenerate that scenery. Existing darkening, blur and missing-room
+behavior remain. Failed staged display changes leave the live cache intact.
 
 Volume changes scale music and effects separately. Mute and zero volume advance
 the audio players silently, so unmuting does not replay stale action.
@@ -344,9 +363,14 @@ Quick save, quick load and rewind have no default button: assign them explicitly
 
 The Journal page contains project-written companion passages. It reveals seven
 chapter entries during active play and a memory entry after that scene completes.
-Future entries stay hidden. Opening an entry marks it read; a small unread notice
-can be disabled. Save version 4 preserves the random seed and journal bits, with
-edition/level/gameplay-fingerprint preflight. Old version 2/3 saves load without
+Future entries stay hidden. Opening an entry marks it read. Each newly unread
+entry triggers a 3.5-second top-edge notice, fading over the last 0.75 seconds;
+leaving it unread does not extend the timer. Notifications can be disabled.
+Autosave and device feedback share this top row, appearing beside the journal
+when both are visible. Errors retain their longer eight-second lifetime, and
+routine autosaves cannot replace an active error. Save version 4 preserves the
+random seed and journal bits, with edition/level/gameplay-fingerprint preflight.
+Old version 2/3 saves load without
 those fields and cannot verify their edition.
 
 The joypad capture accepts physical button presses, rejects conflicting bindings

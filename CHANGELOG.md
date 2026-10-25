@@ -1,6 +1,53 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 # Changes
 
+## 1.35
+
+- Show each new journal entry notification for 3.5 seconds, fading out over the
+  last 0.75 seconds without marking the entry read. Leaving entries unread no
+  longer keeps the banner on screen.
+- Place autosave and other feedback at the same upper-left edge. Simultaneous
+  journal and save notices sit side by side, wrapping within their cards at
+  native resolution. Fade feedback too, retaining the longer error duration.
+
+## 1.34
+
+- Fix macOS QoL pointer polling to use content-relative coordinates while over
+  the window, and take click coordinates directly from button events.
+- Stop cosmetic laser beams at the original gun ray's enemy/wall/range endpoint,
+  showing a brief impact without changing damage, hit rules or game scripts.
+- Add a transparent PNG icon variant and retain the supplied JPEG original.
+- Add asset-free Mac DMGs to both release targets, a GUI assets-folder prompt,
+  and reusable Python asset compaction and app packaging tools. Keep public
+  assets outside signed bundles and verify disk-image inventories before release.
+
+## 1.33
+
+- Add optional native macOS app icons to the private package builder, with all
+  standard 16–1024px sizes and Finder/Dock bundle metadata before signing.
+- Preserve the user-supplied original icon image and its provenance in the repo.
+
+## 1.32
+
+- Let the macOS GUI launcher use assets inside its app bundle, retaining the
+  adjacent-assets layout for public releases. Include a private-package builder
+  for a compact Apple Silicon app with separate Amiga, DOS/GOG and Sega CD sets,
+  optional Ogg CD music and a compressed drag-to-Applications disk image.
+- Keep an edition's sibling music directory attached when it contains Ogg
+  tracks, so converted Sega CD music no longer hides movies and embedded assets
+  or causes detection as cartridge data. Preserve separate soundtrack boundaries.
+
+## 1.31
+
+- Add one-click Classic pixels, Widescreen scenery and Smooth widescreen
+  presentation presets to both Graphics layouts. Expand them into normal saved
+  preferences, preserve window mode/fixed resolution, and show Custom after edits.
+- Apply Point, Linear, ScaleNx and xBRZ consistently to the playfield and side
+  scenery. Cache filtered backgrounds until they change; retain native scenery
+  across live filter switches and renderer resets instead of losing the borders.
+- Check every side-content mode, preset persistence and native-menu activation,
+  plus 1080p/4K rendering with 256×224 and 512×448 game canvases.
+
 ## 1.30
 
 - Audit the new demo and graphics features. Reject oversized or incompletely

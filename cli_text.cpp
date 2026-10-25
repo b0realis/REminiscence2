@@ -211,6 +211,10 @@ DISPLAY
       Examples: --scaler=point@3, --scaler=scale@4, --scaler=xbrz@3.
       Higher xBRZ factors use more CPU; start with 2x or 3x. The live
       Graphics > Pixel filter menu offers these same built-in choices.
+      Graphics > Presentation presets applies Classic pixels, Widescreen
+      scenery or Smooth widescreen in one click. These keep the selected window
+      mode/fixed resolution; Save settings retains the resulting preferences.
+      Side scenery uses the same filter and factor as the main playfield.
       Other names require a compiled-in scaler or a matching plugin in the
       working directory: scaler_NAME.so (scaler_NAME.dll on Windows).
       Other external scaler plugins are not included in the default build.

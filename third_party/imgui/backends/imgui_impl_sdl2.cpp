@@ -652,10 +652,22 @@ static void ImGui_ImplSDL2_UpdateMouseData()
         if (bd->MouseCanUseGlobalState && bd->MouseButtonsDown == 0 && !is_relative_mouse_mode)
         {
             // Single-viewport mode: mouse position in client window coordinates (io.MousePos is (0,0) when the mouse is on the upper-left corner of the app window)
-            int window_x, window_y, mouse_x_global, mouse_y_global;
-            SDL_GetGlobalMouseState(&mouse_x_global, &mouse_y_global);
-            SDL_GetWindowPosition(bd->Window, &window_x, &window_y);
-            io.AddMousePosEvent((float)(mouse_x_global - window_x), (float)(mouse_y_global - window_y));
+            // REminiscence2: prefer SDL's content-relative position while hovered.
+            // Cocoa fullscreen/window decorations and display scaling can give
+            // global position and window origin different coordinate origins.
+            // Mouse events and ImGui DisplaySize both use client-area points.
+            int mouse_x, mouse_y;
+            if (SDL_GetMouseFocus() == bd->Window)
+                SDL_GetMouseState(&mouse_x, &mouse_y);
+            else
+            {
+                int window_x, window_y;
+                SDL_GetGlobalMouseState(&mouse_x, &mouse_y);
+                SDL_GetWindowPosition(bd->Window, &window_x, &window_y);
+                mouse_x -= window_x;
+                mouse_y -= window_y;
+            }
+            io.AddMousePosEvent((float)mouse_x, (float)mouse_y);
         }
     }
 }

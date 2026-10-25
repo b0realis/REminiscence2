@@ -50,6 +50,9 @@ continues to use original MCD playback.
 Standard builds also include live **xBRZ** pixel-art filtering at 2–6×. Choose
 Graphics → Pixel filter in either QoL layout, or launch with `--scaler=xbrz@3`.
 The default remains ScaleNx; higher xBRZ factors require more CPU.
+Graphics also offers **Classic pixels**, **Widescreen scenery** and **Smooth
+widescreen** presets. They apply in one click in either menu layout, retain the
+chosen window mode/fixed resolution and use consistent filtering for side scenery.
 
 See the [0.5.6 integration ledger](docs/UPSTREAM_056.md),
 [validation record](docs/VALIDATION.md), and [roadmap](docs/ROADMAP.md).

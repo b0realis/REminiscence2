@@ -82,7 +82,7 @@ struct SystemStub {
 	virtual bool applyPreferences(const settings::Preferences &, std::string &) { return true; }
 	virtual void showSettings(settings::Session &session) { session.action = settings::Action::Resume; }
 	virtual void setGameplayActive(bool) {}
-	virtual void setJournalNotice(bool) {}
+	virtual void setJournalNotice(uint32_t /* unread entry bits */) {}
 	virtual void setContextHint(const std::string &) {}
 	virtual void notify(const std::string &, bool error = false) {}
 	virtual void setInputProfileDirectory(const std::string &) {}

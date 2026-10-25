@@ -107,6 +107,148 @@ struct PausedSystem : HeadlessSystem {
 	}
 };
 
+// Exercise real SDL button events against pixels rendered at both 1x and 2x.
+// Mouse positions remain window points even when the framebuffer is Retina-sized.
+static void pointerPixels() {
+	check(SDL_Init(SDL_INIT_VIDEO) == 0, "initialize pointer fixture");
+	for (int scale : {1, 2}) for (bool fullscreen : {false, true}) {
+		auto *window = SDL_CreateWindow("pointer fixture", 40, 70, 1280, 800, SDL_WINDOW_HIDDEN);
+		if (fullscreen) SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN_DESKTOP);
+		int width, height;
+		SDL_GetWindowSize(window, &width, &height);
+		auto *surface = SDL_CreateRGBSurfaceWithFormat(0, width * scale, height * scale, 32, SDL_PIXELFORMAT_ARGB8888);
+		auto *renderer = SDL_CreateSoftwareRenderer(surface);
+		{
+			SettingsOverlay overlay;
+			check(overlay.attach(window, renderer), "attach scaled pointer fixture");
+			settings::Session session;
+			overlay.open(session.values);
+			auto frame = [&] {
+				overlay.beginFrame(session.values);
+				overlay.draw(session);
+				overlay.render();
+			};
+			frame(); frame();
+			check(ImGui::GetIO().DisplayFramebufferScale.x == scale, "fixture has requested framebuffer scale");
+			int px = -1, py = -1;
+			// Locate the turquoise Exit button fill, away from anti-aliased corners.
+			for (int y = height * scale - 10; y >= height * scale / 2 && px < 0; --y)
+				for (int x = width * scale - 10; x >= width * scale / 2; --x) {
+					uint8_t r, g, b, a;
+					SDL_GetRGBA(static_cast<uint32_t *>(surface->pixels)[y * surface->pitch / 4 + x], surface->format, &r, &g, &b, &a);
+					if (r >= 28 && r <= 33 && g >= 206 && g <= 212 && b >= 190 && b <= 197) { px = x / scale - 6; py = y / scale - 6; break; }
+				}
+			check(px >= 0, "locate rendered Exit button");
+			// Deliberately stale hover above the button: a real click must supply
+			// its own coordinates, even without a preceding motion event.
+			ImGui::GetIO().AddMousePosEvent(float(px), float(py - 45)); frame();
+			SDL_Event event = {};
+			event.type = SDL_MOUSEBUTTONDOWN;
+			event.button.windowID = SDL_GetWindowID(window);
+			event.button.button = SDL_BUTTON_LEFT;
+			event.button.x = px; event.button.y = py;
+			overlay.processEvent(event, &session); frame(); frame();
+			event.type = SDL_MOUSEBUTTONUP;
+			overlay.processEvent(event, &session); frame(); frame();
+			auto *popup = ImGui::FindWindowByName("Exit game?");
+			check(popup && popup->Active, "click at drawn pixels opens Exit confirmation at 1x/2x in window/fullscreen");
+		}
+		SDL_DestroyRenderer(renderer); SDL_FreeSurface(surface); SDL_DestroyWindow(window);
+	}
+	SDL_Quit();
+}
+
+// Test actual ImGui geometry and blended pixels, including the native canvas.
+static void hudNotifications(const std::filesystem::path &root) {
+	check(SDL_Init(SDL_INIT_VIDEO) == 0, "initialize HUD fixture");
+	for (int width : {256, 640, 1280}) for (int scale : {100, 175}) {
+		const int height = width == 256 ? 224 : 480;
+		auto *window = SDL_CreateWindow("HUD fixture", 0, 0, width, height, SDL_WINDOW_HIDDEN);
+		auto *surface = SDL_CreateRGBSurfaceWithFormat(0, width, height, 32, SDL_PIXELFORMAT_ARGB8888);
+		auto *renderer = surface ? SDL_CreateSoftwareRenderer(surface) : nullptr;
+		check(window && renderer, "create HUD software renderer");
+		if (window && renderer) {
+			SettingsOverlay overlay;
+			check(overlay.attach(window, renderer), "attach HUD fixture");
+			settings::Preferences p;
+			p.uiScale = scale;
+			p.showMenuButton = false;
+			auto frame = [&](float journal, float notice, const char *text = "Autosave stored.") {
+				SDL_SetRenderDrawColor(renderer, 63, 85, 110, 255);
+				SDL_RenderClear(renderer);
+				overlay.beginFrame(p);
+				overlay.drawHud(p, true, journal, {}, text, false, notice);
+				overlay.render();
+				SDL_RenderPresent(renderer);
+			};
+			auto contained = [&](ImGuiWindow *card) {
+				return card && card->Active && card->Pos.x >= 4 && card->Pos.y >= 4 &&
+				       card->Pos.x + card->Size.x <= width - 4 &&
+				       card->Pos.y + card->Size.y < height / 2 &&
+				       card->ScrollMax.x == 0 && card->ScrollMax.y == 0;
+			};
+			for (bool fps : {false, true}) {
+				p.showFps = fps;
+				frame(1, 1); frame(1, 1);
+				auto *journal = ImGui::FindWindowByName("Journal notification");
+				auto *save = ImGui::FindWindowByName("Save and device feedback");
+				check(contained(journal) && contained(save),
+				      "both HUD cards fit in the upper screen without clipping or scrolling");
+				if (journal && save) {
+					check(journal->Pos.y == save->Pos.y &&
+					          journal->Pos.x + journal->Size.x + 4 <= save->Pos.x,
+					      "journal and autosave share one row with a gap");
+					if (fps) {
+						auto *counter = ImGui::FindWindowByName("Frame rate");
+						check(counter && counter->Pos.y + counter->Size.y + 4 <= save->Pos.y,
+						      "optional FPS counter does not overlap notifications");
+					} else {
+						check(save->Pos.y == 4, "notifications sit just under the upper border");
+						const auto file = root / ("hud-" + std::to_string(width) + "-" +
+						                          std::to_string(scale) + ".bmp");
+						check(SDL_SaveBMP(surface, file.string().c_str()) == 0, "capture HUD layout");
+					}
+				}
+				frame(0, 1); frame(0, 1);
+				check(journal && !journal->Active && contained(save) && save->Pos.x == 4,
+				      "autosave takes the journal's top-left position when journal expires");
+				frame(1, 0); frame(1, 0);
+				check(save && !save->Active && contained(journal) && journal->Pos.x == 4,
+				      "journal alone uses the same top-left position");
+			}
+			p.showFps = false;
+			// Measure all rendered pixels so both text and background must fade.
+			auto distanceFromBackground = [&] {
+				uint64_t distance = 0;
+				for (int y = 0; y < height; ++y) for (int x = 0; x < width; ++x) {
+					uint8_t r, g, b, a;
+					SDL_GetRGBA(static_cast<uint32_t *>(surface->pixels)[y * surface->pitch / 4 + x],
+					            surface->format, &r, &g, &b, &a);
+					distance += std::abs(int(r) - 63) + std::abs(int(g) - 85) + std::abs(int(b) - 110);
+				}
+				return distance;
+			};
+			frame(1, 1); frame(1, 1);
+			const auto solid = distanceFromBackground();
+			frame(0.5f, 0.5f);
+			const auto fading = distanceFromBackground();
+			frame(0, 0);
+			check(solid > 0 && fading > solid / 4 && fading < solid * 3 / 4 &&
+			          distanceFromBackground() == 0,
+			      "text and card backgrounds fade, then leave no pixels behind");
+			const char *error = "Autosave failed: the save folder is full. Free some space and try again.";
+			frame(1, 1, error); frame(1, 1, error);
+			auto *save = ImGui::FindWindowByName("Save and device feedback");
+			check(save && save->Pos.x + save->Size.x <= width - 4 && save->ScrollMax.y == 0,
+			      "long feedback wraps within the remaining width without hiding text");
+		}
+		SDL_DestroyRenderer(renderer);
+		SDL_FreeSurface(surface);
+		SDL_DestroyWindow(window);
+	}
+	SDL_Quit();
+}
+
 static void renderPages(const std::filesystem::path &root, const char *assets) {
 	const std::string saveRoot = root.string();
 	check(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER) == 0,
@@ -623,6 +765,43 @@ static void renderPages(const std::filesystem::path &root, const char *assets) {
 		overlay.processEvent(pad, &session);
 		check(session.values.joystickButtons[0] == 8,
 		      "raw joystick has an independent capture profile");
+		// Activate the actual preset buttons in both layouts. Presets are ordinary
+		// live preference changes, not a second settings store or a gameplay action.
+		for (bool native : {false, true}) {
+			SDL_SetWindowSize(window, native ? 256 : 1280, native ? 224 : 800);
+			session.action = settings::Action::None;
+			session.status.clear();
+			session.statusError = false;
+			session.values.windowWidth = 1280;
+			session.values.windowHeight = 720;
+			overlay.open(session.values);
+			overlay.selectPage(2);
+			frame(); frame();
+			ImGuiWindow *content = nullptr;
+			for (auto *candidate : ImGui::GetCurrentContext()->Windows)
+				if (candidate->Active && strstr(candidate->Name, "Page content")) content = candidate;
+			check(content, "Graphics content is available for preset buttons");
+			if (!content) continue;
+			ImGui::SetScrollY(content, 0);
+			frame(); frame();
+			for (auto preset : {settings::Presentation::ClassicPixels,
+			                    settings::Presentation::WidescreenScenery,
+			                    settings::Presentation::SmoothWidescreen}) {
+				session.applyRequested = false;
+				ImGui::ActivateItemByID(content->GetID(settings::presentationName(preset)));
+				frame();
+				check(session.applyRequested && settings::presentation(session.values) == preset &&
+				          session.action == settings::Action::None &&
+				          session.values.windowWidth == 1280 && session.values.windowHeight == 720,
+				      "Preset button applies one preference change while preserving selected output size");
+			}
+			frame(true);
+			auto *surface = SDL_CreateRGBSurfaceWithFormatFrom(captured.data(), capturedWidth, capturedHeight,
+			                                               32, capturedWidth * 4, SDL_PIXELFORMAT_ARGB8888);
+			check(surface && SDL_SaveBMP(surface, (root / (native ? "presets-native.bmp" : "presets-desktop.bmp")).string().c_str()) == 0,
+			      "Capture presentation preset controls");
+			SDL_FreeSurface(surface);
+		}
 		overlay.detach();
 		check(overlay.attach(window, renderer),
 		      "renderer backend can reattach without losing UI context");
@@ -685,6 +864,30 @@ int main(int argc, char **argv) {
 	check(settings::save(path, p, reason), "save settings atomically");
 	settings::Preferences loaded;
 	check(settings::load(path, loaded, reason) && loaded == p, "all preferences round-trip");
+	for (auto preset : {settings::Presentation::ClassicPixels, settings::Presentation::WidescreenScenery,
+	                    settings::Presentation::SmoothWidescreen}) {
+		auto chosen = p;
+		settings::Preferences restored;
+		settings::applyPresentation(chosen, preset);
+		check(chosen.scale == 3 && chosen.filter == (preset == settings::Presentation::SmoothWidescreen ?
+		      settings::Filter::Xbrz : settings::Filter::Point) &&
+		      chosen.integerScale == (preset == settings::Presentation::ClassicPixels) &&
+		      chosen.widescreen == (preset == settings::Presentation::ClassicPixels ? kWidescreenNone : kWidescreenAdjacentRooms),
+		      "Preset describes the promised pixel and scenery presentation");
+		check(settings::validate(chosen, reason) &&
+		          settings::save((root / "presentation.cfg").string(), chosen, reason) &&
+		          settings::load((root / "presentation.cfg").string(), restored, reason) &&
+		          restored == chosen && settings::presentation(restored) == preset,
+		      "Preset survives the existing preferences format without a separate preset ID");
+		chosen.scale = 4;
+		check(settings::presentation(chosen) == settings::Presentation::Custom,
+		      "Manual graphics edits show Custom instead of a stale preset name");
+		chosen.scale = p.scale;
+		chosen.filter = p.filter;
+		chosen.integerScale = p.integerScale;
+		chosen.widescreen = p.widescreen;
+		check(chosen == p, "Preset leaves display mode/resolution, controls, audio and gameplay untouched");
+	}
 	{
 		settings::Preferences legacy;
 		write(root / "legacy-display.cfg", "version=1\nfullscreen=1\nwindow_scale=3\n");
@@ -972,6 +1175,8 @@ int main(int argc, char **argv) {
 		check(platform.redOnReopen,
 		      "explicit Red/Pink survives reopening despite legacy false boolean");
 	}
+	pointerPixels();
+	hudNotifications(root);
 	renderPages(root, argc == 3 ? argv[2] : nullptr);
 	std::cout << (failures ? "Settings checks failed\n" : "Settings checks passed\n");
 	return failures ? 1 : 0;

@@ -86,13 +86,13 @@ struct SystemStub_SDL : SystemStub {
 	int _logicalW = 0, _logicalH = 0;
 	bool _gameplayActive = false, _pointerVisible = false;
 	bool _focusLost = false, _backgrounded = false;
-	bool _journalNotice = false;
+	JournalNotice _journalNotice;
 	std::string _contextHint;
 	uint32_t _lastPointer = 0;
 	SDL_JoystickID _inputDevice = -1;
-	bool _frameDirty = true;
+	bool _frameDirty = true, _wideDirty = true;
 	std::vector<uint32_t> _rgbScratch, _blurScratch, _widePixels;
-	int _wideWidth = 0;
+	int _wideWidth = 0; // Native source width, independent of the filtered texture.
 
 	virtual ~SystemStub_SDL() {}
 	void configure(const RuntimeOptions &options) override { _options = options; }
@@ -127,7 +127,7 @@ struct SystemStub_SDL : SystemStub {
 		}
 		SystemStub::setCutsceneSkipEnabled(enabled);
 	}
-	void setJournalNotice(bool visible) override { _journalNotice = visible; }
+	void setJournalNotice(uint32_t unread) override { _journalNotice.update(unread, SDL_GetTicks()); }
 	void setContextHint(const std::string &text) override { _contextHint = text; }
 	void setInputProfileDirectory(const std::string &directory) override {
 		_profileDirectory = directory;
@@ -187,7 +187,9 @@ struct SystemStub_SDL : SystemStub {
 	void closeInputDevice();
 	void restoreTextures();
 	void updateWide(const SDL_Rect *area, const uint32_t *pixels, int pitch);
+	bool uploadPixels(SDL_Texture *texture, const uint32_t *pixels, int width, int height);
 	void prepareGraphics();
+	int textureFactor() const { return _scaler ? _scaleFactor : 1; }
 	int presentationFactor() const { return _preferences.integerScale ? 1 : _scaleFactor; }
 	void renderCoordinates(bool overlay = false);
 	void cleanupGraphics();
@@ -428,19 +430,6 @@ void SystemStub_SDL::zoomRect(int x, int y, int w, int h) {
 	_texRect.h = h * _texH / _screenH;
 }
 
-static void clearTexture(SDL_Texture *texture, int h, SDL_PixelFormat *fmt) {
-	void *dst = 0;
-	int pitch = 0;
-	if (SDL_LockTexture(texture, 0, &dst, &pitch) == 0) {
-		assert((pitch & 3) == 0);
-		const uint32_t color = SDL_MapRGB(fmt, 0, 0, 0);
-		for (uint32_t i = 0; i < h * pitch / sizeof(uint32_t); ++i) {
-			((uint32_t *)dst)[i] = color;
-		}
-		SDL_UnlockTexture(texture);
-	}
-}
-
 static void blur_h(int radius, const uint32_t *src, int srcPitch, int w, int h, const SDL_PixelFormat *fmt, uint32_t *dst, int dstPitch) {
 
 	const int count = 2 * radius + 1;
@@ -597,61 +586,31 @@ void SystemStub_SDL::copyWidescreenRight(int w, int h, const uint8_t *buf, bool 
 
 void SystemStub_SDL::copyWidescreenMirror(int w, int h, const uint8_t *buf) {
 	assert(w >= _wideMargin);
-	_rgbScratch.resize(size_t(w) * h);
-	uint32_t *rgb = _rgbScratch.data();
-	if (rgb) {
-		for (int i = 0; i < w * h; ++i) {
-			rgb[i] = _darkPalette[buf[i]];
-		}
-		void *dst = 0;
-		int pitch = 0;
-		if (SDL_LockTexture(_widescreenTexture, 0, &dst, &pitch) == 0) {
-			assert((pitch & 3) == 0);
-			uint32_t *p = (uint32_t *)dst;
-			for (int y = 0; y < h; ++y) {
-				std::fill_n(p, _wideWidth, 0);
-				for (int x = 0; x < _wideMargin; ++x) {
-					// left side
-					const int xLeft = _wideMargin - 1 - x;
-					p[x] = rgb[y * w + xLeft];
-					// right side
-					const int xRight = w - 1 - x;
-					p[_wideMargin + _screenW + x] = rgb[y * w + xRight];
-				}
-				p += pitch / sizeof(uint32_t);
-			}
-			updateWide(nullptr, static_cast<uint32_t *>(dst), pitch);
-			SDL_UnlockTexture(_widescreenTexture);
+	if (!_widescreenTexture || !buf || w != _screenW || h != _screenH)
+		return;
+	std::fill(_widePixels.begin(), _widePixels.end(), 0);
+	for (int y = 0; y < h; ++y) {
+		auto *row = _widePixels.data() + size_t(y) * _wideWidth;
+		for (int x = 0; x < _wideMargin; ++x) {
+			row[x] = _darkPalette[buf[y * w + _wideMargin - 1 - x]];
+			row[_wideMargin + _screenW + x] = _darkPalette[buf[y * w + w - 1 - x]];
 		}
 	}
+	_wideDirty = true;
 }
 
 void SystemStub_SDL::copyWidescreenBlur(int w, int h, const uint8_t *buf) {
 	assert(w == _screenW && h == _screenH);
-	void *ptr = 0;
-	int pitch = 0;
-	if (SDL_LockTexture(_widescreenTexture, 0, &ptr, &pitch) == 0) {
-		assert((pitch & 3) == 0);
-
-		_rgbScratch.resize(size_t(w) * h);
-		uint32_t *src = _rgbScratch.data();
-		_blurScratch.resize(size_t(w) * h);
-		uint32_t *tmp = _blurScratch.data();
-		uint32_t *dst = (uint32_t *)ptr;
-
-		if (src && tmp) {
-			for (int i = 0; i < w * h; ++i) {
-				src[i] = _rgbPalette[buf[i]];
-			}
-			static const int radius = 8;
-			blur_h(radius, src, w, w, h, _fmt, tmp, w);
-			blur_v(radius, tmp, w, w, h, _fmt, dst, pitch / sizeof(uint32_t));
-		}
-
-
-		updateWide(nullptr, static_cast<uint32_t *>(ptr), pitch);
-		SDL_UnlockTexture(_widescreenTexture);
-	}
+	if (!_widescreenTexture || !buf || _wideWidth != w || h != _screenH)
+		return;
+	_rgbScratch.resize(size_t(w) * h);
+	_blurScratch.resize(size_t(w) * h);
+	for (int i = 0; i < w * h; ++i)
+		_rgbScratch[i] = _rgbPalette[buf[i]];
+	static const int radius = 8;
+	blur_h(radius, _rgbScratch.data(), w, w, h, _fmt, _blurScratch.data(), w);
+	blur_v(radius, _blurScratch.data(), w, w, h, _fmt, _widePixels.data(), _wideWidth);
+	_wideDirty = true;
 }
 
 void SystemStub_SDL::copyWidescreenCDi(int w, int h, const uint8_t *buf, const uint8_t *pal) {
@@ -677,16 +636,30 @@ void SystemStub_SDL::copyWidescreenCDi(int w, int h, const uint8_t *buf, const u
 }
 
 void SystemStub_SDL::updateWide(const SDL_Rect *area, const uint32_t *pixels, int pitch) {
-	if (!_widescreenTexture) return;
-	int width, height;
-	SDL_QueryTexture(_widescreenTexture, nullptr, nullptr, &width, &height);
-	_wideWidth = width;
-	_widePixels.resize(size_t(width) * height);
-	const SDL_Rect r = area ? *area : SDL_Rect{0, 0, width, height};
+	if (!_widescreenTexture || !pixels) return;
+	const SDL_Rect r = area ? *area : SDL_Rect{0, 0, _wideWidth, _screenH};
+	if (r.x < 0 || r.y < 0 || r.w <= 0 || r.h <= 0 ||
+	    r.w > _wideWidth - r.x || r.h > _screenH - r.y || pitch < r.w * int(sizeof(uint32_t)))
+		return;
 	for (int y = 0; y < r.h; ++y)
-		memcpy(_widePixels.data() + (r.y + y) * width + r.x,
+		memcpy(_widePixels.data() + (r.y + y) * _wideWidth + r.x,
 		       reinterpret_cast<const uint8_t *>(pixels) + size_t(y) * pitch, r.w * sizeof(uint32_t));
-	if (area) SDL_UpdateTexture(_widescreenTexture, area, pixels, pitch);
+	_wideDirty = true;
+}
+
+bool SystemStub_SDL::uploadPixels(SDL_Texture *texture, const uint32_t *pixels, int width, int height) {
+	// Both the playfield and scenery pass through the same scaler and sampling
+	// path. Sources remain native-sized so filters/reset never discard scenery.
+	if (!_scaler)
+		return SDL_UpdateTexture(texture, nullptr, pixels, width * sizeof(uint32_t)) == 0;
+	void *dst = nullptr;
+	int pitch = 0;
+	if (SDL_LockTexture(texture, nullptr, &dst, &pitch) != 0)
+		return false;
+	_scaler->scale(_scaleFactor, static_cast<uint32_t *>(dst), pitch / sizeof(uint32_t),
+	               pixels, width, width, height);
+	SDL_UnlockTexture(texture);
+	return true;
 }
 void SystemStub_SDL::restoreTextures() {
 	if (_overlay) _overlay->resetRenderer();
@@ -697,16 +670,17 @@ void SystemStub_SDL::restoreTextures() {
 	_frameDirty = true;
 	if (_widescreenTexture) {
 		SDL_DestroyTexture(_widescreenTexture);
-		_widescreenTexture = SDL_CreateTexture(_renderer, kPixelFormat, SDL_TEXTUREACCESS_STREAMING, _wideWidth, _screenH);
+		_widescreenTexture = SDL_CreateTexture(_renderer, kPixelFormat, SDL_TEXTUREACCESS_STREAMING,
+		                                      _wideWidth * textureFactor(), _screenH * textureFactor());
 		if (!_widescreenTexture) error("Cannot restore side texture: %s", SDL_GetError());
 		SDL_SetTextureScaleMode(_widescreenTexture, _scalerType == kScalerTypePoint ? SDL_ScaleModeNearest : SDL_ScaleModeLinear);
-		if (!_widePixels.empty()) SDL_UpdateTexture(_widescreenTexture, nullptr, _widePixels.data(), _wideWidth * sizeof(uint32_t));
+		_wideDirty = true;
 	}
 }
 
 void SystemStub_SDL::clearWidescreen() {
 	std::fill(_widePixels.begin(), _widePixels.end(), 0);
-	clearTexture(_widescreenTexture, _screenH, _fmt);
+	_wideDirty = true;
 }
 
 void SystemStub_SDL::enableWidescreen(bool enable) {
@@ -720,16 +694,7 @@ void SystemStub_SDL::fadeScreen() {
 bool SystemStub_SDL::drawGameFrame(int shakeOffset) {
 	renderCoordinates();
 	if (_frameDirty) {
-		if (_texW != _screenW || _texH != _screenH) {
-			void *dst = nullptr;
-			int pitch = 0;
-			if (SDL_LockTexture(_texture, nullptr, &dst, &pitch) != 0)
-				return false;
-			_scaler->scale(_scaleFactor, static_cast<uint32_t *>(dst), pitch / sizeof(uint32_t),
-			               _screenBuffer, _screenW, _screenW, _screenH);
-			SDL_UnlockTexture(_texture);
-		} else if (SDL_UpdateTexture(_texture, nullptr, _screenBuffer,
-		                             _screenW * sizeof(uint32_t)) != 0)
+		if (!uploadPixels(_texture, _screenBuffer, _screenW, _screenH))
 			return false;
 		_frameDirty = false; // Failed uploads stay dirty and are retried on the next presentation.
 	}
@@ -737,6 +702,11 @@ bool SystemStub_SDL::drawGameFrame(int shakeOffset) {
 	SDL_RenderClear(_renderer);
 	if (_widescreenMode != kWidescreenNone) {
 		if (_enableWidescreen) {
+			if (_wideDirty) {
+				if (!uploadPixels(_widescreenTexture, _widePixels.data(), _wideWidth, _screenH))
+					return false;
+				_wideDirty = false; // Static scenery is filtered only when it changes.
+			}
 			// borders / background screen
 			SDL_RenderCopy(_renderer, _widescreenTexture, 0, 0);
 		}
@@ -780,15 +750,17 @@ bool SystemStub_SDL::drawGameFrame(int shakeOffset) {
 void SystemStub_SDL::updateScreen(int shakeOffset) {
 	if (!drawGameFrame(_preferences.reduceShake ? 0 : shakeOffset))
 		return;
-	const bool noticeVisible = _notice.visible(SDL_GetTicks());
-	if ((noticeVisible || _preferences.showFps ||
+	const uint32_t now = SDL_GetTicks();
+	const float noticeOpacity = _notice.opacity(now);
+	const float journalOpacity = _journalNotice.toast.opacity(now);
+	if ((noticeOpacity > 0 || _preferences.showFps ||
 	     (_gameplayActive &&
-	      (_preferences.showMenuButton || _journalNotice || !_contextHint.empty()))) &&
+	      (_preferences.showMenuButton || journalOpacity > 0 || !_contextHint.empty()))) &&
 	    _overlay && !_settingsSession) {
 		renderCoordinates(true);
 		_overlay->beginFrame(_preferences);
-		if (_overlay->drawHud(_preferences, _gameplayActive, _journalNotice, _contextHint,
-		                      noticeVisible ? _notice.text : std::string(), _notice.error))
+		if (_overlay->drawHud(_preferences, _gameplayActive, journalOpacity, _contextHint,
+		                      _notice.text, _notice.error, noticeOpacity))
 			_pi.escape = true;
 		_overlay->render();
 	}
@@ -1327,6 +1299,11 @@ void SystemStub_SDL::prepareGraphics() {
 	}
 	_texture = SDL_CreateTexture(_renderer, kPixelFormat, SDL_TEXTUREACCESS_STREAMING, _texW, _texH);
 	if (!_texture) error("Cannot create game texture: %s", SDL_GetError());
+	const auto sampling = _scalerType == kScalerTypePoint ? SDL_ScaleModeNearest : SDL_ScaleModeLinear;
+	SDL_SetTextureScaleMode(_texture, sampling);
+	_wideWidth = 0;
+	_widePixels.clear();
+	_wideDirty = true;
 	if (_widescreenMode != kWidescreenNone) {
 		int w = _screenH * 16 / 9;
 		// in blur mode, the background texture has the same dimensions as the game texture
@@ -1336,8 +1313,10 @@ void SystemStub_SDL::prepareGraphics() {
 		} else if (_widescreenMode == kWidescreenCDi) {
 			w = _screenW + kWidescreenBorderCDiW * 2;
 		}
-		_widescreenTexture = SDL_CreateTexture(_renderer, kPixelFormat, SDL_TEXTUREACCESS_STREAMING, w, _screenH);
-		clearTexture(_widescreenTexture, _screenH, _fmt);
+		_widescreenTexture = SDL_CreateTexture(_renderer, kPixelFormat, SDL_TEXTUREACCESS_STREAMING,
+		                                      w * textureFactor(), _screenH * textureFactor());
+		if (!_widescreenTexture) error("Cannot create side texture: %s", SDL_GetError());
+		SDL_SetTextureScaleMode(_widescreenTexture, sampling);
 		_wideWidth = w;
 		_widePixels.assign(size_t(w) * _screenH, 0);
 
@@ -1420,8 +1399,9 @@ bool SystemStub_SDL::applyPreferences(const settings::Preferences &p, std::strin
 	                           (!p.fullscreen && !p.windowWidth &&
 	                            (p.scale != _scaleFactor || p.widescreen != _widescreenMode));
 	SDL_Texture *gameTexture = nullptr, *wideTexture = nullptr;
-	const int texW = _screenW * (type == kScalerTypeInternal ? p.scale : 1);
-	const int texH = _screenH * (type == kScalerTypeInternal ? p.scale : 1);
+	const int factor = type == kScalerTypeInternal ? p.scale : 1;
+	const int texW = _screenW * factor;
+	const int texH = _screenH * factor;
 	const int canvasW = display::canvasWidth(_screenW, _screenH, p.widescreen);
 	const int wideW = p.widescreen == kWidescreenBlur ? _screenW : canvasW;
 	auto discard = [&] {
@@ -1433,7 +1413,8 @@ bool SystemStub_SDL::applyPreferences(const settings::Preferences &p, std::strin
 		// ImGui resources alive across mode and filter changes.
 		gameTexture = SDL_CreateTexture(_renderer, kPixelFormat, SDL_TEXTUREACCESS_STREAMING, texW, texH);
 		if (p.widescreen != kWidescreenNone)
-			wideTexture = SDL_CreateTexture(_renderer, kPixelFormat, SDL_TEXTUREACCESS_STREAMING, wideW, _screenH);
+			wideTexture = SDL_CreateTexture(_renderer, kPixelFormat, SDL_TEXTUREACCESS_STREAMING,
+			                                wideW * factor, _screenH * factor);
 		if (!gameTexture || (p.widescreen != kWidescreenNone && !wideTexture)) {
 			reason = std::string("Display change could not allocate textures: ") + SDL_GetError();
 			discard();
@@ -1443,7 +1424,6 @@ bool SystemStub_SDL::applyPreferences(const settings::Preferences &p, std::strin
 		SDL_SetTextureScaleMode(gameTexture, sampling);
 		if (wideTexture) {
 			SDL_SetTextureScaleMode(wideTexture, sampling);
-			clearTexture(wideTexture, _screenH, _fmt);
 		}
 	}
 	const bool vsyncChanged = p.vsync != _preferences.vsync;
@@ -1464,13 +1444,20 @@ bool SystemStub_SDL::applyPreferences(const settings::Preferences &p, std::strin
 		_texture = gameTexture;
 		_frameDirty = true;
 		_widescreenTexture = wideTexture;
+		// Filter/factor changes reuse the original scenery. Changing its content
+		// mode clears the cache until Game redraws that mode at the paused boundary.
+		if (!wideTexture)
+			_widePixels.clear();
+		else if (p.widescreen != _widescreenMode || wideW != _wideWidth)
+			_widePixels.assign(size_t(wideW) * _screenH, 0);
 		_wideWidth = wideW;
-		_widePixels.assign(size_t(wideW) * _screenH, 0);
+		_wideDirty = true;
 		_scalerType = type;
 		_scaler = scaler;
 		_scaleFactor = p.scale;
+		if (p.widescreen != _widescreenMode)
+			_enableWidescreen = p.widescreen != kWidescreenNone;
 		_widescreenMode = p.widescreen;
-		_enableWidescreen = p.widescreen != kWidescreenNone;
 		_wideMargin = (wideW - _screenW) / 2;
 		_texW = texW;
 		_texH = texH;

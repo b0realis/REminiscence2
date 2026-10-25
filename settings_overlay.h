@@ -47,9 +47,9 @@ public:
 	void beginFrame(const settings::Preferences &preferences);
 	void draw(settings::Session &session);
 	// Returns true when the on-screen QoL shortcut was clicked.
-	bool drawHud(const settings::Preferences &preferences, bool gameplay, bool newJournal = false,
+	bool drawHud(const settings::Preferences &preferences, bool gameplay, float journalOpacity = 0,
 	             const std::string &contextHint = {}, const std::string &notice = {},
-	             bool noticeError = false);
+	             bool noticeError = false, float noticeOpacity = 1);
 	bool shortcutContains(float x, float y) const;
 	void render();
 };

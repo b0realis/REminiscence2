@@ -54,6 +54,31 @@ int main(int argc, char **argv) {
 		check(path && fs::u8path(path).parent_path().filename() == "data",
 		      "Duplicate name crossed edition boundary");
 		free(path);
+		put(libraryRoot / "segacd/DATA/PRESENT.LEV");
+		put(libraryRoot / "segacd/SC1.MCD");
+		put(libraryRoot / "segacd/SUB.BIN");
+		put(libraryRoot / "segacd/music/track02.wav");
+		const auto waveLibrary = assets::discover(libraryRoot.u8string());
+		const int waveSega = assets::find(waveLibrary.games, "sega:segacd");
+		check(waveSega >= 0, "CD WAV library root");
+		fs::remove(libraryRoot / "segacd/music/track02.wav");
+		put(libraryRoot / "segacd/music/track02.ogg");
+		put(libraryRoot / "amiga/music/track02.ogg");
+		const auto oggLibrary = assets::discover(libraryRoot.u8string());
+		const int oggSega = assets::find(oggLibrary.games, "sega:segacd");
+		check(oggSega >= 0 && oggLibrary.games[oggSega].label == waveLibrary.games[waveSega].label,
+		      "Converting native CD music changed the edition/root");
+		check(assets::find(oggLibrary.music, "sega:segacd") >= 0 &&
+		          assets::find(oggLibrary.music, "music:segacd/music") < 0,
+		      "Converted CD soundtrack detached from its game");
+		const auto &sega = oggLibrary.games[oggSega];
+		FileSystem segaFiles(sega.root.c_str(), sega.excludedRoots);
+		check(segaFiles.exists("SC1.MCD") && segaFiles.exists("SUB.BIN") &&
+		          segaFiles.exists("track02.ogg") && !segaFiles.exists("FONT8.SPR"),
+		      "Ogg CD edition lost sibling resources or crossed edition boundary");
+		check(assets::find(oggLibrary.games, "amiga:amiga") >= 0 &&
+		          assets::find(oggLibrary.music, "music:music/Sega CD") >= 0,
+		      "Native Ogg music swallowed an external soundtrack or lost Amiga siblings");
 		put(root / "nested/level1.map");
 		put(root / "nested/amiga/level1.lev");
 		put(root / "nested/amiga/only-amiga.dat");

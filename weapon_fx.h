@@ -17,6 +17,8 @@ struct Shot {
 	int age = 16, x = 0, y = 0, direction = 1, room = -1;
 	int flashX = 0, flashY = 0; // Native render pixels, including odd Mac coordinates.
 	Style style = Style::Original;
+	int rayLength = -1; // Native render pixels; -1 until the original gun query runs.
+	bool impact = false;
 };
 struct State {
 	std::array<Shot, 4> shots{};
@@ -29,6 +31,7 @@ struct State {
 	// x/y are the native flash's rear edge and centerline in render pixels.
 	void fire(Style choice, int x, int y, int dir, int room, int type);
 	void followFlash(int x, int y);
+	void trace(int endX, bool impact);
 	int recoil(int type) const;
 	void draw(uint8_t *pixels, int width, int height, int scale, int room) const;
 };
