@@ -7,10 +7,23 @@ to Delphine Software and the people who have kept this game playable.
 
 ## Snapshots
 
-**Sega CD jungle, running in 1.35.** Original 256×224 game pixels enlarged 3×
-with nearest-neighbour sampling.
+**Six of the seven Amiga levels, captured in 1.35.** Click any image for the
+full-size view. Original 256×224 pixels are enlarged 3× with nearest-neighbour
+sampling.
 
-![Sega CD jungle gameplay in REminiscence2 1.35](https://github.com/b0realis/REminiscence2/releases/download/v1.35/segacd-jungle-1.35.png)
+| Level 1 | Level 2 | Level 3 |
+| :---: | :---: | :---: |
+| <a href="https://github.com/b0realis/REminiscence2/releases/download/v1.35/amiga-level1-1.35.png"><img src="https://github.com/b0realis/REminiscence2/releases/download/v1.35/amiga-level1-1.35.png" alt="Amiga level 1 in REminiscence2 1.35" width="240"></a> | <a href="https://github.com/b0realis/REminiscence2/releases/download/v1.35/amiga-level2-1.35.png"><img src="https://github.com/b0realis/REminiscence2/releases/download/v1.35/amiga-level2-1.35.png" alt="Amiga level 2 in REminiscence2 1.35" width="240"></a> | <a href="https://github.com/b0realis/REminiscence2/releases/download/v1.35/amiga-death-tower-1.35.png"><img src="https://github.com/b0realis/REminiscence2/releases/download/v1.35/amiga-death-tower-1.35.png" alt="Amiga level 3 in REminiscence2 1.35" width="240"></a> |
+| **Level 4** | **Level 6** | **Level 7** |
+| <a href="https://github.com/b0realis/REminiscence2/releases/download/v1.35/amiga-level4-1.35.png"><img src="https://github.com/b0realis/REminiscence2/releases/download/v1.35/amiga-level4-1.35.png" alt="Amiga level 4 in REminiscence2 1.35" width="240"></a> | <a href="https://github.com/b0realis/REminiscence2/releases/download/v1.35/amiga-level6-1.35.png"><img src="https://github.com/b0realis/REminiscence2/releases/download/v1.35/amiga-level6-1.35.png" alt="Amiga level 6 in REminiscence2 1.35" width="240"></a> | <a href="https://github.com/b0realis/REminiscence2/releases/download/v1.35/amiga-level7-1.35.png"><img src="https://github.com/b0realis/REminiscence2/releases/download/v1.35/amiga-level7-1.35.png" alt="Amiga level 7 in REminiscence2 1.35" width="240"></a> |
+
+### QoL controls and keyboard preview
+
+Open **Esc / F10 → Controls**. Select a coloured key or its action to rebind it;
+the highlighted keys and arrows follow your bindings. The preview below shows
+the actual 1.35 overlay over Amiga gameplay.
+
+![Interactive QoL keyboard action guide in 1.35](https://github.com/b0realis/REminiscence2/releases/download/v1.35/qol-keyboard-1.35.png)
 
 **One-click presentation presets.** Classic pixels, Widescreen scenery and
 Smooth widescreen share the live Graphics page with display modes and filters.
@@ -18,16 +31,11 @@ Smooth widescreen share the live Graphics page with display modes and filters.
 ![Presentation presets and display controls in 1.35](https://github.com/b0realis/REminiscence2/releases/download/v1.35/qol-presentation-1.35.png)
 
 <details>
-<summary>More snapshots: Amiga gameplay, keyboard guide and the native-resolution menu</summary>
+<summary>More snapshots: Sega CD jungle and the native-resolution QoL menu</summary>
 
-**Amiga Death Tower, captured in 1.35.** Original game pixels enlarged 3×.
+**Sega CD jungle, running in 1.35.** Original game pixels enlarged 3×.
 
-![Amiga Death Tower gameplay in 1.35](https://github.com/b0realis/REminiscence2/releases/download/v1.35/amiga-death-tower-1.35.png)
-
-**A keyboard guide that follows your bindings.** Select a coloured key or action
-to rebind it; highlights and arrows follow the chosen controls.
-
-![Interactive keyboard action guide in 1.35](https://github.com/b0realis/REminiscence2/releases/download/v1.35/qol-keyboard-1.35.png)
+![Sega CD jungle gameplay in 1.35](https://github.com/b0realis/REminiscence2/releases/download/v1.35/segacd-jungle-1.35.png)
 
 **The same presets at 256×224.** The compact menu scrolls its settings while
 keeping Resume and the turquoise EXIT GAME button visible.
