@@ -1,111 +1,137 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
-## v1.35 build refresh — 25 October 2026
+REminiscence2 brings **Flashback** to modern systems with a live QoL menu,
+flexible presentation and better ways to keep your progress. This **1.35 preview**
+combines the latest fixes with the features from the earlier releases—a thank-you
+to Delphine Software and the people who have kept this game playable.
 
-Refreshed all six platform builds. Adds presentation presets with consistent
-side-scenery filtering, fixes the Mac QoL mouse offset and laser hit effects,
-and makes journal/autosave notifications fade in a shared top row. Both Mac
-architectures now also have drag-to-Applications DMGs; asset compaction and
-private-app packaging tools are included in the source. Public downloads need
-your own game assets. SHA256SUMS now covers ten package/source downloads.
+## Snapshots
 
-The original release notes and screenshots are retained below.
+**Sega CD jungle, running in 1.35.** Original 256×224 game pixels enlarged 3×
+with nearest-neighbour sampling.
 
-REminiscence2 1.30 adds live display controls, built-in xBRZ and original demo
-playback from the QoL menu. This preview combines the changes since 1.25 with
-the previous release's Sega CD support and fixes.
+![Sega CD jungle gameplay in REminiscence2 1.35](https://github.com/b0realis/REminiscence2/releases/download/v1.35/segacd-jungle-1.35.png)
 
-## New since 1.25
+**One-click presentation presets.** Classic pixels, Widescreen scenery and
+Smooth widescreen share the live Graphics page with display modes and filters.
 
-- **Graphics:** choose windowed, borderless windowed or exclusive fullscreen;
-  select a window size or a fullscreen resolution reported by the monitor.
-  Unsupported fullscreen changes retain the previous settings. Old fullscreen
-  profiles remain borderless, and obsolete startup resolutions fall back safely.
-- **Pixel presentation:** Point, Linear, ScaleNx and now xBRZ at 2×–6×.
-  Integer scaling fits whole multiples of the original pixels with borders;
-  select Point for unaltered pixels. Fixed window dimensions survive filter
-  changes. Point sampling remains sharp after renderer resets.
-- **Session → Gameplay demos:** watch available Jungle, Alien World and Death
-  Tower recordings from the selected DOS/GOG or Macintosh edition. These are
-  original attract-mode replays, not additional levels. Esc returns to the title;
-  F10 opens QoL. Confirm before replacing a running game; demos cannot save or
-  overwrite progress. Editions without compatible recordings explain why.
-- **Demo robustness:** cover the historical missing-map starting-room case,
-  return recorded death to the title, and reject oversized or incomplete loose
-  recordings without losing the previous session.
-- **Offline movie restoration tools:** export Sega CD movies through the engine
-  decoder, upscale with Real-CUGAN Pro, preserve original frame holds and audio,
-  and validate the result with source/model hashes. The tooling guide includes
-  the 3× / denoise 3 workflow and optional tracked-region sign repair. Models,
-  restored movies and commercial assets are supplied separately. The game still
-  plays the original MCD movies; this is an offline viewing/export workflow.
-
-Open QoL with **Esc or F10** during gameplay. Both desktop and original-resolution
-layouts include the new controls. **Ctrl+S / Ctrl+L** quick-save/load the selected
-manual slot in the current level; controller bindings are configurable in Joypad.
-Save settings in the menu to retain preferences between launches.
-
-## Retained from 1.25: Sega CD and original assets
-
-- Play the supported US Sega CD assets: seven level resource sets, title
-  graphics, 70 MCD movies with embedded audio, VCE voice dialogue and eight
-  lossless music tracks.
-- Extract your own CUE/BIN with the standard-library Python tool. Browse and
-  play movies with `tools/play_cutscenes.py`. Asset and binary-format references
-  document required files, extraction and engine support.
-- Select the CD soundtrack independently of Amiga or GOG/DOS graphics in QoL
-  Audio. Imported game files stay untouched.
-- Sega CD supports Conrad's undershirt choices and alternative pistol styles
-  in Enhancements. The jacket retains its native colours. Effects follow the
-  original muzzle position and firing height; gameplay remains unchanged.
-- Title navigation fixes prevent excessive Amiga repeats and missed DOS taps.
-  Mouse wheel/click navigation and left-click cutscene skipping are available.
-- Movie playback handles focus/background pauses; WAV failure handling,
-  extraction bounds and CD object-bank/muzzle lookup fixes are retained.
-
-All 70 extracted movies matched an independent disc extraction, and all 17,754
-indexed frames matched the original game's 68000 decompressor in the 1.25 audit.
-The checkerboard texture belongs to the original 256×128, 16-colour dithering.
-
-## Downloads and validation
-
-Packages cover **Windows x64, Linux x64, Steam Deck, macOS Apple Silicon,
-macOS Intel and Quest arm64**. Quest includes a signed APK and Linux/ADB
-deployment bundle. Desktop packages provide launchers and a precreated `assets`
-folder; supply your own original game files. The corresponding-source archive
-includes matching SDL2/zlib sources. Packages retain xBRZ and other dependency
-notices. `SHA256SUMS` covers the eight package/source downloads.
-
-All **31 local Release suites**, **31 Debug/UBSan suites** and **11 packaging-tool
-tests** passed. Private tests use supplied Amiga, GOG/DOS and Sega CD assets;
-public regressions run without original game files. Publication requires the
-normal Build and test workflow and all six package builds to pass for the same
-tagged source commit.
-
-This remains a preview. Full playthroughs, physical-display mode switching,
-physical Deck/Quest testing, console A/V timing comparisons and other Sega CD
-pressings remain outstanding. Macintosh compatibility needs real assets.
-macOS apps are ad-hoc signed, not notarized. Quest runs as a flat Android panel;
-its host controls window size and mode.
-
-## Screenshots
-
-The new Graphics captures use the production overlay with synthetic session
-data: the first at 1280×800, the second at the native 256×224 size.
-
-![Graphics with borderless mode and xBRZ](https://raw.githubusercontent.com/b0realis/REminiscence2/v1.30/docs/screenshots/qol-graphics-1.30.png)
-
-![Original-resolution Graphics menu](https://raw.githubusercontent.com/b0realis/REminiscence2/v1.30/docs/screenshots/qol-native-graphics-1.30.png)
+![Presentation presets and display controls in 1.35](https://github.com/b0realis/REminiscence2/releases/download/v1.35/qol-presentation-1.35.png)
 
 <details>
-<summary>Sega CD gameplay and the keyboard guide retained from 1.25</summary>
+<summary>More snapshots: Amiga gameplay, keyboard guide and the native-resolution menu</summary>
 
-Real Sega CD gameplay enlarged with nearest-neighbour sampling, and the
-production keyboard action guide. These captures retain their original version.
-Original game artwork belongs to its respective rights holders.
+**Amiga Death Tower, captured in 1.35.** Original game pixels enlarged 3×.
 
-![Sega CD gameplay](https://raw.githubusercontent.com/b0realis/REminiscence2/v1.30/docs/screenshots/segacd-gameplay-1.25.png)
+![Amiga Death Tower gameplay in 1.35](https://github.com/b0realis/REminiscence2/releases/download/v1.35/amiga-death-tower-1.35.png)
 
-![Interactive keyboard action guide](https://raw.githubusercontent.com/b0realis/REminiscence2/v1.30/docs/screenshots/qol-keyboard-1.25.png)
+**A keyboard guide that follows your bindings.** Select a coloured key or action
+to rebind it; highlights and arrows follow the chosen controls.
+
+![Interactive keyboard action guide in 1.35](https://github.com/b0realis/REminiscence2/releases/download/v1.35/qol-keyboard-1.35.png)
+
+**The same presets at 256×224.** The compact menu scrolls its settings while
+keeping Resume and the turquoise EXIT GAME button visible.
+
+![Native-resolution presentation menu in 1.35](https://github.com/b0realis/REminiscence2/releases/download/v1.35/qol-native-presentation-1.35.png)
 
 </details>
+
+These are captures from the 1.35 engine and production overlay. Menu captures
+use controlled session settings; gameplay uses player-supplied original assets.
+Flashback artwork belongs to its respective rights holders.
+
+## New in 1.31–1.35
+
+- **Presentation presets:** Classic pixels uses integer fitting and borders;
+  Widescreen scenery adds adjacent-room scenery; Smooth widescreen adds xBRZ.
+  Filtering is consistent across the playfield and side scenery. The selected
+  window mode and fixed resolution survive preset changes. Side scenery does
+  not enlarge the playable area or stretch gameplay.
+- **Quieter notifications:** a new journal notice lasts 3.5 seconds and fades
+  during the final 0.75 seconds. The entry stays unread until opened. Autosave
+  feedback uses the same top edge; simultaneous notices sit side by side,
+  including at native resolution. Errors retain their longer display time.
+- **Mac QoL mouse fix:** pointer polling and clicks use the window's content
+  coordinates, addressing the reported fullscreen menu offset.
+- **Pistol effects:** cosmetic laser beams stop at the original shot's enemy,
+  wall or range endpoint, with a brief impact. Original damage and hit rules
+  are preserved. The alternative styles remain optional.
+- **Mac installation:** both Apple Silicon and Intel now have drag-to-Applications
+  DMGs alongside ZIPs. The launcher helps locate the assets folder. Python tools
+  compact owned assets, optionally convert Sega CD music to Ogg, and build a
+  private self-contained Mac app. Private game bundles are not public downloads.
+
+## Included from earlier releases
+
+- **Live QoL controls:** open with **Esc, F10 or controller Start**. Adjust audio,
+  graphics and controls during play; browse saves, levels, cheats and the journal.
+  Both desktop and original-resolution layouts keep essential actions accessible.
+- **Save and recovery tools:** **Ctrl+S / Ctrl+L** quick-save/load the selected
+  manual slot; browse saves across levels, name and protect milestones, keep
+  rotating autosaves, use checkpoint recovery and an optional rewind timeline.
+  New saves carry previews; loading validates compatible data before replacing
+  the running session. Automatic resume at launch is optional.
+- **Keyboard and joypad support:** the graphical keyboard follows remapping;
+  controller profiles include buttons, triggers and stick settings. Disconnect
+  pauses gameplay. Optional assists include short input buffering, sticky Action,
+  reduced shake, a steady shield-hit sprite and slower gameplay pacing.
+- **Journal and objectives:** optional original companion passages and a chapter
+  notebook reveal only reached content. Entries can be read in the paused menu.
+- **Display choices:** windowed, borderless and exclusive fullscreen; selectable
+  window sizes and reported fullscreen resolutions; integer pixel fitting;
+  Point, Linear, ScaleNx and **xBRZ at 2×–6×**. Invalid mode changes retain or
+  safely restore usable settings.
+- **Original gameplay demos:** QoL Session can launch available Jungle, Alien
+  World and Death Tower recordings from compatible DOS/GOG or Macintosh data.
+  These are attract-mode replays, not extra levels. Demos cannot write progress;
+  missing-map starts and malformed recordings have focused regressions.
+- **Amiga, DOS/GOG and US Sega CD assets:** keep editions in separate folders,
+  choose which to play, and select an independent soundtrack with native fallback.
+  Original Macintosh support is retained; real Macintosh assets still need validation.
+- **Sega CD media:** seven level resource sets, title graphics, **70 MCD movies**
+  with embedded audio, **VCE voice dialogue** and **eight music tracks**. All 70
+  extracted movies and 17,754 indexed frames matched independent extraction and
+  the original 68000 decoder in the 1.25 audit. The checkerboard texture comes
+  from the original 256×128, 16-colour dithering.
+- **Original presentation and optional cosmetics:** skippable opening sequences
+  lead to the original title menu. Space, alphabet keys and left-click can skip
+  cutscenes; title navigation supports mouse and wheel input. Conrad's undershirt
+  choices leave his jacket unchanged; optional pistol styles follow native muzzle
+  positions across supported asset editions.
+- **Asset and movie tools:** Python tools prepare WHDLoad data and extract Sega CD
+  CUE/BIN assets, list/play cutscenes, and document the formats. The offline
+  restoration workflow supports Real-CUGAN Pro 3× / denoise 3, original timing and
+  audio, and optional tracked sign repair. Models and restored movies are supplied
+  separately; the game continues to play original MCD movies.
+
+## Downloads
+
+| Platform | Choose |
+| --- | --- |
+| Windows x64 | `win64.zip` |
+| Linux x64 | `linux64.tar.gz` — launch with `play.sh` |
+| Steam Deck | `steamdeck.tar.gz` — add the launcher as a Non-Steam Game |
+| Mac Apple Silicon, including M5 | `macos-arm64.dmg` or `.zip` |
+| Older Intel Mac | `macos-x86_64.dmg` or `.zip` |
+| Quest arm64 | Signed `.apk`, or the bundle ZIP with Linux/ADB deployment tools |
+
+Supply your own prepared game files. Desktop packages include an `assets` folder;
+Mac DMGs can use `~/Library/Application Support/REminiscence2/assets`. Public
+packages contain no playable original assets. Save settings in QoL to retain
+preferences. The corresponding-source archive includes matching SDL2/zlib sources
+and dependency notices. **SHA256SUMS covers the ten package/source downloads**;
+the gallery PNGs are separate illustrative attachments.
+
+## Validation and remaining checks
+
+All six target builds and the normal CI matrix passed for the tagged 1.35 source,
+including Linux sanitizer checks. Local 1.35 passed **35 Release suites**, seven
+focused Debug/UBSan suites and **17 packaging-tool tests**; 1.34 had also passed
+all 35 Debug/UBSan suites. Uploaded package checksums were verified. Package,
+binary-string, image-metadata and screenshot audits found no personal-data or
+credential leaks; the fresh gallery was checked as well.
+
+This remains a preview: full playthroughs, physical Deck/Quest testing, physical
+Mac fullscreen retesting, console A/V timing comparisons and other Sega CD
+pressings remain outstanding. Macintosh asset compatibility needs real data.
+Mac apps are ad-hoc signed, not notarized. Quest runs as a flat Android panel.

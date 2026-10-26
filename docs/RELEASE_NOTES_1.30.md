@@ -82,9 +82,9 @@ its host controls window size and mode.
 The new Graphics captures use the production overlay with synthetic session
 data: the first at 1280×800, the second at the native 256×224 size.
 
-![Graphics with borderless mode and xBRZ](https://raw.githubusercontent.com/b0realis/REminiscence2/v1.30/docs/screenshots/qol-graphics-1.30.png)
+![Graphics with borderless mode and xBRZ](https://raw.githubusercontent.com/b0realis/REminiscence2/b4ce87d5efc3e9121ff5a312356ffe5dbc5cdfb5/docs/screenshots/qol-graphics-1.30.png)
 
-![Original-resolution Graphics menu](https://raw.githubusercontent.com/b0realis/REminiscence2/v1.30/docs/screenshots/qol-native-graphics-1.30.png)
+![Original-resolution Graphics menu](https://raw.githubusercontent.com/b0realis/REminiscence2/b4ce87d5efc3e9121ff5a312356ffe5dbc5cdfb5/docs/screenshots/qol-native-graphics-1.30.png)
 
 <details>
 <summary>Sega CD gameplay and the keyboard guide retained from 1.25</summary>
@@ -93,8 +93,8 @@ Real Sega CD gameplay enlarged with nearest-neighbour sampling, and the
 production keyboard action guide. These captures retain their original version.
 Original game artwork belongs to its respective rights holders.
 
-![Sega CD gameplay](https://raw.githubusercontent.com/b0realis/REminiscence2/v1.30/docs/screenshots/segacd-gameplay-1.25.png)
+![Sega CD gameplay](https://raw.githubusercontent.com/b0realis/REminiscence2/b4ce87d5efc3e9121ff5a312356ffe5dbc5cdfb5/docs/screenshots/segacd-gameplay-1.25.png)
 
-![Interactive keyboard action guide](https://raw.githubusercontent.com/b0realis/REminiscence2/v1.30/docs/screenshots/qol-keyboard-1.25.png)
+![Interactive keyboard action guide](https://raw.githubusercontent.com/b0realis/REminiscence2/b4ce87d5efc3e9121ff5a312356ffe5dbc5cdfb5/docs/screenshots/qol-keyboard-1.25.png)
 
 </details>
