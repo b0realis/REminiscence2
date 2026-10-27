@@ -13,6 +13,7 @@
 #include "file.h"
 #include "fs.h"
 #include "game.h"
+#include "authoring_hooks.h"
 #include "mcd_player.h"
 #include "save_catalog.h"
 #include "gameplay_identity.h"
@@ -431,9 +432,17 @@ void Game::resetGameState() {
 }
 
 void Game::mainLoop() {
+	if (_authoring)
+		_authoring->boundary(*this);
+	if (_stub->_pi.quit)
+		return;
 	_stub->setGameplayActive(false);
 	playCutscene();
 	if (_cut._id == 0x3D) {
+		if (_authoring && _authoring->levelExit(*this, 7)) {
+			_endLoop = true;
+			return;
+		}
 		showFinalScore();
 		_endLoop = true;
 		return;
@@ -469,20 +478,14 @@ void Game::mainLoop() {
 	_weaponFx.tick();
 	// Preserve the composed frame when a device event opens the pause overlay.
 	memcpy(_vid._frontLayer, _vid._backLayer, _vid._layerSize);
-	pge_prepare();
-	col_prepareRoomState();
-	uint8_t oldLevel = _currentLevel;
-	for (uint16_t i = 0; i < _res._pgeNum; ++i) {
-		LivePGE *pge = _pge_liveTable2[i];
-		if (pge) {
-			_col_currentPiegeGridPosY = (pge->pos_y / 36) & ~1;
-			_col_currentPiegeGridPosX = (pge->pos_x + 8) >> 4;
-			const int previousFrame = pge->anim_number;
-			pge_process(pge);
-			updateConradShot(pge, previousFrame);
-		}
-	}
+	const uint8_t oldLevel = _currentLevel;
+	simulateActors();
 	if (oldLevel != _currentLevel) {
+		if (_authoring && _authoring->levelExit(*this, _currentLevel)) {
+			_currentLevel = oldLevel;
+			_endLoop = true;
+			return;
+		}
 		if (_res._isDemo) {
 			_currentLevel = oldLevel;
 		}
@@ -519,10 +522,16 @@ void Game::mainLoop() {
 	if (_res.isDOS() && (_stub->_pi.dbgMask & PlayerInput::DF_AUTOZOOM) != 0) {
 		pge_updateZoom();
 	}
+	if (_authoring)
+		_authoring->beforeDraw(*this);
 	prepareAnims();
 	drawAnims();
+	if (_authoring)
+		_authoring->afterActors(*this);
 	drawCurrentInventoryItem();
 	drawLevelTexts();
+	if (_authoring)
+		_authoring->afterDraw(*this);
 	if (g_options.enable_password_menu) {
 		printLevelCode();
 	}
@@ -554,6 +563,24 @@ void Game::mainLoop() {
 		}
 	}
 	inp_handleSpecialKeys();
+}
+
+// Shared by normal play and the custom-scene runner; one source of gameplay rules.
+void Game::simulateActors() {
+	if (_authoring && !_authoring->beforeSimulation(*this)) return;
+	pge_prepare();
+	col_prepareRoomState();
+	for (uint16_t i = 0; i < _res._pgeNum; ++i) {
+		LivePGE *pge = _pge_liveTable2[i];
+		if (pge) {
+			_col_currentPiegeGridPosY = (pge->pos_y / 36) & ~1;
+			_col_currentPiegeGridPosX = (pge->pos_x + 8) >> 4;
+			const int previousFrame = pge->anim_number;
+			if (!_authoring || _authoring->beforeActor(*this, *pge)) pge_process(pge);
+			updateConradShot(pge, previousFrame);
+		}
+	}
+	if (_authoring) _authoring->afterSimulation(*this);
 }
 
 void Game::updateTiming() {
@@ -1533,10 +1560,11 @@ void Game::drawCharacter(const uint8_t *dataPtr, int16_t pos_x, int16_t pos_y, u
 int Game::loadMonsterSprites(LivePGE *pge) {
 	debug(DBG_GAME, "Game::loadMonsterSprites()");
 	InitPGE *init_pge = pge->init_PGE;
-	if (init_pge->obj_node_number != 0x49 && init_pge->object_type != 10) {
+	const int behavior = _authoring ? _authoring->behaviorIdentity(init_pge->obj_node_number) : init_pge->obj_node_number;
+	if (behavior != 0x49 && init_pge->object_type != 10) {
 		return 0xFFFF;
 	}
-	if (init_pge->obj_node_number == _curMonsterFrame) {
+	if (behavior == _curMonsterFrame) {
 		return 0xFFFF;
 	}
 	if (pge->room_location != _currentRoom) {
@@ -1544,7 +1572,7 @@ int Game::loadMonsterSprites(LivePGE *pge) {
 	}
 
 	const uint8_t *mList = _monsterListLevels[_currentLevel];
-	while (*mList != init_pge->obj_node_number) {
+	while (*mList != behavior) {
 		if (*mList == 0xFF) { // end of list
 			return 0;
 		}
@@ -1845,6 +1873,8 @@ void Game::loadLevelData() {
 		}
 	}
 
+	if (_authoring)
+		_authoring->loaded(*this);
 	_cut._id = lvl->cutscene_id;
 
 	_curMonsterNum = 0xFFFF;
@@ -2494,7 +2524,8 @@ bool Game::loadStateRewind(unsigned age) {
 
 void AnimBuffers::addState(uint8_t stateNum, int16_t x, int16_t y, const uint8_t *dataPtr, LivePGE *pge, uint8_t w, uint8_t h) {
 	debug(DBG_GAME, "AnimBuffers::addState() stateNum=%d x=%d y=%d dataPtr=%p pge=%p", stateNum, x, y, dataPtr, pge);
-	assert(stateNum < 4);
+	if (stateNum >= 4 || (_curPos[stateNum] != 0xFF && _curPos[stateNum] >= kCapacity - 1))
+		return; // Bound custom scenes and unusual neighbor graphs before writing.
 	AnimBufferState *state = _states[stateNum];
 	state->x = x;
 	state->y = y;

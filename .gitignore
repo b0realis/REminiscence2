@@ -19,6 +19,7 @@ CMakeUserPresets.json
 /docs/reference/technical/*.pdf
 __pycache__/
 .DS_Store
+.editor-settings.json
 DATA/
 SAVE/
 ORIG/
@@ -76,3 +77,16 @@ fb
 
 # Private Sega CD disc image supplied for compatibility testing.
 /Flashback - The Quest for Identity (USA) (Adventure, Platform, Puzzle) (1992) (Sega CD, Mega CD)/
+
+# Campaign runtime progress stays private.
+*.r2save.json
+.campaign-saves/
+
+# Authored story demos remain local; training fixtures are public.
+/examples/editor/alien-starship/
+/examples/editor/relay-station/
+/tools/create_alien_starship.py
+/tools/create_relay_station.py
+/tests/alien_starship_tests.cpp
+/tests/relay_station_tests.cpp
+/docs/screenshots/editor-relay-station-1.46.png

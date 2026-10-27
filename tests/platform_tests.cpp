@@ -49,6 +49,7 @@ static int checkRate(int rate) {
 	event.window.event = SDL_WINDOWEVENT_FOCUS_GAINED;
 	SDL_PushEvent(&event);
 	const auto pauseStart = SDL_GetTicks();
+	const auto pausedBefore = platform->getPausedTime();
 	std::thread foreground([] {
 		SDL_Delay(80);
 		SDL_Event e{};
@@ -59,6 +60,8 @@ static int checkRate(int rate) {
 	foreground.join();
 	if (SDL_GetTicks() - pauseStart < 60)
 		return 38;
+	if (platform->getPausedTime() - pausedBefore < 60)
+		return 39; // Story/media active clocks must exclude the background interval.
 	// Virtual devices exercise hotplug/instance filtering without hardware.
 	const int virtualIndex = SDL_JoystickAttachVirtual(SDL_JOYSTICK_TYPE_UNKNOWN, 2, 10, 1);
 	if (virtualIndex >= 0) {

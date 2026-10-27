@@ -237,7 +237,9 @@ int main(int argc, char **argv) {
 	{
 		struct RatedSystem : HeadlessSystem {
 			unsigned rate = 22050;
+			int oversleep = 0;
 			uint32_t getOutputSampleRate() override { return rate; }
+			void sleep(int duration) override { HeadlessSystem::sleep(duration + oversleep); }
 		} platform;
 		FileSystem files(argv[1]);
 		Mixer mixer(&files, &platform);
@@ -266,6 +268,21 @@ int main(int argc, char **argv) {
 			game->updateTiming();
 		check(platform.clock - start == 20000,
 		      "50 percent assist doubles reaction time without changing simulation steps");
+		game->_preferences.gameSpeed = 100;
+		platform.oversleep = 2;
+		for (uint32_t epoch : {0u, UINT32_MAX - 5000}) {
+			platform.clock = game->_frameTimestamp = epoch;
+			for (int i = 0; i < 300; ++i)
+				game->updateTiming();
+			check(uint32_t(platform.clock - epoch) == 10002,
+			      "Scheduler overshoot or clock wrap caused accumulated movement slowdown");
+			platform.clock += 5000;
+			game->updateTiming();
+			const auto resumed = platform.clock;
+			game->updateTiming();
+			check(uint32_t(platform.clock - resumed) >= 33,
+			      "Long stall caused catch-up frames instead of resetting pacing");
+		}
 	}
 	{
 		std::array<uint8_t, 256 * 224> pixels{};

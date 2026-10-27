@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#include "authoring_hooks.h"
 #include "game.h"
 #include "gameplay_identity.h"
 #include "save_catalog.h"
@@ -173,6 +174,7 @@ progress::Snapshot Game::captureSnapshot() {
 	return snapshot;
 }
 bool Game::saveManualState(int slot, const std::string &label, bool protect, std::string &reason) {
+	if (_authoring && _authoring->ownsSaves()) return _authoring->saveCampaign(*this, reason);
 	if (_demoBin != -1) {
 		reason = "Demo playback cannot be saved.";
 		return false;
@@ -192,6 +194,7 @@ bool Game::saveManualState(int slot, const std::string &label, bool protect, std
 	return result;
 }
 bool Game::loadManualState(int level, int slot, std::string &reason) {
+	if (_authoring && _authoring->ownsSaves()) return _authoring->loadCampaign(*this, reason);
 	if (level < 0 || level > 6 || slot < 0 || slot > 99) {
 		reason = "Invalid level or save slot.";
 		return false;
@@ -346,6 +349,7 @@ void Game::refreshRestoredFrame() {
 	_frameTimestamp = _saveTimestamp = _stub->getTimeStamp();
 }
 void Game::updateProgress() {
+	if (_authoring && _authoring->ownsSaves()) { ++_playTicks; return; }
 	if (_demoBin != -1) {
 		_stub->setContextHint({});
 		return;

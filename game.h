@@ -17,6 +17,7 @@
 #include "settings.h"
 #include "context_hints.h"
 
+struct AuthoringHooks;
 struct File;
 struct FileSystem;
 struct SystemStub;
@@ -69,6 +70,7 @@ struct Game {
 	static const uint8_t _protectionCodeDataAmiga[];
 	static const uint8_t _protectionPal[];
 
+	AuthoringHooks *_authoring = nullptr;
 	Cutscene _cut;
 	Menu _menu;
 	Mixer _mix;
@@ -124,16 +126,16 @@ struct Game {
 	journal::State _journal;
 	unsigned _timingRemainder = 0;
 	uint32_t _timingExpected = UINT32_MAX;
-	uint16_t _currentInventoryIconNum;
+	uint16_t _currentInventoryIconNum = 0;
 	uint16_t _curMonsterFrame;
 	uint16_t _curMonsterNum;
 	uint8_t _blinkingConradCounter;
 	uint16_t _textToDisplay;
 	bool _eraseBackground;
-	AnimBufferState _animBuffer0State[41];
-	AnimBufferState _animBuffer1State[6]; // Conrad
-	AnimBufferState _animBuffer2State[42];
-	AnimBufferState _animBuffer3State[12];
+	AnimBufferState _animBuffer0State[AnimBuffers::kCapacity];
+	AnimBufferState _animBuffer1State[AnimBuffers::kCapacity]; // Conrad
+	AnimBufferState _animBuffer2State[AnimBuffers::kCapacity];
+	AnimBufferState _animBuffer3State[AnimBuffers::kCapacity];
 	AnimBuffers _animBuffers;
 	uint16_t _deathCutsceneCounter;
 	bool _saveStateCompleted;
@@ -160,6 +162,7 @@ struct Game {
 	void displayTitleScreenMac(int num);
 	void resetGameState();
 	void mainLoop();
+	void simulateActors();
 	void updateTiming();
 	void playCutscene(int id = -1);
 	bool playCutsceneSeq(const char *name);

@@ -1,6 +1,262 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 # Changes
 
+Authored story demos mentioned in the local development history below are kept
+private and are not included in this source tree. The editor, engine, training
+fixtures and public regression tests are included.
+
+## 1.51
+
+- Bound hit-response rule scans before reading the next object, including empty
+  tables and exhausted rule indices. Add a synthetic regression alongside all
+  three asset editions' combat/editor tests.
+- Release replaced SPC sprite tables on loose-file, archive and Macintosh paths,
+  retaining DOS global tables across level cleanup. Exercise repeated loose and
+  archived loads under LeakSanitizer.
+- Separate editor level resets from one-time global resource initialization.
+  Repeated native-campaign probes retain fonts, shared sprites, icons and DOS
+  samples instead of leaking buffers or appending duplicate icon banks.
+- Document a matched LLVM 22 sanitizer toolchain for recent macOS and isolate
+  physical-controller discovery in headless leak checks without suppressions.
+
+## 1.50
+
+- Keep disabled doors visible and prevent native animation strides crossing
+  narrow authored gates, preserving native approach/ledge alignment and original
+  campaign physics. Check both directions, room edges, open gates and jumps.
+- Restore standalone checkpoints with their puzzle state and quest inventory;
+  keep fallback anchors valid at room boundaries. Reject contradictory dialogue
+  queues and malformed quest data before changing the running world.
+- Pause custom gameplay and node timers after controller disconnect until a
+  fresh confirm press. Consume that press without activating a nearby puzzle;
+  require a fresh press for death-recovery retries too.
+- Share native frame pacing with custom campaigns to compensate for scheduler
+  overshoot. Exclude background time from timed story scenes and their effects.
+- Expand original-campaign parity checks across all seven chapters with walking,
+  running, jumping and pistol inputs, alongside the authored campaign walkthroughs.
+
+## 1.49
+
+- Study original campaign scenery and simplify the twenty-room starship into
+  broad dark planes, sparse highlights and quieter backgrounds, retaining one
+  continuous atlas with floor-aligned crops.
+- Add six raised machinery platforms with two-sided ledges, elevated pickups and
+  controls, three additional solid bulkheads and a two-input pressure puzzle.
+  Add physical shuttle boarding while retaining the ramp interaction.
+- Use 32-pixel solid doors after detecting native animation strides through
+  one-cell walls. Verify closed doors, platform approaches/descent, the full
+  mission and ending on Amiga, DOS/GOG and Sega CD.
+- Keep previous private demo copies intact and create the new editable layout
+  as `AfterTheDrift-Classic`; document the style study, geometry and walkthrough.
+
+## 1.48
+
+- Redesign After the Drift as twenty connected rooms sliced from one continuous
+  four-deck starship cutaway, with reciprocal lifts and a raised shuttle interior.
+- Add automatic anomaly release, cargo discovery, portable-cell relay, separate
+  couplers, reactor/pressure interlocks, tractor isolation, clamps and keyed ignition.
+- Add an editable animated shuttle launch/tractor recapture and fade-to-black ending;
+  expose story-layer motion and timed whole-screen fade in the campaign editor.
+- Fix smeared authored text by preserving DOS glyph shadows; use compact checkpoint
+  notices with a one-second fade. Keep the former private demo copy intact.
+- Exercise all twenty rooms, puzzle interlocks, return travel, boarding, timer
+  restore and cinematic rendering with Amiga, DOS/GOG and Sega CD assets.
+
+## 1.47
+
+- Add importable Music/Sound nodes with WAV/Ogg previews, looping, volume,
+  start/stop/completion ports and campaign resume seeking. Carry audio through
+  project, campaign, clipboard and portable-module copies; validate bounded audio.
+- Add live sprite-strip previews to node inspectors; hide inactive animation
+  nodes that have no idle sprite. Project/module schemas advance to 9/7.
+- Add After the Drift: four atmospheric alien-starship rooms, original ambient
+  audio, containment/sigil/reactor puzzles, a sentinel, checkpoint and escape ending.
+  Include artwork provenance, generator, walkthrough and `--starship` launchers.
+- Verify full starship traversal on Amiga, DOS/GOG and Sega CD, plus audio decoder,
+  mixer, lifecycle and asset-copy regressions.
+
+## 1.46
+
+- Save and resume campaign progress atomically, including native actors, queued
+  messages, authored puzzles, timers and dialogue. Add Resume/New controls,
+  campaign-aware native save/recovery UI and stateful return visits.
+- Carry keyed items and flags between modules/levels; add Set/Test campaign flag
+  nodes (24 types), conditional routes and health/native-inventory carry options.
+  Native transfers use matching destination templates, preserving local scripts.
+- Fix return-visit player script initialization, restore legacy NPC/computer
+  dialogue notices, apply photo opacity, standalone flag resets and above-cap
+  healing; store campaign checkpoints promptly and clarify the counter inspector.
+- Add Relay Station: seven original rooms, three levels, carried-coil quest,
+  friendly crawler, timed reactor state machine, route unlock and ending.
+  Include a reproducible generator, walkthrough and `--demo` local launchers.
+- Add strict save/corruption regressions and real-input demo playthroughs for
+  Amiga, DOS/GOG and Sega CD. Project/module/campaign schemas are now 8/6/2.
+
+## 1.45
+
+- Expand the authored palette to 22 nodes with health pickups, damage, counters,
+  item tests, custom-scene checkpoints, teleporting, named level exits and startup
+  events. Clarify the existing quest pickup versus its visual effect.
+- Animate signal direction and state changes; add per-node/module help, inputs,
+  outputs and designer comments, direct module management controls and reversible
+  native puzzle deletion with protected shared actors.
+- Add a fourth Campaign workspace with linked/imported levels, forks, catalog
+  movies, endings, and text/photo screens with placement, color, typewriter/fade
+  effects and a draggable layout preview. Add `--campaign`, stage playtesting and
+  an original campaign example. New native imports include a route document.
+- Introduce project schema 7/module schema 5 and campaign schema 1. Campaign
+  visits start fresh; persistent campaign progress and arbitrary MP4 playback
+  remain future work.
+
+## 1.44
+
+- Expose the complete seven-level native campaign as connected module groups,
+  with typed actor/room ports, visible shared dependencies, independent behavior
+  copies, complete-bundle movement/duplication and undo/redo. Include incoming
+  activators, hidden helpers and owned authored extension graphs in relocation.
+- Add native connections graphs, delivered-message traces, live actor state and
+  single-frame stepping. Preserve original sprite/animation identity when private
+  rule tables are installed; reject new incompatible enemy-bank arrangements.
+- Add schema 6 template provenance, guarded native reference/inventory/collision
+  operations, transactional seven-level import and `./edit-local.sh --campaign`.
+  Preserve original actor IDs and report capacity limits, including full level 2.
+- Verify original simulation parity across all seven levels in Amiga, DOS/GOG
+  and Sega CD and audit every copyable bundle's references. Native copies remain
+  local to their source level/edition; dynamic/global campaign links stay shared.
+
+## 1.43
+
+- Add explicit State nodes with initial states, mutually exclusive machine groups,
+  entry/exit signals and active-state progress gates. Add a state-machine airlock
+  recipe and graph-only Start, Play, Pause, Step and Reset controls using the same
+  evaluator as gameplay. Highlight active nodes, delivered wires and bounded
+  signal traces; inspect running custom or native extension graphs.
+- Add actor nodes using native crawler assets in custom levels, with patrol
+  bounds, friendly interaction, wired behavior controls and hurt/death/endpoint
+  events. Native actor bindings retain their original artwork and scripts and
+  connect native rule execution and messages to authored dialogue/state graphs.
+- Expose native state-machine conditions, actions, operands and transitions for
+  all seven levels. Group reviewed actor dependencies into named puzzle modules;
+  support regrouping, disabled rules, appended branches and live execution traces.
+  Preserve stable actor IDs and hidden dependencies; logic edits require restart.
+- Add schema 5 projects / schema 4 prefabs, bounded native table aliases and trace
+  storage, transactional native program compilation, legacy migration and guarded
+  rule iteration. Original assets stay read-only. Native actor cloning and
+  opaque dependency rewriting remain outside this patch.
+
+## 1.42
+
+- Separate the editor into **Level Editing**, **Module Placement**, **Module
+  Editing**, and a top **Help** tab. Geometry tools and module gestures stay in
+  their own workspaces; F1 still opens help while playtesting.
+- Add named module creation, module-owned image libraries, and reusable templates
+  in the project's `modules/` folder. Export/import carries images and internal
+  connections; each placed instance starts with independent state.
+- Add standalone dialogue nodes with speakers, pagination and two optional
+  choice branches. Conversations queue without replacing each other. Completion
+  runs after dismissal; Stop/Disable cancels queued or active conversations.
+- Add triggered animation, pickup-effect animation and timer nodes with Started,
+  Completed and Stopped outputs; Activate, Stop, Reset and one-shot controls.
+  Include branching-dialogue/door and pickup-effect/door palette recipes.
+- Migrate older projects to schema 4 and modules to schema 3. Add regressions for
+  asynchronous actions, cancellation, choice navigation, owned assets, real
+  workspace tabs, module creation and library placement across supported assets.
+
+## 1.41
+
+- Add Editor Settings with direct native campaign project creation, persistent
+  Play/F5 start mode and native actor-marker visibility. Native campaign mode
+  plays from the selected level's authored start; current-room mode uses TEST.
+  Shift+F5 forces authored start and Ctrl/Cmd+F5 forces the current room.
+- Keep settings in a bounded, atomically written folder-local sidecar. Prevent
+  play shortcuts and file drops through its modal; protect hidden/off-room actor
+  records from accidental canvas dragging.
+- Explain native event coverage explicitly in the GUI and documentation. Original
+  actors/helpers are selectable, but their events are not traced or editable as
+  nodes yet. Name the custom palette Puzzle Modules and record the whole-puzzle
+  ownership contract for future native conversion.
+
+## 1.40
+
+- Add PLAY HERE / F5 to test the currently edited room immediately. Graph tests
+  use the selected node's room; a session-only TEST marker chooses the position
+  without moving the authored player start. Shift+F5 tests the authored start.
+- Support direct starts throughout native campaigns with the original actors,
+  hidden helpers and script dependencies intact. Skip the arrival animation and
+  cinematic, equip the original pistol, and reset simulation state consistently.
+  Keep Pause / Apply live / Resume for testing with earned puzzle progress.
+- Validate test positions against collision and closed custom doors; reject
+  native slots without maps and malformed command coordinates before mutation.
+- Cover current-room/graph/marker shortcuts in actual widget tests, direct starts
+  in all seven levels of three editions, repeatability and native launch commands.
+
+## 1.39
+
+- Edit all seven native campaign levels with the complete original actor table,
+  hidden helpers, puzzles, inventory, dialogue and scripts retained. Use a native
+  player window with Pause / Apply live / Resume / Restart / Stop controls.
+- Merge safe art, collision and exit edits between frames; reject script conflicts
+  and new collision over active actors. Require restart for actor setup changes.
+  Protect native IDs and operands; keep preview saves inside the project.
+- Add custom-module multi-selection, box selection, group movement and copy/paste
+  with fresh IDs and remapped internal links. Add independent visual-layer and
+  collision locks, graph pan/zoom/frame-all, and clickable validation locations.
+- Add schema-3 migration, native campaign/command protocol documentation and
+  regressions for all seven levels in Amiga, DOS/GOG and Sega CD, actual editor
+  widgets and the native player process.
+
+## 1.38
+
+- Add built-in Guidelines (F1): native room dimensions, large-image slicing,
+  art layers, collision/ledge coordinates, sprite strips, style advice and
+  editor/playtest controls. Add palette search and Fit / 1x / 2x room zoom.
+- Keep module/node selection and the graph view through undo/redo. Preserve
+  redo on empty ledge-removal clicks and align left-facing ledge hit targets.
+  Open dropped project JSON files correctly; block file drops during play/modal
+  operations and keep play paused while reading guidelines.
+- Open original level one as a read-only reference using Amiga, DOS/GOG or
+  Sega CD assets: native map slots, collision, exits, actor records and initial
+  rendering. Create private, editable scenery-study projects with exact collision
+  and room links, original player start, decoded Back art and a Front priority
+  mask. Native campaign scripts/actors are not converted to modules; live
+  campaign hot reload remains future work.
+- Reuse the native loader for reference and custom playtests, export lossless
+  RGBA PNGs atomically and reject overwriting existing scenery-copy directories.
+  Add real-edition decoding/export/playtest and actual-widget regressions.
+
+## 1.37
+
+- Add a visual interactable module editor: draggable nodes, typed event ports,
+  gold item-requirement links, independent part placement, sprite strips and
+  idle/active animations with looping or hold-last-frame playback.
+- Add reusable button/door, keycard, NPC retrieval, mission computer and area
+  trigger templates; bounded cyclic signal delivery, distinct mission objectives,
+  item consumption, native-resolution paginated dialogue and pickup notices.
+- Preserve old projects with schema-1 migration, convert paired doors into
+  graphs, keep legacy chains working, and copy all node artwork when exporting
+  prefabs or saving a project elsewhere. Include an original-art Module Lab.
+- Fix failed prefab imports advancing project IDs, selection clearing redo,
+  foreground ordering and missing activators in world thumbnails, overlapping
+  world-room placement, and closing doors over live enemies. Document the
+  original campaign palette's actual coverage and remaining gaps.
+
+## 1.36
+
+- Add a native visual level editor with whole-level image slicing, Back /
+  Playfield / Front layers, independent collision and ledges, linked rooms and
+  a world overview. Imported images are stored once with reusable crop references.
+- Add self-contained door/activator pairs, independent duplication, portable
+  module files and chained door outputs; include animated props, health pickups
+  and the original crawler as the first reusable palette entries.
+- Play custom rooms with the original player simulation using Amiga, DOS/GOG
+  or Sega CD assets. Preserve pistol controller dependencies and explicit sprite
+  coverage, bound and expand sprite queues for crowded authored rooms, and stop
+  audio before releasing scene resources.
+- Add atomic project saving, undo/redo, bounded input validation, an original-art
+  Workshop example, `edit-local.sh`, `--project`, an authoring guide and schema
+  documentation. Custom campaign saves and the complete object catalog remain
+  future work. Add original-asset and real-widget editor regressions.
+
 ## 1.35
 
 - Show each new journal entry notification for 3.5 seconds, fading out over the

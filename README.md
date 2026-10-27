@@ -56,6 +56,35 @@ chosen window mode/fixed resolution and use consistent filtering for side scener
 
 See the [0.5.6 integration ledger](docs/UPSTREAM_056.md),
 [validation record](docs/VALIDATION.md), and [roadmap](docs/ROADMAP.md).
+The [visual level editor](docs/LEVEL_EDITOR.md) provides Back, Playfield and Front
+layers, collision/ledge authoring, room links and reusable objects. Version 1.37
+adds a [node-based module editor](docs/EDITOR_MODULES.md) for doors/buttons,
+NPC/item quests and mission/action chains, with separate animation assets per
+node. Run `./edit-local.sh --modules` for the playable Module Lab, or
+`./edit-local.sh` for the room/ledge Workshop. Version 1.39 adds full native
+campaign editing: all seven levels retain their original actors and scripts,
+with controlled live art/geometry updates in a separate game window. Start with
+`./edit-local.sh --original-level`, then **Edit full native campaign...**.
+Custom modules gain multi-select/copy-paste, layer locks, graph pan/zoom and
+clickable validation. Native actor setup changes require a level restart;
+original actor bundles are not automatically converted into reusable modules.
+Version 1.40 adds **PLAY HERE / F5** for the current room or selected graph node,
+with session-only TEST markers and **Shift+F5** for the authored level start.
+Version 1.41 adds **Settings** for native campaign setup and a saved Play/F5
+start preference. Custom puzzles are connected modules.
+Version 1.42 adds distinct **Level Editing / Module Placement / Module Editing**
+tabs and **Help**, with named modules, owned image libraries and reusable local
+templates. Dialogue nodes offer speaker text and branching choices; animation,
+pickup-effect and timer nodes connect through activation, completion and stop
+signals. Version 1.44 adds [complete native campaign modules](docs/NATIVE_CAMPAIGN_MODULES.md):
+typed puzzle connections, safe complete-bundle copies, private rule tables, real
+message tracing and frame stepping. Run `./edit-local.sh --campaign` to prepare
+and open all seven levels. New Washington's original actor table is full, so it
+supports editing/moving existing modules rather than adding copies. Version 1.43 adds State nodes, graph playback with signal stepping,
+actor patrol/friendly controls, full native rule-table editing and live event
+monitoring. Native actor bindings connect original events to authored dialogue
+and state machines. Native IDs stay stable; automatic actor-bundle cloning is
+still unavailable. See the [module workflow guide](docs/EDITOR_MODULES.md).
 Linux, macOS and Windows CI runs native builds and tests. See the
 [release recipes](docs/RELEASES.md) for desktop packages and the Quest flat-panel
 APK. A native SDL3 backend remains future work.
@@ -317,10 +346,43 @@ cmake --build build/debug --parallel
 ctest --test-dir build/debug --output-on-failure
 ```
 
-This requests AddressSanitizer and UndefinedBehaviorSanitizer. If the local
-Apple sanitizer runtime hangs before `main()` on macOS, configure with
-`-DREMINISCENCE2_SANITIZER_SET=undefined` to run UBSan separately; see the
-validation record. Keep ASan checks enabled on a working toolchain.
+This requests AddressSanitizer and UndefinedBehaviorSanitizer. Older Apple Clang
+runtimes can hang before `main()` on recent macOS versions due to an
+[upstream runtime bug](https://github.com/llvm/llvm-project/pull/182943).
+Use a matched LLVM 22.1.8 compiler/runtime pair in a fresh build directory; mixing
+Apple Clang with only the upstream runtime fails the sanitizer version check.
+For an installed Homebrew `llvm@22` toolchain:
+
+```sh
+asan_llvm_dir="$(brew --prefix llvm@22)"
+cmake -S . -B build/asan-llvm22 \
+  -DCMAKE_C_COMPILER="$asan_llvm_dir/bin/clang" \
+  -DCMAKE_CXX_COMPILER="$asan_llvm_dir/bin/clang++" \
+  -DCMAKE_OSX_SYSROOT="$(xcrun --show-sdk-path)" \
+  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+  '-DCMAKE_C_FLAGS_RELWITHDEBINFO=-O1 -g' \
+  '-DCMAKE_CXX_FLAGS_RELWITHDEBINFO=-O1 -g' \
+  '-DCMAKE_C_FLAGS=-fsanitize=address -fno-omit-frame-pointer' \
+  -DREMINISCENCE2_SANITIZERS=ON
+cmake --build build/asan-llvm22 --parallel
+ASAN_OPTIONS=halt_on_error=1:detect_leaks=1:detect_stack_use_after_return=1 \
+ASAN_SYMBOLIZER_PATH="$asan_llvm_dir/bin/llvm-symbolizer" \
+SDL_JOYSTICK_MFI=0 SDL_JOYSTICK_IOKIT=0 SDL_JOYSTICK_HIDAPI=0 \
+ctest --test-dir build/asan-llvm22 --output-on-failure -j3
+```
+
+The `-O1 -g` configuration keeps assertions and debug information while reducing
+sanitizer test time. Add the private asset paths below for the full campaign and
+editor suite. UBSan alone remains available through
+`-DREMINISCENCE2_SANITIZER_SET=undefined`; it does not replace ASan coverage.
+
+The three SDL hints disable physical-controller discovery **only for this
+headless sanitizer run**. On macOS 26.5.2, SDL's hardware discovery leaves Apple
+GameController/Objective-C worker allocations reported by LeakSanitizer, also
+reproduced by a standalone SDL init/quit program. Virtual-controller tests still
+run. Leak detection stays enabled without suppressions; ordinary builds and
+player launches retain hardware controller support. Run physical pad checks
+separately without these hints.
 
 Asset-free tests cover configuration and CLI validation, archive lookup,
 static-table integrity, rewind streams, audio devices, MIDI/PRF timing and
@@ -356,3 +418,13 @@ The inherited [GPLv3 license](LICENSE) and third-party notices are preserved.
 New REminiscence2 contributions are offered under `GPL-3.0-or-later`.
 The later-version permission for the entire inherited tree needs verification;
 see [licensing and provenance](docs/LICENSING.md) before preparing a release.
+
+### Campaign authoring and expanded modules
+
+The editor now has four authoring workspaces and 26 node types, with animated
+signals, help and designer notes. Run `./edit-local.sh --campaign-editor` to try
+the level-route editor, movies and text/photo screens. See the [campaign guide](docs/CAMPAIGN_EDITOR.md).
+Campaign progress now saves actors, puzzles, dialogue and carried items together.
+Returning levels preserve their world. Ctrl+S/Ctrl+L save/load during gameplay;
+the campaign launcher offers Resume/New. The repository includes small training
+fixtures for learning and regression tests. Full authored story demos stay private.

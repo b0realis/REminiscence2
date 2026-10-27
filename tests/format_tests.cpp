@@ -9,6 +9,7 @@
 #include "appearance.h"
 #include "resource_mac.h"
 #include "resource.h"
+#include "resource_aba.h"
 #include "fs.h"
 #include "mixer.h"
 #include "headless_system.h"
@@ -93,6 +94,45 @@ int main(int argc, char **argv) {
 	}
 	const auto root = std::filesystem::path(argv[1]);
 	std::filesystem::create_directories(root);
+	{
+		// SPC is global on DOS but replaced per level on Amiga/Mac. Repeated
+		// loads must replace the owned buffer, not accumulate it; LSan checks
+		// ownership while these assertions check data and global lifetime.
+		const auto sprites = root / "sprite-reloads";
+		std::filesystem::create_directories(sprites);
+		save(sprites / "first.spc", {0, 2, 42});
+		save(sprites / "second.spc", {0, 4, 0, 4, 99});
+		FileSystem files(sprites.string().c_str());
+		Resource resource(&files, kResourceTypeDOS, LANG_EN);
+		for (int i = 0; i < 8; ++i) {
+			resource.load("first", Resource::OT_SPC);
+			check(resource._spcSize == 3 && resource._numSpc == 1 && resource._spc[2] == 42,
+			      "first sprite table loaded");
+			resource.load("second", Resource::OT_SPC);
+			resource.clearLevelRes();
+			check(resource._spcSize == 5 && resource._numSpc == 2 && resource._spc[4] == 99,
+			      "replacement sprite table survives DOS level cleanup");
+		}
+		File packed;
+		packed.open("sprites.aba", "wb", sprites.string().c_str());
+		packed.writeUint16BE(1); packed.writeUint16BE(30);
+		const char name[14] = "ARCHIVED.SPC";
+		packed.write(name, sizeof(name));
+		packed.writeUint32BE(34); packed.writeUint32BE(3); packed.writeUint32BE(3);
+		packed.writeUint32BE(ResourceAba::TAG);
+		const uint8_t data[] = {0, 2, 77};
+		packed.write(data, sizeof(data)); packed.close();
+		FileSystem archives(sprites.string().c_str());
+		ResourceAba archive(&archives);
+		archive.readEntries("sprites.aba");
+		resource._archive = &archive;
+		for (int i = 0; i < 8; ++i) {
+			resource.load("archived", Resource::OT_SPC);
+			check(resource._spcSize == 3 && resource._numSpc == 1 && resource._spc[2] == 77,
+			      "archive replaces the previous sprite table");
+		}
+		resource._archive = nullptr;
+	}
 	{
 		const auto demos = root / "demo-inputs";
 		std::filesystem::create_directories(demos);

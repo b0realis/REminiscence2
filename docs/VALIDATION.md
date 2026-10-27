@@ -1,5 +1,487 @@
 # REminiscence2 validation
 
+Full story demos and their walkthrough sources are private. Historical results
+below include those local checks; a public checkout runs the editor training and
+engine regressions without either authored story campaign.
+
+Before publishing 1.51, a fresh export of the staged public tree built successfully
+and passed **26/26 asset-free CTest checks** in **16.72 seconds**. Packaging-tool
+checks passed **17/17**. Neither story demo, its generator, walkthrough source nor
+its screenshot was present in the exported tree. The public Ogg regression uses
+an independent synthetic tone; optional private walkthroughs remain available
+locally. Documentation boundaries and staged whitespace checks passed.
+
+## Patch 1.51 — working ASan retry and memory fixes
+
+The Apple Clang startup failure recorded below is resolved with a matched
+**LLVM 22.1.8 compiler/runtime**, tested on macOS 26.5.2 arm64. A minimal program
+reaches `main`, and an intentional heap-use-after-free probe correctly fails with
+an ASan report and source location. The engine build uses `-O1 -g` with assertions,
+AddressSanitizer and UndefinedBehaviorSanitizer, plus leak and stack-use-after-return
+detection. See the reproducible command in [Development](../README.md#development).
+
+The first complete ASan run found issues missed by the previous UBSan/release runs:
+
+| Finding | Fix and regression |
+| --- | --- |
+| Hit-response scans read one object past the final native rule. | Check the index before reading the rule type; reject exhausted starting indices. A synthetic exact-size table checks misses, final-rule hits, state boundaries and empty tables. All three asset editions' editor cases exposed the original fault. |
+| Amiga level changes replaced SPC sprite tables without freeing them. | Release on replacement for loose files, archives and Macintosh level resources. Synthetic reloads verify contents, archive replacement and DOS global-table survival; Amiga integration checks exercise saves and level changes. |
+| Native audit probes repeatedly initialized globals on the same Game. | Separate one-time initialization from simulation resets. Retain fonts, shared sprites, icon banks and DOS samples; stop playback before level resources change. Check global ownership during repeated seven-chapter probes. |
+
+The full combined ASan/UBSan suite passed **63/63**, **198.70 seconds**, with leak
+and stack-use-after-return detection enabled and **no sanitizer diagnostics**.
+The six focused ASan/UBSan/LSan regressions also passed in **5.99 seconds**. The
+rebuilt local Apple Silicon Release suite passed **63/63**, **55.66 seconds**, with
+normal controller discovery enabled. Native probes compare **34,127 ticks across
+21 chapter/edition cases**. Both suites include the complete authored starship and
+relay walkthroughs, native campaign/editor workflows, saves, combat, presentation,
+input/audio, decoders and tooling. The local player reports **1.51** via `play-local.sh`.
+
+For the headless sanitizer run only, set `SDL_JOYSTICK_MFI=0`,
+`SDL_JOYSTICK_IOKIT=0` and `SDL_JOYSTICK_HIDAPI=0`. A standalone SDL init/quit probe
+reproduced the Apple GameController/Objective-C worker allocations without any
+engine code; disabling physical-device discovery removed those reports. Virtual
+controller hotplug/input checks still execute. **No leak suppressions or disabled
+leak checks are used.** These environment settings do not change shipped defaults.
+
+Logs and minimal probes: `build/audit-1.50/asan-retry/`; sanitizer build:
+`build/asan-llvm22/`. Automated tests use private Amiga, DOS/GOG and Sega CD assets
+and dummy video/audio. Macintosh assets, physical controllers/speakers and other
+operating systems have not been exercised in this retry. The Macintosh replacement
+path was reviewed; its real asset integration remains untested.
+
+## Patch 1.50 — gameplay bug hunt, recovery and pacing
+
+Local Apple Silicon Release build: **63/63 CTest checks passed**, 117.09 seconds.
+Full Debug UndefinedBehaviorSanitizer build: **63/63 passed**, 977.69 seconds,
+with `halt_on_error=1` and no undefined-behavior diagnostics.
+The engine reports version **1.50** and is available through `play-local.sh`.
+
+Findings and fixes:
+
+| Finding | Correction and regression coverage |
+| --- | --- |
+| Disabling a closed door hid its artwork but retained collision. | Keep the panel visible; compare rendered enabled/disabled closed gates. |
+| Native animation strides could cross a 16-pixel authored door. | Sweep actor cell centers before graph feedback. Check walking/running from both directions, room edges, open gates and clear jumps. |
+| Restarting a standalone checkpoint reset puzzle state and quest items. | Capture the full scene and local quest values; kill/restart downstream of an opened gate and verify recovery. Clamp fallback anchors at room edges. |
+| Contradictory saved dialogue pages/requests could leave an invalid page index. | Validate queue ownership, generation and active state before restoring. Check rejection without changing the world, strict quest types/keys and older snapshot compatibility. |
+| Custom playback resumed almost immediately after controller disconnect. | Freeze actors and node timers until a fresh confirm press; test held input, resume and subsequent switch use. Show the pause prompt even during dialogue. |
+| Custom playback accumulated scheduler overshoot. | Share the native timing accumulator. Verify 300 ticks, 50% speed, deliberate oversleep, clock wrap and long-stall recovery. |
+| Timed story screens could finish while the player was away. | Honor focus pause and subtract paused time from effects/advance timers. Exercise SDL background-time accounting. |
+| Holding confirm could repeatedly retry a failed death recovery. | Require a fresh press for each retry. |
+
+The initial door guard disturbed ledge alignment by snapping native pose coordinates.
+The full starship walkthrough caught this; the final guard retains the preceding
+horizontal pose and lets native scripts handle the approach. All six raised
+platforms remain climbable from both sides, with backtracking and descent checked.
+
+Coverage spans original Amiga, DOS/GOG and Sega CD data, native campaign editing,
+both authored campaign walkthroughs, graph/state-machine execution, media nodes,
+real-process campaign routing, editor GUI workflows, saves, input/audio, scalers,
+combat, startup, decoder/fuzz fixtures and extraction tools. The expanded native
+probes compare complete actor state with and without authoring hooks for **34,127
+ticks across 21 chapter/edition cases**, using walking, running, jumping and pistol
+inputs. These are deterministic probes, not solutions to all original puzzles.
+
+At the time of this pass, AddressSanitizer could not start on this host (resolved
+in the 1.51 retry above): Apple's ASan runtime deadlocked
+during allocator/shadow-memory initialization before `main`. A process sample
+records that failure; it is not an ASan pass. GUI/player automation used SDL dummy
+video/audio and software rendering. Physical controller/speaker testing,
+Macintosh game assets and other operating systems were not exercised here.
+
+Logs: `build/audit-1.50/`; final walkthrough captures:
+`build/package-arm64/starship-{amiga,dos,segacd}/`. Original game data and generated
+captures remain private. Documentation boundaries and whitespace checks pass.
+
+## Patch 1.49 — restrained scenery and physical room variety
+
+- Local Apple Silicon release build: **63/63 CTest checks passed**, 122.42 seconds.
+  After expanding the door checks to walking, running and jump attempts, the
+  final three edition-specific starship walkthroughs passed again (3.60 seconds).
+- Focused UndefinedBehaviorSanitizer content/starship/campaign suites: **7/7
+  passed**, 74.67 seconds. The final expanded starship checks passed **3/3** again,
+  56.92 seconds, with no sanitizer diagnostics.
+- All twenty rooms are traversed with original Amiga, DOS/GOG and Sega CD actor
+  scripts. New checks climb and descend both edges of all six machinery platforms,
+  operate raised pickups/controls, enforce distinct pressure/coupler inputs and
+  verify closed bulkheads from ground and platform approaches.
+- A one-cell shutter initially failed the movement test. The demo now uses
+  matching 32-pixel art/collision bounds, and closed-door movement checks pass.
+  This is an authored geometry correction; native movement rules are unchanged.
+- Visual review covers native gameplay frames, the assembled twenty-room map,
+  source atlas and the actual editor workspace. Floor crops were corrected to
+  the redraw's source edges. The new private project/campaign validates and
+  opens in the editor under SDL dummy video/audio with software rendering.
+- All twenty generated project/art/audio files match between the checked-in
+  example and fresh private copy. Previous private copies remain intact.
+  Launcher syntax, documentation boundaries and whitespace checks pass.
+- This is automated input/rendering validation, not a hands-on controller or
+  speaker session. Screen-link reachability notes remain expected for decks
+  connected through teleport/lift nodes; the full traversal proves those routes.
+
+Logs and original-art study exports: `build/editor-study/style-1.49/`.
+Final gameplay captures: `build/package-arm64/starship-{amiga,dos,segacd}/`.
+The private demo style study records the observations and measurements; its
+private artwork notes contain the built-in imagegen prompts and source hash. Original reference
+images and game-character captures remain private.
+
+## Patch 1.48 — connected twenty-room starship
+
+- Local release build: **63/63 CTest checks passed**, 121.88 seconds.
+- Focused UndefinedBehaviorSanitizer build: **7/7 passed**, 51.24 seconds; no
+  sanitizer diagnostics. Covers content/rendering, all three full starship
+  walkthroughs and real campaign-player routing on Amiga, DOS/GOG and Sega CD.
+- Walkthroughs use original movement/input and visit every room. Check automatic
+  release, reciprocal art/exits, return lifts, distinct two-switch requirement,
+  cell/manifest interlocks, timer save/restore, boarding/disembarking/reboarding,
+  cockpit platform height, flight-key requirement and unread dialogue before launch.
+- Rendering checks preserve DOS glyph shadows, fade notices completely, validate
+  motion/opacity bounds and confirm the exact final cinematic frame is black.
+- The actual SDL player ran the full timed launch → recapture → ending sequence
+  and wrote a finished campaign save. Dummy video/audio and software rendering
+  were used; this is not a hands-on desktop/controller or speaker test.
+- Regeneration reproduces project, campaign, background, effect and audio bytes;
+  existing output folders are refused. Private demo validation, launch-script
+  syntax/version checks and public documentation boundary checks pass.
+- Visual review caught the native 72-pixel standing-platform constraint. The
+  shuttle artwork was edited with imagegen, then cabin collision and anchors
+  aligned to y=144 so Conrad stands inside, rather than below, the shuttle.
+
+Logs: `build/editor-study/release-1.48.log`, `ubsan-1.48.log`, and
+`starship-finale-1.48/player.log`. Actual room captures, their reassembled map,
+checkpoint and ending captures are in `build/package-arm64/starship-{amiga,dos,segacd}`.
+Generated source scenery and the final prompt set are in
+`examples/editor/alien-starship/ARTWORK.md`; game-character captures stay private.
+
+## Patch 1.47 — media nodes and After the Drift
+
+Apple Silicon Release build: **63/63 CTest checks passed**. Editor UBSan suites:
+**28/28 passed**, with **3/3** final media/UI checks after inspector polish,
+and no undefined-behavior diagnostics. Coverage includes:
+
+- Real-input traversal of all four starship rooms with Amiga, DOS/GOG and Sega CD
+  assets: containment counter, sentinel override, living sigil, reactor hand-in,
+  mid-mission save/restore, hangar checkpoint and escape.
+- WAV mono/stereo decoding and Ogg Vorbis decoding; bad/truncated WAV rejection;
+  imported duration checks; audio dependency export/import; loop, completion and
+  stop behavior; independent music/effects/master/mute gains; resume seeking and
+  callback detachment before freeing samples.
+- Real editor widgets: import an audio file through the picker, Listen, Stop
+  listening, save/reload the node, and open an animated sprite-strip preview.
+- Regenerated starship project validation and original campaign/editor regressions.
+
+Logs are under `build/editor-study/`: `release-final-1.47.log`, `ubsan-1.47.log`,
+`media-final-ui-1.47.log` and `ubsan-final-ui-1.47.log`. Gameplay PNGs are under `build/package-arm64/starship-*`;
+UI captures are in `build/editor-study/media-final-ui-1.47/`.
+
+Rendering/input tests used SDL dummy video/audio and software rendering. These
+checks do not substitute for a hands-on speaker/controller session. The generated
+background atlas is retained unmodified with its prompt and provenance in
+`examples/editor/alien-starship/ARTWORK.md`; character assets remain private.
+
+## Patch 1.46 — persistent campaigns and Relay Station
+
+Local Apple Silicon Release build: **59/59 CTest checks passed**. The complete
+editor UBSan run passed **24/24**, followed by **13/13** targeted checks after
+resource-aware save validation was tightened. Final scene/checkpoint regressions
+also passed **7/7** under UBSan. No undefined-behavior diagnostics were reported.
+
+Coverage includes:
+
+- Campaign save/resume and ending resume through the actual SDL player, including
+  original movie/audio playback with Amiga, DOS/GOG and Sega CD assets.
+- Scene snapshots containing timers, multi-page dialogue, NPC/computer notices,
+  door state and queued native messages; resumption after destroying/recreating
+  the scene; all seven native levels and unique-template inventory transfer.
+- Truncated documents, missing fields, wrong asset/content identity, invalid
+  numbers/keys/links, invalid cinematic/text/icon IDs, failed-save preservation
+  and rejection without modifying live state.
+- Return-visit player script initialization, standalone flag reset, health above
+  the normal cap, immediate campaign checkpoint requests and photo opacity.
+- **Relay Station** actual-input walkthroughs on all three editions: movement,
+  two-cycle airlock, carried/consumed coil, friendly crawler, mid-dialogue disk
+  resume, reactor state machine, stateful return visit and final departure.
+- Real editor-widget regression using the new demo; a world-view capture is in
+  `docs/screenshots/editor-relay-station-1.46.png`. The private example
+  contains only original artwork and text. A private editable copy is prepared
+  under `.local/editor-projects/RelayStation`.
+
+Build/test logs: `build/editor-study/final-1.46.log`, `ubsan-1.46.log`,
+`ubsan-final-1.46.log` and `ubsan-scene-final-1.46.log`. Actual gameplay frames
+are generated by the playthrough tests under `build/package-arm64/relay-*`.
+The desktop was locked: tests used SDL dummy video/audio and the software renderer.
+No hands-on controller/GPU session or Macintosh-asset test was performed.
+
+## Patch 1.44 — modular native campaign
+
+Local Release build: **53/53 CTest tests passed**. Debug UBSan editor suites:
+**18/18 passed**, with no `runtime error` or UndefinedBehaviorSanitizer diagnostics.
+The original native-test timeout was extended for the exhaustive bundle audit;
+unchanged source-table validation now avoids rebuilding identical operand sets.
+
+Coverage includes:
+
+- All seven levels in each installed Amiga, DOS/GOG and Sega CD edition: 1,097
+  original actors per edition, complete ownership coverage, source-template and
+  alias serialization, initial-state equality and 45 simulated frames compared
+  against an unmodified native game.
+- Every copyable fixed-dependency bundle: internal/literal reference relocation,
+  source provenance, unchanged original instances, private rule ownership and
+  rejected actor-capacity overflow without partial edits. New Washington's
+  256-actor table is retained and rejects added copies.
+- Representative copied bundles in the actual native runtime, 60 simulated
+  frames, full InitPGE template preservation, original-versus-private enemy
+  sprite-bank selection, actor preview restoration, legacy project previews,
+  live monitor revision matching and delivered native messages.
+- Public, newly authored synthetic scripts test actor versus scalar operands,
+  literal actor ports, room remapping, offsets, mixed-use rejection, provenance,
+  inventory self-reference rejection and copied authored Actor bindings. These
+  regressions need no original game data in public CI.
+- Actual ImGui widgets open native connections and the placement dialog, copy a
+  complete puzzle, and undo/redo it. Actual standalone player processes exercise
+  pause, one-frame step, stable paused state, apply/reject/restart/resume/stop.
+- Seven-level CLI import produces a complete private campaign; a second import
+  into the same destination is rejected and all file hashes remain unchanged.
+  `./edit-local.sh --campaign --validate` reopens the prepared project.
+
+Evidence is local under `build/editor-study/`: `final-1.44.log`,
+`ubsan-final-1.44.log`, and `ui-1.44-final/` actual-widget captures. Native captures
+and generated campaign JSON remain private. Original assets were not modified.
+The desktop was locked: UI verification used SDL software/dummy rendering, not a
+physical GPU/controller playthrough. The short deterministic simulations do not
+claim completion of every story branch. Macintosh remains untested without assets.
+
+## Patch 1.43 — state machines, actors and native event editing
+
+Built the local Apple Silicon game and editor. Release checks passed 53/53;
+editor regressions passed 18/18 under UndefinedBehaviorSanitizer. Actual SDL
+widget tests exercise Start, single-wire Step, state exclusivity, dialogue
+activation and the native rule Enabled control. Captures use SDL dummy/software
+rendering; this is not a physical mouse/GPU play session.
+
+New model/scene tests cover exclusive state entry/exit, active-state progress,
+matching stepped and automatic evaluation, bounded feedback loops and trace
+storage, actor control inputs, patrol bounds, friendly conversation and single
+positive-to-dead event emission. They run with Amiga, DOS/GOG and Sega CD assets.
+Native tests retain initialization and 45-tick simulation parity with unmodified
+campaigns for all seven levels in each edition, then check edited/disabled native
+rules, unsafe transitions, legacy state validation, authored dialogue pausing,
+native message delivery, overlay composition and live graph revision/state data.
+This is a regression set, not a complete campaign playthrough.
+
+The review also fixed repeated native-table export growth using bounded aliases,
+end-of-table rule iteration, mixed legacy/node actor pool overflow protection,
+file-size checks before atomic saves and stale live graph snapshots after edits.
+Native bindings preserve stable actor IDs and opaque dependencies. Automatic
+native puzzle cloning, extension-state savegames and Macintosh validation remain
+outside this patch. Source assets and native captures stay under ignored paths.
+
+## Patch 1.42 — separate workflows and dialogue/action modules
+
+Built the local game and editor on Apple Silicon. The final Release suite passed
+53/53; all 18 editor suites passed under UndefinedBehaviorSanitizer. Actual-widget
+regressions run through SDL's dummy/software renderer, with inspected captures.
+The locked desktop prevented a physical mouse/keyboard/GPU session.
+
+New model checks cover deferred dialogue completion, choice branches, held-input
+edges, ordered conversations, Stop/Disable cancellation, stale activation
+callbacks, one-shot Reset, finite Started/Stopped cycles, animation duration and
+looping, timer restart deadlines, whitespace-only dialogue, portable owned images,
+invalid dialogue/timer fields and path traversal. Scene regressions repeat with
+Amiga, DOS/GOG and Sega CD resources, including asynchronous door collision and
+legacy module chains. Native campaign tests still exercise all seven levels.
+
+Actual UI checks click each workflow, create a named module, add a Dialogue node,
+save it to the local library and place a second independent instance. They verify
+that Level Editing cannot delete or drag the placement selection. Existing graph,
+clipboard, validation, live-session and start-preference tests remain enabled.
+
+The public screenshot contains only custom node/UI content and newly written
+sample dialogue. The updated guide covers schema-4 projects, schema-3 templates,
+node ports, animation timing, cancellation, library ownership and limits. Native
+campaign event graph conversion remains unfinished. Documentation boundary and
+Git whitespace checks passed. No release published by this patch.
+
+## Patch 1.41 — GUI campaign settings and puzzle ownership
+
+Built the game/editor on Apple Silicon. The full Release suite passed 53/53 and
+all 18 editor suites passed under UndefinedBehaviorSanitizer. After the final
+settings-modal opacity/close-priority adjustment, the actual-widget smoke run
+was repeated and its SDL software capture inspected. This does not claim a
+physical mouse/keyboard/GPU session on the locked desktop.
+
+Actual ImGui input checks the Settings button, both preference controls, atomic
+sidecar persistence/reopening, F5 obeying authored-start mode, Ctrl+F5 forcing
+current-room mode, blocked F5/file drops behind the modal, native campaign
+creation through Settings and its folder picker, all seven sibling files, and
+preventing hidden actor-marker dragging. Model checks reject oversized/deep,
+wrong-schema and non-boolean preferences and verify recovery by a valid write.
+Existing native script/state and process regressions still pass for all three
+available editions. Source assets remain read only.
+
+Reviewed `InitPGE`/`Object`, `Game::pge_execute`, native palette/inspector and
+session status. Original actor records and scripts are retained, but there is no
+native per-event overlay, event trace or editable native graph bridge. The UI
+and coverage audit state those limits. The whole-puzzle module ownership rule
+is documented for native conversion; custom connected graph modules already
+exist. Native puzzle conversion was not implemented by this settings patch.
+
+The public Settings capture contains only authored Workshop graph/UI content.
+Native Settings captures remain in ignored build folders. Preferences are in an
+ignored project-folder sidecar, with no machine asset paths. No release published.
+
+## Patch 1.40 — playtest the current room
+
+Built the game and editor locally on Apple Silicon. The full Release suite passed
+53/53; all 18 editor suites passed under UndefinedBehaviorSanitizer. After the
+final TEST-label placement adjustment, the actual-widget smoke run was repeated
+and its SDL capture inspected. These are software/dummy renderer and simulation
+checks, not a complete human campaign playthrough or a physical-input/GPU test.
+
+For each of all seven levels in Amiga, DOS/GOG and Sega CD, started directly in a
+mapped room other than the authored start. Checked exact initial position, native
+standing state, skipped arrival cinematic, preserved actor counts/behavior IDs,
+pistol inventory dependency, unchanged project JSON and repeatable fresh state
+after ticking and restarting. Invalid positions reject without changing state.
+The pass found and fixed random-seed carryover between repeated tests.
+
+Actual editor input covers Place TEST marker, its snapped position, F5, graph
+PLAY HERE in a node's different room, Shift+F5, and returning to unchanged room
+selection/document state. Model checks cover supported automatic placement and
+closed-door obstruction. Separate native processes test initial play-here launch,
+later room/level changes, authored-start playback, pause/apply/resume/stop and
+oversized, fractional and negative command coordinates. Oversized JSON integers
+are rejected before conversion, avoiding truncation into valid coordinates.
+
+The new editor screenshot contains only authored Workshop artwork and UI. Source
+assets are read only. Native tests preserve original script dependencies but do
+not synthesize earlier quest progress; testing that state uses controlled live
+apply. Macintosh editor assets and full manual campaign validation remain outside
+this check. No release was published.
+
+## Patch 1.39 — native campaign live editing and editor QoL
+
+Built the editor and game locally on Apple Silicon. The full Release suite passed
+53/53. The 18 editor suites passed under UndefinedBehaviorSanitizer; after the
+final paused-render/cinematic fix, the six native model/process suites were run
+again under UBSan. Editor and CLI checks were also rerun on the final Release
+build. These are automated SDL software/dummy and resource/simulation tests,
+not a complete human campaign playthrough or physical GPU/controller test.
+
+For Amiga, DOS/GOG and Sega CD, exported/reloaded all seven native levels and
+retained actor counts 107, 256, 176, 190, 90, 109 and 169. Compared initial saved
+state and 45 simulation frames per level against the normal loader. Verified
+unchanged script execution, rejection of dependency mutations and live actor
+relocation, preservation of unrelated runtime puzzle collision and actor/link
+state, rejection of conflicting CT edits, and explicit edited-level restart.
+Authored art retains native HUD pixels; pausing/resuming clears the compositor
+before a possible cinematic. Full normal campaign playthrough remains a manual
+validation task, and Macintosh editor assets remain unsupported.
+
+Actual ImGui input tests cover multi-selection, keyboard copy/paste, locked
+layer deletion/dragging, transformed graph dragging, pan/zoom/frame-all,
+clickable node validation and the full-campaign import folder picker. Model
+tests cover clipboard ID/link remapping, relative group offsets, cross-project
+art relocation, atomic failed paste and image diagnostic locations. Separate
+native player processes exercise pause, apply, rejection, level restart, resume
+and stop with paths containing spaces. Original files remain read only; process
+fixtures and saves live in temporary/private folders.
+
+Inspected actual SDL captures of graph navigation and the native editor. Public
+editor screenshots contain only project-authored UI/example material. Native
+campaign captures stay in ignored build folders. No GitHub release or target
+publication is part of this patch.
+
+## Patch 1.38 — editor guidelines, QoL and original-level study
+
+Built the native editor and game on Apple Silicon. The full configured Release
+suite passed 47/47; all 12 editor suites passed under UndefinedBehaviorSanitizer.
+The native fixture tests also decode rooms in reverse browsing order and compare
+both scenery and actor pixels, to check palette/cache independence.
+
+For the supplied Amiga, DOS/GOG and Sega CD files, decoded every available
+level-one map (38 / 26 / 38) and all 107 initial actor records per edition.
+Exported private scenery studies, compared all raw collision cells and valid
+room links, verified lossless exported pixels and PNG alpha, rejected attempts
+to overwrite an existing output directory, then edited/reloaded collision and
+ran a native-player playtest in the starting room. Source assets are read only.
+No Macintosh reference import or full native-script conversion is claimed.
+
+Actual ImGui input regressions exercise palette search, Fit / 1x zoom, the
+Guidelines button and F1/Escape, graph-selection preservation through undo/redo,
+project-drop dispatch and modal drop rejection, Original L1 and the scenery-copy
+folder picker. They also verify F1 pauses a playtest and Escape closes only the
+guidelines. SDL software/dummy captures were inspected; this is not a physical
+mouse or GPU test of the locked desktop.
+
+The guide screenshot contains newly authored Module Lab artwork only. Original
+reference screenshots and decoded studies stay in ignored build/private folders.
+No release publication or packaging changes are part of this patch.
+
+## Patch 1.37 — editor audit and visual module graphs
+
+Built both local Apple Silicon binaries. The configured full CTest suite passes
+47/47, including 12 editor/model/widget/example cases. The 12 editor cases also
+pass under UndefinedBehaviorSanitizer. Tests use the prepared private Amiga,
+DOS/GOG and Sega CD editions; no Macintosh data or other OS editor build was
+validated in this patch.
+
+The audit fixes failed prefab imports consuming project IDs, selection clearing
+redo history, thumbnail foreground ordering and missing activators, ambiguous
+room widget IDs for duplicate names, overlapping world positions, and unsafe
+closing over native actors. Graph regressions cover independent instances,
+scoped IDs, missing item requirements, invalid ports/paths, bounded cycles,
+distinct mission objectives, item consumption, animation bounds/hold-last-frame,
+prefab artwork copying, legacy-chain compatibility and cross-room doors. A new
+item cannot reuse the ID of a deleted but still-required item. Mission completion
+text is kept separate from a pickup notice when collection triggers completion.
+
+Native playtests exercise real Enter edges, held-key suppression, item pickup,
+NPC hand-in, paginated dialogue pausing, terminal acceptance/completion and door
+collision updates. Actual ImGui widgets connect event ports, drag graph headers,
+save/reopen connections and layout, and preserve redo when selecting. Module Lab
+runs the same UI/play lifecycle with all three editions and its own sprite sheets.
+The graph workspace was rendered and visually checked using SDL's dummy driver;
+this does not claim physical mouse/gamepad testing on the locked desktop.
+
+The palette audit and current limitations are in [EDITOR_MODULES.md](EDITOR_MODULES.md).
+The full original campaign catalog is not imported. Public examples and the new
+graph screenshot contain newly authored artwork only. No game assets are added.
+
+## Patch 1.36 — visual custom-level editor
+
+Built the native editor and game locally on Apple Silicon. The configured
+43-test CTest suite passes, including original campaign regressions and eight
+new editor tests. Those eight also pass in a Debug UndefinedBehaviorSanitizer
+build. The editor's source-image slicing, independent collision/ledge overlays,
+project/prefab round trips, malformed numeric bounds, horizontal and vertical
+room transitions, original crouched gun hits, door activation/dependency
+isolation, cyclic links and foreground occlusion were exercised with private
+Amiga, DOS/GOG and Sega CD files. Dense 64-crawler scenes and an over-capacity
+sprite-queue regression check the expanded, bounded drawing buffers.
+
+Real-widget tests use the native editor with SDL dummy video/audio: switch
+room/world views, place a paired module at the clicked floor, undo/redo, select
+a tall panel, save, start play, move Conrad and stop without changing the edited
+document. Ten additional Amiga UI/audio lifecycle runs passed after correcting
+the new audio adapter's byte-to-stereo-frame conversion. A guarded audio buffer
+regression checks the boundary deterministically. Resource teardown stops audio
+before freeing the scene's samples.
+
+The native workspace, world overview and embedded playtest were rendered and
+visually inspected. The development Mac's desktop was locked; this validates
+the actual SDL renderer and injected widget input, not physical mouse/gamepad
+use on an unlocked desktop. ASan could not run: the installed Apple runtime
+deadlocked in its own allocator initialization before `main`. That attempt was
+stopped; it is not counted as an ASan pass. No Macintosh game data or other OS
+editor binaries were tested in this patch.
+
+The public Workshop has newly authored art. No original assets were added.
+Vendored JSON/stb headers and licenses match their recorded SHA-256 hashes.
+Full original campaign import, every legacy object prefab, custom saves and
+normal QoL/inventory integration remain outside this initial editor profile.
+
 ## Patch 1.33 — supplied Mac app icon
 
 The repository JPEG matches the supplied attachment's SHA-256. The private Mac
@@ -882,3 +1364,35 @@ simulation and the existing T-shirt/jacket regression remain unchanged.
   DOS/GOG and Sega CD assets, Ogg music and transparent icon. Verified all 551
   bundled asset hashes, app signature, disk image and launcher edition discovery.
   The local play script launches 1.35. No GitHub release was published.
+
+## 1.45 — module mechanics and campaign authoring (2026-10-26)
+
+- Local macOS arm64 player/editor build: **56/56 CTest checks passed**.
+  All 21 editor checks also passed with UBSan and `halt_on_error=1`. Six full-native
+  UI cases exceeded the previous 60-second harness limit under instrumentation;
+  they passed when rerun with 120 seconds (observed 67–72 seconds). The regular
+  native UI cases take approximately 6–10 seconds. CTest allows 140 seconds for
+  this instrumented UI work; native dependency audits retain 300 seconds.
+- Regression coverage: all 22 node help entries; real pickups versus visual
+  effects; health/damage, counters, consumed-item branches, teleport/checkpoint
+  behavior, a delayed checkpoint after leaving valid rooms, named exits, and
+  comment round trips/runtime identity. Native checks cover reversible actor
+  deletion, shared-service protection, restart requirements, transition routing
+  and original seven-level parity for Amiga, DOS/GOG and Sega CD.
+- Campaign tests cover draft serialization, integer/path/rectangle bounds,
+  missing/dangling routes, actual level exits, nonlinear forks and loops,
+  multipart movie names, the asset movie catalog, photo/text compositing,
+  stable typewriter layout and fade timing. Real SDL player runs exercise
+  story -> named custom-level exit -> original movie/audio -> ending on all
+  three asset editions, including repeated window/audio teardown.
+- Actual ImGui widget tests exercise campaign stage creation, port connections,
+  save/reload, node help, the larger story layout window, dragging text and undo.
+  Captures are in `docs/screenshots/editor-*-1.45.png`; all show authored content.
+  Fresh seven-level native campaign export and its route document validate.
+- Full playthroughs of every possible authored campaign, physical GPU/controller
+  testing and Macintosh assets were not tested. The desktop was locked; UI
+  validation used SDL dummy video/audio and the software renderer.
+- Logs: `build/editor-study/final-1.45.log`, `ui-final-1.45.log`,
+  `ubsan-final-1.45.log`, `ubsan-retry-1.45.log`. Known remaining boundaries:
+  campaign visits initialize fresh state; no campaign progress persistence;
+  movie stages use the existing catalog rather than arbitrary MP4 files.

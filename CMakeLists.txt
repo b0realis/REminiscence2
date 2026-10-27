@@ -124,6 +124,22 @@ if(WIN32 OR (UNIX AND NOT APPLE AND NOT ANDROID))
 endif()
 set_target_properties(${engine_target} PROPERTIES CXX_EXTENSIONS OFF)
 
+# Custom content is shared by the desktop editor and the game's --project path.
+# It has no dependency on editor UI, and is also available to the Android player.
+add_library(reminiscence2_content STATIC editor/audio.cpp editor/content.cpp editor/image.cpp editor/runtime.cpp editor/graph.cpp editor/graph_runtime.cpp editor/original.cpp editor/editing.cpp editor/native.cpp editor/native_logic.cpp editor/native_modules.cpp editor/playtest.cpp editor/settings.cpp editor/campaign.cpp editor/campaign_player.cpp editor/campaign_progress.cpp editor/scene_progress.cpp)
+target_link_libraries(reminiscence2_content PUBLIC reminiscence2_engine PRIVATE dear_imgui)
+target_link_libraries(${engine_target} PRIVATE reminiscence2_content)
+if(NOT ANDROID)
+    add_executable(reminiscence2-editor editor/main.cpp)
+    if(TARGET SDL2::SDL2main)
+        target_link_libraries(reminiscence2-editor PRIVATE SDL2::SDL2main)
+    endif()
+    target_link_libraries(reminiscence2-editor PRIVATE reminiscence2_content dear_imgui)
+    if(WIN32 OR (UNIX AND NOT APPLE))
+        target_link_options(reminiscence2-editor PRIVATE -static-libgcc -static-libstdc++)
+    endif()
+endif()
+
 # Offline movie tools reuse the verified decoder; no SDL window is opened.
 # Opt-in target so ordinary game/Android packages do not gain another binary.
 if(NOT ANDROID)
@@ -136,6 +152,54 @@ configure_file(fb.cfg fb.cfg COPYONLY)
 
 include(CTest)
 if(BUILD_TESTING)
+    if(TARGET reminiscence2-editor)
+        target_compile_definitions(reminiscence2-editor PRIVATE REMINISCENCE2_EDITOR_TESTING)
+        add_test(NAME editor_module_example COMMAND reminiscence2-editor
+            "${CMAKE_CURRENT_SOURCE_DIR}/examples/editor/module-lab/project.r2project.json" --validate)
+    endif()
+    add_executable(editor_tests tests/editor_tests.cpp)
+    target_link_libraries(editor_tests PRIVATE reminiscence2_content)
+    add_test(NAME editor_content COMMAND editor_tests "${CMAKE_CURRENT_BINARY_DIR}/editor-fixtures")
+    set_tests_properties(editor_content PROPERTIES TIMEOUT 30)
+    add_test(NAME editor_audio_ogg COMMAND editor_tests --audio-file
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/audio/tone.ogg")
+    # Full authored demos and their walkthroughs stay private. Their absence
+    # must not break source builds or remove the public editor regressions.
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/alien_starship_tests.cpp" AND
+       EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/examples/editor/alien-starship/project.r2project.json")
+        add_executable(alien_starship_tests tests/alien_starship_tests.cpp)
+        target_link_libraries(alien_starship_tests PRIVATE reminiscence2_content)
+    endif()
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/relay_station_tests.cpp" AND
+       EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/examples/editor/relay-station/campaign.r2campaign.json")
+        add_executable(relay_station_tests tests/relay_station_tests.cpp)
+        target_link_libraries(relay_station_tests PRIVATE reminiscence2_content)
+    endif()
+    add_executable(editor_native_tests tests/editor_native_tests.cpp)
+    target_link_libraries(editor_native_tests PRIVATE reminiscence2_content)
+    foreach(edition AMIGA DOS SEGACD)
+        if(REMINISCENCE2_${edition}_DATA)
+            string(TOLOWER "${edition}" editor_edition)
+            if(TARGET alien_starship_tests)
+                add_test(NAME editor_starship_${editor_edition} COMMAND alien_starship_tests
+                    "${CMAKE_CURRENT_SOURCE_DIR}/examples/editor/alien-starship" "${REMINISCENCE2_${edition}_DATA}"
+                    "${CMAKE_CURRENT_BINARY_DIR}/starship-${editor_edition}")
+                set_tests_properties(editor_starship_${editor_edition} PROPERTIES TIMEOUT 90)
+            endif()
+            if(TARGET relay_station_tests)
+                add_test(NAME editor_relay_${editor_edition} COMMAND relay_station_tests
+                    "${CMAKE_CURRENT_SOURCE_DIR}/examples/editor/relay-station" "${REMINISCENCE2_${edition}_DATA}"
+                    "${CMAKE_CURRENT_BINARY_DIR}/relay-${editor_edition}")
+                set_tests_properties(editor_relay_${editor_edition} PROPERTIES TIMEOUT 90)
+            endif()
+            add_test(NAME editor_${editor_edition} COMMAND editor_tests
+                "${CMAKE_CURRENT_BINARY_DIR}/editor-${editor_edition}" "${REMINISCENCE2_${edition}_DATA}")
+            set_tests_properties(editor_${editor_edition} PROPERTIES TIMEOUT 30)
+            add_test(NAME editor_native_${editor_edition} COMMAND editor_native_tests
+                "${CMAKE_CURRENT_BINARY_DIR}/native-${editor_edition}" "${REMINISCENCE2_${edition}_DATA}")
+            set_tests_properties(editor_native_${editor_edition} PROPERTIES TIMEOUT 300 FIXTURES_SETUP native_${editor_edition})
+        endif()
+    endforeach()
     add_executable(presentation_tests tests/presentation_tests.cpp)
     target_link_libraries(presentation_tests PRIVATE reminiscence2_engine)
     add_test(NAME presentation COMMAND presentation_tests)
@@ -255,6 +319,36 @@ if(BUILD_TESTING)
     set_tests_properties(cutscenes PROPERTIES TIMEOUT 20)
     find_package(Python3 3.9 COMPONENTS Interpreter QUIET)
     if(Python3_Interpreter_FOUND)
+        if(TARGET reminiscence2-editor)
+            add_test(NAME editor_ui COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/tools/check_editor_ui.py" "$<TARGET_FILE:reminiscence2-editor>"
+                "${CMAKE_CURRENT_SOURCE_DIR}/examples/editor/workshop/project.r2project.json")
+            set_tests_properties(editor_ui PROPERTIES TIMEOUT 140)
+            foreach(edition AMIGA DOS SEGACD)
+                if(REMINISCENCE2_${edition}_DATA)
+                    string(TOLOWER "${edition}" editor_edition)
+                    add_test(NAME editor_campaign_${editor_edition} COMMAND "${Python3_EXECUTABLE}"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/tools/check_campaign_player.py"
+                        "$<TARGET_FILE:reminiscence2>" "${REMINISCENCE2_${edition}_DATA}")
+                    set_tests_properties(editor_campaign_${editor_edition} PROPERTIES TIMEOUT 50)
+                    add_test(NAME editor_ui_${editor_edition} COMMAND "${Python3_EXECUTABLE}"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/tools/check_editor_ui.py" "$<TARGET_FILE:reminiscence2-editor>"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/examples/editor/workshop/project.r2project.json"
+                        "--assets=${REMINISCENCE2_${edition}_DATA}")
+                    set_tests_properties(editor_ui_${editor_edition} PROPERTIES TIMEOUT 140)
+                    add_test(NAME editor_session_${editor_edition} COMMAND "${Python3_EXECUTABLE}"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/tools/check_editor_session.py" "$<TARGET_FILE:reminiscence2>"
+                        "${CMAKE_CURRENT_BINARY_DIR}/native-${editor_edition}" "${REMINISCENCE2_${edition}_DATA}")
+                    set_tests_properties(editor_session_${editor_edition} PROPERTIES TIMEOUT 60
+                        FIXTURES_REQUIRED native_${editor_edition})
+                    add_test(NAME editor_lab_${editor_edition} COMMAND "${Python3_EXECUTABLE}"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/tools/check_editor_ui.py" "$<TARGET_FILE:reminiscence2-editor>"
+                        "${CMAKE_CURRENT_SOURCE_DIR}/examples/editor/module-lab/project.r2project.json"
+                        "--assets=${REMINISCENCE2_${edition}_DATA}")
+                    set_tests_properties(editor_lab_${editor_edition} PROPERTIES TIMEOUT 140)
+                endif()
+            endforeach()
+        endif()
         if(TARGET reminiscence2-export-mcd)
             add_dependencies(segacd_media_tests reminiscence2-export-mcd)
             add_test(NAME movie_upscaling COMMAND "${Python3_EXECUTABLE}" -m unittest

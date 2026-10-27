@@ -237,7 +237,52 @@ static bool nativeWallTrace() {
 	return true;
 }
 
+static bool hitRuleBoundary() {
+	FileSystem files(".");
+	HeadlessSystem platform;
+	auto game = std::make_unique<Game>(&platform, &files, &files, ".", 0,
+	                                   kResourceTypeDOS, LANG_EN, kWidescreenNone, false, 0);
+	auto *node = static_cast<ObjectNode *>(calloc(1, sizeof(ObjectNode)));
+	node->objects = static_cast<Object *>(calloc(2, sizeof(Object)));
+	node->num_objects = 2;
+	game->_res._numObjectNodes = 1;
+	game->_res._objectNodesMap[0] = node; // Resource owns both allocations.
+	InitPGE initial{};
+	LivePGE actor{};
+	actor.init_PGE = &initial;
+	actor.obj_type = 7;
+	node->objects[0].type = node->objects[1].type = actor.obj_type;
+	auto hit = [&](int message) { return game->col_detectHitCallbackHelper(&actor, message); };
+	// Exhausting an exact-size rule table must not read the following object.
+	if (hit(3) != 0)
+		return false;
+	node->objects[1].opcode1 = 0x22;
+	node->objects[1].opcode_arg1 = 3;
+	if (hit(3) != 0xFFFF || hit(4) != 0)
+		return false;
+	node->objects[1].opcode1 = 0;
+	node->objects[1].opcode2 = 0x6B;
+	node->objects[1].opcode_arg2 = 1;
+	if (hit(3) != 0xFFFF || hit(4) != 0xFFFF || hit(1) != 0)
+		return false;
+	node->objects[1].type = 8; // Do not enter the next state's rules.
+	if (hit(3) != 0)
+		return false;
+	actor.first_obj_number = 2;
+	if (hit(3) != 0)
+		return false;
+	actor.first_obj_number = 65535;
+	if (hit(3) != 0)
+		return false;
+	actor.first_obj_number = 0;
+	node->num_objects = 0;
+	return hit(3) == 0;
+}
+
 int main() {
+	if (!hitRuleBoundary()) {
+		std::cerr << "Hit rule table boundary or message matching failed\n"; return 19;
+	}
 	if (!nativeWallTrace()) {
 		std::cerr << "Native wall/room-boundary laser trace failed\n"; return 18;
 	}

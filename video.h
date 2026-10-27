@@ -9,6 +9,7 @@
 
 #include "intern.h"
 #include "appearance.h"
+#include <functional>
 
 struct Resource;
 struct SystemStub;
@@ -31,6 +32,7 @@ struct Video {
 	static const uint8_t _palSlot0xF[];
 	static const uint8_t _font8Jp[];
 
+	std::function<bool()> _presentOverride; // Editor true-colour art; false keeps native rendering.
 	Resource *_res;
 	SystemStub *_stub;
 	WidescreenMode _widescreenMode;
@@ -40,6 +42,13 @@ struct Video {
 	int _layerSize;
 	int _layerScale; // 2 for Macintosh (512x448), 1 for other versions (256x224)
 	uint8_t *_frontLayer;
+	// Optional explicit sprite coverage for true-color custom-room composition.
+	// The caller supplies _layerSize bytes and clears them before drawing.
+	uint8_t *_spriteCoverage = nullptr;
+	void markSpritePixel(const uint8_t *pixel) {
+		if (_spriteCoverage && pixel >= _frontLayer && pixel < _frontLayer + _layerSize)
+			_spriteCoverage[pixel - _frontLayer] = 255;
+	}
 	uint8_t *_backLayer;
 	uint8_t *_tempLayer;
 	uint8_t *_tempLayer2;

@@ -80,6 +80,8 @@ void Video::markBlockAsDirty(int16_t x, int16_t y, uint16_t w, uint16_t h, int s
 }
 
 void Video::updateScreen() {
+	if (_presentOverride && _presentOverride())
+		return;
 	debug(DBG_VIDEO, "Video::updateScreen()");
 //	_fullRefresh = true;
 	if (_fullRefresh) {
@@ -777,6 +779,7 @@ void Video::drawSpriteSub1(const uint8_t *src, uint8_t *dst, int pitch, int h, i
 		for (int i = 0; i < w; ++i) {
 			if (src[i] != 0) {
 				dst[i] = src[i] | colMask;
+				markSpritePixel(dst + i);
 			}
 		}
 		src += pitch;
@@ -790,6 +793,7 @@ void Video::drawSpriteSub2(const uint8_t *src, uint8_t *dst, int pitch, int h, i
 		for (int i = 0; i < w; ++i) {
 			if (src[-i] != 0) {
 				dst[i] = src[-i] | colMask;
+				markSpritePixel(dst + i);
 			}
 		}
 		src += pitch;
@@ -803,6 +807,7 @@ void Video::drawSpriteSub3(const uint8_t *src, uint8_t *dst, int pitch, int h, i
 		for (int i = 0; i < w; ++i) {
 			if (src[i] != 0 && !(dst[i] & 0x80)) {
 				dst[i] = appearance::shirtPixel(_res->isAmiga() || _res->isSegaCD(), src[i] | colMask, conrad);
+				markSpritePixel(dst + i);
 			}
 		}
 		src += pitch;
@@ -816,6 +821,7 @@ void Video::drawSpriteSub4(const uint8_t *src, uint8_t *dst, int pitch, int h, i
 		for (int i = 0; i < w; ++i) {
 			if (src[-i] != 0 && !(dst[i] & 0x80)) {
 				dst[i] = appearance::shirtPixel(_res->isAmiga() || _res->isSegaCD(), src[-i] | colMask, conrad);
+				markSpritePixel(dst + i);
 			}
 		}
 		src += pitch;
@@ -829,6 +835,7 @@ void Video::drawSpriteSub5(const uint8_t *src, uint8_t *dst, int pitch, int h, i
 		for (int i = 0; i < w; ++i) {
 			if (src[i * pitch] != 0 && !(dst[i] & 0x80)) {
 				dst[i] = appearance::shirtPixel(_res->isAmiga() || _res->isSegaCD(), src[i * pitch] | colMask, conrad);
+				markSpritePixel(dst + i);
 			}
 		}
 		++src;
@@ -842,6 +849,7 @@ void Video::drawSpriteSub6(const uint8_t *src, uint8_t *dst, int pitch, int h, i
 		for (int i = 0; i < w; ++i) {
 			if (src[-i * pitch] != 0 && !(dst[i] & 0x80)) {
 				dst[i] = appearance::shirtPixel(_res->isAmiga() || _res->isSegaCD(), src[-i * pitch] | colMask, conrad);
+				markSpritePixel(dst + i);
 			}
 		}
 		++src;

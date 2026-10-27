@@ -243,6 +243,16 @@ void savesPage(settings::Session &s, const char *query,
                const std::function<void(std::shared_ptr<const progress::Preview>)> &preview) {
 	if (!match(query, "Save load slot checkpoint progress refresh name protect milestone browser"))
 		return;
+	if (s.campaign) {
+		ImGui::SeparatorText("Campaign progress");
+		hint("One campaign checkpoint includes actors, puzzles, dialogue and carried items. Autosaves every 10 seconds and when changing stages.");
+		ImGui::BeginDisabled(!s.canSave || s.recovery);
+		if (wideButton("Save campaign now")) s.action = settings::Action::SaveGame;
+		ImGui::EndDisabled();
+		if (wideButton("Restore campaign checkpoint...")) ImGui::OpenPopup("Restore campaign?");
+		confirmation("Restore campaign?", "Replace current progress with the last campaign checkpoint?", "Restore", [&] { s.action = settings::Action::LoadGame; });
+		return;
+	}
 	ImGui::SeparatorText(compactLayout ? "Manual saves" : "Manual save browser / all levels");
 	int level = s.browseLevel, slot = s.saveSlot;
 	if (!compactLayout)
@@ -1074,6 +1084,7 @@ void SettingsOverlay::draw(settings::Session &s) {
 	};
 
 	auto autosaves = [&](bool preview = false, bool focusButton = false) {
+		if (s.campaign) { savesPage(s, "", [&](auto p) { drawPreview(p); }); return; }
 		ImGui::SeparatorText("Persistent autosaves");
 		if (s.autosaves.empty()) {
 			hint("No valid autosaves for this edition yet.");
@@ -1290,6 +1301,7 @@ void SettingsOverlay::draw(settings::Session &s) {
 	} else if (s.recovery) {
 		ImGui::BeginChild("Recovery choices", ImVec2(0, -footer), ImGuiChildFlags_Borders);
 		hint("Conrad fell. Choose where to return; the game stays paused.");
+		if (s.campaign) savesPage(s, "", [&](auto p) { drawPreview(p); });
 		if (!s.status.empty())
 			ImGui::TextWrapped("%s", s.status.c_str());
 		const auto checkpoint = std::find_if(s.saves.begin(), s.saves.end(), [&](const auto &v) {

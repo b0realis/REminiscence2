@@ -13,7 +13,10 @@ out of gratitude for that work and the people who have kept it accessible.
 - **Yaz0r, Pixel, and gawd** shared information about the game, as acknowledged
   in the original README.
 - **Zenju** authored the inherited xBRZ scaler code.
-- **Sean Barrett and stb contributors** provided the inherited Vorbis decoder.
+- **Sean Barrett and stb contributors** provided the inherited Vorbis decoder
+  and the editor's image decoder.
+- **Niels Lohmann and JSON for Modern C++ contributors** provided the editor's
+  JSON parser and serializer.
 - **Nuke.YKT** authored Nuked OPL3, used by the new AdLib music backend.
 - **FluidSynth and Munt contributors** provide the optional software synthesizers.
 - **SDL, zlib, and libmodplug contributors**, port maintainers, translators,

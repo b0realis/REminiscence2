@@ -1,0 +1,128 @@
+{
+  "schema": 1,
+  "name": "Station routes - campaign example",
+  "comments": "Original example material. Reuse levels and route to story screens or catalog movies. This example bundles no game assets.",
+  "entry": "arrival",
+  "stages": [
+    {
+      "id": "arrival",
+      "name": "Arrival at the station",
+      "kind": 2,
+      "x": 24,
+      "y": 24,
+      "elements": [
+        {
+          "kind": 0,
+          "text": "The shuttle has gone. Two corridors lead into the station. One is quiet. The other still has power.",
+          "x": 40,
+          "y": 40,
+          "width": 560,
+          "height": 200,
+          "size": 24,
+          "color": [
+            80,
+            230,
+            215,
+            255
+          ],
+          "effect": 1,
+          "delay": 0,
+          "duration": 1000,
+          "rate": 32
+        }
+      ],
+      "routes": [
+        {
+          "key": "complete",
+          "label": "Continue",
+          "to": "choice"
+        }
+      ]
+    },
+    {
+      "id": "choice",
+      "name": "Choose an approach",
+      "kind": 3,
+      "x": 310,
+      "y": 24,
+      "elements": [
+        {
+          "kind": 0,
+          "text": "Which route will you take?",
+          "x": 40,
+          "y": 40,
+          "width": 560,
+          "height": 200,
+          "size": 24,
+          "color": [
+            80,
+            230,
+            215,
+            255
+          ],
+          "effect": 1,
+          "delay": 0,
+          "duration": 1000,
+          "rate": 32
+        }
+      ],
+      "routes": [
+        {
+          "key": "complete",
+          "label": "Explore the station",
+          "to": "training"
+        },
+        {
+          "key": "complete",
+          "label": "Read the transmission",
+          "to": "ending"
+        }
+      ]
+    },
+    {
+      "id": "training",
+      "name": "Station training",
+      "kind": 0,
+      "x": 595,
+      "y": 24,
+      "elements": [],
+      "routes": [
+        {
+          "key": "complete",
+          "label": "Continue",
+          "to": "ending"
+        }
+      ],
+      "level": "levels/training/project.r2project.json"
+    },
+    {
+      "id": "ending",
+      "name": "A distant transmission",
+      "kind": 4,
+      "x": 595,
+      "y": 220,
+      "elements": [
+        {
+          "kind": 0,
+          "text": "A light answers from the far side of the city. Your next chapter is waiting.",
+          "x": 40,
+          "y": 40,
+          "width": 560,
+          "height": 200,
+          "size": 24,
+          "color": [
+            80,
+            230,
+            215,
+            255
+          ],
+          "effect": 1,
+          "delay": 0,
+          "duration": 1000,
+          "rate": 32
+        }
+      ],
+      "routes": []
+    }
+  ]
+}

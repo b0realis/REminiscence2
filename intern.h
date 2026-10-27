@@ -253,6 +253,8 @@ struct AnimBufferState {
 };
 
 struct AnimBuffers {
+	// 0xFF is the empty sentinel in _curPos, so 255 is the largest safe count.
+	static constexpr unsigned kCapacity = 255;
 	AnimBufferState *_states[4];
 	uint8_t _curPos[4];
 

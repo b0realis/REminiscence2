@@ -359,9 +359,14 @@ int Game::col_detectHitCallbackHelper(LivePGE *pge, int16_t msgNum) {
 	InitPGE *init_pge = pge->init_PGE;
 	assert(init_pge->obj_node_number < _res._numObjectNodes);
 	ObjectNode *on = _res._objectNodesMap[init_pge->obj_node_number];
+	if (!on || !on->objects || pge->first_obj_number >= on->num_objects) {
+		return 0;
+	}
 	Object *obj = &on->objects[pge->first_obj_number];
 	int i = pge->first_obj_number;
-	while (pge->obj_type == obj->type && on->num_objects > i) {
+	// A type's rules may run all the way to the end of the object node.
+	// Check the bound before dereferencing the next rule, including after ++obj.
+	while (i < on->num_objects && pge->obj_type == obj->type) {
 		if (obj->opcode2 == 0x6B) { // pge_isToggleable
 			if (obj->opcode_arg2 == 0) {
 				if (msgNum == 1 || msgNum == 2) return 0xFFFF;

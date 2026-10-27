@@ -774,6 +774,8 @@ void SystemStub_SDL::updateScreen(int shakeOffset) {
 }
 
 void SystemStub_SDL::processEvents() {
+	if (externalQuitRequested && externalQuitRequested())
+		_pi.quit = true;
 	pumpSilentAudio();
 	bool paused = _backgrounded || (_focusLost && _preferences.pauseOnFocusLoss);
 	while (true) {

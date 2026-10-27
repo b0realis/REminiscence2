@@ -61,6 +61,11 @@ void Mixer::init() {
 }
 
 void Mixer::free() {
+	{
+		LockAudioStack lock(_stub);
+		_contentHook = nullptr;
+		_contentOwner = nullptr;
+	}
 	setPremixHook(0, 0);
 	_mod.stop();
 	_sfx.stop();
@@ -75,6 +80,19 @@ void Mixer::free() {
 	_musicTrack = -1;
 	stopAll();
 	_stub->stopAudio();
+}
+
+void Mixer::setContentHook(ContentHook hook, void *owner) {
+	LockAudioStack lock(_stub);
+	_contentHook = hook;
+	_contentOwner = owner;
+}
+void Mixer::clearContentHook(void *owner) {
+	LockAudioStack lock(_stub);
+	if (_contentOwner == owner) {
+		_contentHook = nullptr;
+		_contentOwner = nullptr;
+	}
 }
 
 void Mixer::setPremixHook(PremixHook premixHook, void *userData) {
@@ -235,7 +253,8 @@ void Mixer::playMusic(int num, int tempo, bool trySource) {
 			return;
 		}
 	}
-	if ((_musicType == MT_OGG || _musicType == MT_CPC) && isMusicSfx(num)) { // do not play level action music with background music
+	if ((_musicType == MT_OGG || _musicType == MT_CPC) &&
+	    isMusicSfx(num)) { // do not play level action music with background music
 		return;
 	}
 	if (isMusicSfx(num)) { // level action sequence
@@ -358,7 +377,7 @@ void Mixer::mix(int16_t *out, int len) {
 					}
 				}
 				sample = sample * ch->volume / Mixer::MAX_VOLUME * _effectsVolume / 100;
-				out[2 * pos]     = ADDC_S16(out[2 * pos],     sample);
+				out[2 * pos] = ADDC_S16(out[2 * pos], sample);
 				out[2 * pos + 1] = ADDC_S16(out[2 * pos + 1], sample);
 				ch->chunkPos += ch->chunkInc;
 			}
@@ -367,6 +386,8 @@ void Mixer::mix(int16_t *out, int len) {
 	if (kUseNr) {
 		nr(out, len * 2); // stereo
 	}
+	if (_contentHook)
+		_contentHook(_contentOwner, out, len, _musicVolume, _effectsVolume);
 	const int masterGain = _muted ? 0 : _masterVolume;
 	for (int i = 0; i < len * 2; ++i) {
 		out[i] = out[i] * masterGain / 100;

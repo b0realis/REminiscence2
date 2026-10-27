@@ -5,6 +5,7 @@
  */
 
 #include "game.h"
+#include "authoring_hooks.h"
 #include "resource.h"
 #include "systemstub.h"
 #include "util.h"
@@ -104,11 +105,11 @@ void Game::pge_loadForCurrentLevel(uint16_t idx) {
 		ObjectNode *on = _res._objectNodesMap[init_pge->obj_node_number];
 		Object *obj = on->objects;
 		int i = 0;
-		while (obj->type != live_pge->obj_type) {
+		while (i < on->num_objects && obj->type != live_pge->obj_type) {
 			++i;
 			++obj;
 		}
-		assert(i < on->num_objects);
+		if (i == on->num_objects) { live_pge->flags &= ~4; _pge_liveTable2[idx] = nullptr; return; }
 		live_pge->first_obj_number = i;
 		pge_setupDefaultAnim(live_pge);
 	}
@@ -134,7 +135,7 @@ void Game::pge_process(LivePGE *pge) {
 		ObjectNode *on = _res._objectNodesMap[init_pge->obj_node_number];
 		Object *obj = &on->objects[pge->first_obj_number];
 		while (1) {
-			if (obj->type != pge->obj_type) {
+			if (obj >= on->objects + on->num_objects || obj->type != pge->obj_type) {
 				pge_clearMessages(pge->index);
 				return;
 			}
@@ -277,6 +278,7 @@ void Game::pge_setupAnim(LivePGE *pge) {
 
 int Game::pge_execute(LivePGE *live_pge, InitPGE *init_pge, const Object *obj) {
 	debug(DBG_PGE, "Game::pge_execute() pge_num=%ld op1=0x%X op2=0x%X op3=0x%X", live_pge - &_pgeLive[0], obj->opcode1, obj->opcode2, obj->opcode3);
+	if (_authoring && !_authoring->allowRule(*this, *live_pge, *obj)) return 0;
 	pge_OpcodeProc op;
 	ObjectOpcodeArgs args;
 	if (obj->opcode1) {
@@ -317,6 +319,7 @@ int Game::pge_execute(LivePGE *live_pge, InitPGE *init_pge, const Object *obj) {
 			warning("Game::pge_execute() missing call to pge_opcode 0x%X", obj->opcode3);
 		}
 	}
+	if (_authoring) _authoring->ruleExecuted(*this, *live_pge, *obj);
 	live_pge->obj_type = obj->init_obj_type;
 	live_pge->first_obj_number = obj->init_obj_number;
 	live_pge->anim_seq = 0;
@@ -918,12 +921,14 @@ int Game::pge_op_pickupObject(ObjectOpcodeArgs *args) {
 }
 
 int Game::pge_op_addItemToInventory(ObjectOpcodeArgs *args) {
+	if (args->a < 0 || args->a >= _res._pgeNum) return 0;
 	pge_updateInventory(&_pgeLive[args->a], args->pge);
 	args->pge->room_location = 0xFF;
 	return 0xFFFF;
 }
 
 int Game::pge_op_copyPiege(ObjectOpcodeArgs *args) {
+	if (args->a < 0 || args->a >= _res._pgeNum) return 0;
 	LivePGE *src = &_pgeLive[args->a];
 	LivePGE *dst = args->pge;
 
@@ -1124,9 +1129,9 @@ int Game::pge_o_unk0x40(ObjectOpcodeArgs *args) {
 }
 
 int Game::pge_op_wakeUpPiege(ObjectOpcodeArgs *args) {
-	if (args->a <= 3) {
+	if (args->a >= 0 && args->a <= 3) {
 		int16_t num = args->pge->init_PGE->data[args->a];
-		if (num >= 0) {
+		if (num >= 0 && num < _res._pgeNum) {
 			LivePGE *pge = &_pgeLive[num];
 			pge->flags |= 4;
 			_pge_liveTable2[num] = pge;
@@ -1136,9 +1141,9 @@ int Game::pge_op_wakeUpPiege(ObjectOpcodeArgs *args) {
 }
 
 int Game::pge_op_removePiege(ObjectOpcodeArgs *args) {
-	if (args->a <= 3) {
+	if (args->a >= 0 && args->a <= 3) {
 		int16_t num = args->pge->init_PGE->data[args->a];
-		if (num >= 0) {
+		if (num >= 0 && num < _res._pgeNum) {
 			_pge_liveTable2[num] = 0;
 			_pgeLive[num].flags &= ~4;
 		}
@@ -1168,6 +1173,7 @@ skip_pge:
 }
 
 int Game::pge_op_loadPiegeCounter(ObjectOpcodeArgs *args) {
+	if (args->a < 0 || args->a > 3) return 0;
 	args->pge->counter_value = args->pge->init_PGE->data[args->a];
 	return 1;
 }
@@ -1203,6 +1209,7 @@ int Game::pge_o_unk0x49(ObjectOpcodeArgs *args) {
 }
 
 int Game::pge_op_killInventoryPiege(ObjectOpcodeArgs *args) {
+	if (args->a < 0 || args->a >= _res._pgeNum) return 0;
 	LivePGE *pge = args->pge;
 	pge->room_location = 0xFE;
 	pge->flags &= ~4;
@@ -1244,7 +1251,7 @@ int Game::pge_op_scrollPosY(ObjectOpcodeArgs *args) {
 	LivePGE *pge = args->pge;
 	args->pge->pos_y += args->a;
 	uint8_t pge_num = pge->current_inventory_PGE;
-	while (pge_num != 0xFF) {
+	for (int remaining = _res._pgeNum; pge_num != 0xFF && pge_num < _res._pgeNum && remaining-- > 0;) {
 		pge = &_pgeLive[pge_num];
 		pge->pos_y += args->a;
 		pge_num = pge->next_inventory_PGE;
@@ -1289,6 +1296,7 @@ int Game::pge_op_incLife(ObjectOpcodeArgs *args) {
 }
 
 int Game::pge_op_setPiegeDefaultAnim(ObjectOpcodeArgs *args) {
+	if (args->a < 0 || args->a > 3) return 0;
 	assert(args->a >= 0 && args->a < 4);
 	InitPGE *init_pge = args->pge->init_PGE;
 	args->pge->room_location = init_pge->data[args->a];
@@ -1300,11 +1308,13 @@ int Game::pge_op_setPiegeDefaultAnim(ObjectOpcodeArgs *args) {
 }
 
 int Game::pge_op_setLifeCounter(ObjectOpcodeArgs *args) {
+	if (args->a < 0 || args->a >= _res._pgeNum) return 0;
 	_pgeLive[args->a].life = args->pge->init_PGE->data[0];
 	return 1;
 }
 
 int Game::pge_op_decLifeCounter(ObjectOpcodeArgs *args) {
+	if (args->a < 0 || args->a >= _res._pgeNum) return 0;
 	args->pge->life = _pgeLive[args->a].life - 1;
 	return 1;
 }
@@ -1425,16 +1435,20 @@ int Game::pge_o_unk0x64(ObjectOpcodeArgs *args) {
 }
 
 int Game::pge_op_addToCredits(ObjectOpcodeArgs *args) {
+	if (args->a < 0 || args->a > 2) return 0;
 	assert(args->a >= 0 && args->a < 3);
-	uint8_t pge = args->pge->init_PGE->data[args->a];
+	int pge = args->pge->init_PGE->data[args->a];
+	if (pge < 0 || pge >= _res._pgeNum) return 0;
 	int16_t val = args->pge->init_PGE->data[args->a + 1];
 	_pgeLive[pge].life += val;
 	return 1;
 }
 
 int Game::pge_op_subFromCredits(ObjectOpcodeArgs *args) {
+	if (args->a < 0 || args->a > 2) return 0;
 	assert(args->a >= 0 && args->a < 3);
-	uint8_t pge = args->pge->init_PGE->data[args->a];
+	int pge = args->pge->init_PGE->data[args->a];
+	if (pge < 0 || pge >= _res._pgeNum) return 0;
 	int16_t val = args->pge->init_PGE->data[args->a + 1];
 	_pgeLive[pge].life -= val;
 	return 1;
@@ -1641,7 +1655,7 @@ int Game::pge_o_unk0x6F(ObjectOpcodeArgs *args) {
 
 int Game::pge_o_unk0x70(ObjectOpcodeArgs *args) {
 	uint8_t pge_num = args->pge->current_inventory_PGE;
-	while (pge_num != 0xFF) {
+	for (int remaining = _res._pgeNum; pge_num != 0xFF && pge_num < _res._pgeNum && remaining-- > 0;) {
 		pge_sendMessage(args->pge->index, _pgeLive[pge_num].index, args->a);
 		pge_num = _pgeLive[pge_num].next_inventory_PGE;
 	}
@@ -1905,9 +1919,12 @@ int Game::pge_op_setPiegePosModX(ObjectOpcodeArgs *args) {
 
 // taxi and teleporter
 int Game::pge_op_changeRoom(ObjectOpcodeArgs *args) {
+	if (args->a < 0 || args->a > 2) return 0;
 	// pge_op_protectionScreen
 	InitPGE *init_pge_1 = args->pge->init_PGE;
 	const int16_t _ax = init_pge_1->data[args->a];
+	const int16_t _bx = init_pge_1->data[args->a + 1];
+	if (_ax < 0 || _bx < 0 || _ax >= _res._pgeNum || _bx >= _res._pgeNum) return 0;
 	if (_ax == 0 && !g_options.bypass_protection && !g_options.use_words_protection && (_res.isAmiga() || _res.isDOS())) {
 		if (!handleProtectionScreenShape()) {
 			// _pge_opcodeTable[0x82] = &Game::pge_op_nop;
@@ -1916,7 +1933,6 @@ int Game::pge_op_changeRoom(ObjectOpcodeArgs *args) {
 		}
 	}
 	// pge_op_changeRoom
-	const int16_t _bx = init_pge_1->data[args->a + 1];
 	LivePGE *live_pge_1 = &_pgeLive[_bx];
 	LivePGE *live_pge_2 = &_pgeLive[_ax];
 	int8_t pge_room = live_pge_1->room_location;
@@ -1928,7 +1944,9 @@ int Game::pge_op_changeRoom(ObjectOpcodeArgs *args) {
 		pge_addToCurrentRoomList(live_pge_2, room);
 		InitPGE *init_pge_2 = live_pge_2->init_PGE;
 		init_pge_1 = live_pge_1->init_PGE;
-		if (init_pge_2->obj_node_number == init_pge_1->obj_node_number) {
+		// Private editor rule tables retain their resource/animation identity.
+        const auto identity = [&](int b) { return _authoring ? _authoring->behaviorIdentity(b) : b; };
+		if (identity(init_pge_2->obj_node_number) == identity(init_pge_1->obj_node_number)) {
 			live_pge_2->flags &= ~1;
 			if (live_pge_1->flags & 1) {
 				live_pge_2->flags |= 1;
@@ -1939,7 +1957,7 @@ int Game::pge_op_changeRoom(ObjectOpcodeArgs *args) {
 			ObjectNode *on = _res._objectNodesMap[init_pge_2->obj_node_number];
 			Object *obj = on->objects;
 			int i = 0;
-			while (obj->type != live_pge_2->obj_type) {
+			while (i < on->num_objects && obj->type != live_pge_2->obj_type) {
 				++i;
 				++obj;
 			}
@@ -1961,7 +1979,7 @@ int Game::pge_op_changeRoom(ObjectOpcodeArgs *args) {
 int Game::pge_op_hasInventoryItem(ObjectOpcodeArgs *args) {
 	LivePGE *pge = &_pgeLive[0];
 	uint8_t _dl = pge->current_inventory_PGE;
-	while (_dl != 0xFF) {
+	for (int remaining = _res._pgeNum; _dl != 0xFF && _dl < _res._pgeNum && remaining-- > 0;) {
 		pge = &_pgeLive[_dl];
 		if (pge->init_PGE->object_id == args->a) {
 			return 0xFFFF;
@@ -1986,6 +2004,7 @@ int Game::pge_o_unk0x86(ObjectOpcodeArgs *args) {
 }
 
 int Game::pge_op_playSoundGroup(ObjectOpcodeArgs *args) {
+	if (args->a < 0 || args->a > 3) return 0;
 	assert(args->a < 4);
 	uint16_t c = args->pge->init_PGE->data[args->a];
 	uint8_t sfxId = c & 0xFF;
@@ -2033,6 +2052,15 @@ int Game::pge_setCurrentInventoryObject(LivePGE *pge) {
 }
 
 void Game::pge_updateInventory(LivePGE *pge1, LivePGE *pge2) {
+    // A rewired module must never create a circular inventory chain.
+    const LivePGE *owner = pge1;
+    for (int depth = 0;; ++depth) {
+        if (owner == pge2 || depth >= _res._pgeNum) return;
+        const int parent = owner->ref_inventory_PGE;
+        if (parent == 0xFF) break;
+        if (parent >= _res._pgeNum) return;
+        owner = &_pgeLive[parent];
+    }
 	if (pge2->ref_inventory_PGE != 0xFF) {
 		pge_reorderInventory(pge2);
 	}
@@ -2059,7 +2087,7 @@ void Game::pge_reorderInventory(LivePGE *pge) {
 LivePGE *Game::pge_getPreviousInventoryItem(LivePGE *pge, LivePGE *last_pge) {
 	LivePGE *_di = pge;
 	uint8_t n = _di->current_inventory_PGE;
-	while (n != 0xFF) {
+	for (int remaining = _res._pgeNum; n != 0xFF && n < _res._pgeNum && remaining-- > 0;) {
 		LivePGE *_si = &_pgeLive[n];
 		if (_si == last_pge) {
 			break;
@@ -2089,6 +2117,10 @@ int Game::pge_updateCollisionState(LivePGE *pge, int16_t pge_dy, uint8_t value) 
 		int16_t pge_pos_y = ((pge->pos_y / 36) & ~1) + pge_dy;
 		int16_t pge_pos_x = (pge->pos_x + 8) >> 4;
 
+        const int offset = pge_pos_x + pge_pos_y * 16 -
+            (_pge_currentPiegeFacingDir ? int(pge_collision_data_len) - 1 : 0);
+        if (pge_collision_data_len == 0 || pge_collision_data_len > sizeof(_col_slots2[0].data_buf) ||
+            offset < 0 || offset + pge_collision_data_len > 0x70) return 0;
 		grid_data += pge_pos_x + pge_pos_y * 16;
 
 		CollisionSlot2 *slot1 = _col_slots2Next;
@@ -2136,7 +2168,7 @@ int Game::pge_updateCollisionState(LivePGE *pge, int16_t pge_dy, uint8_t value) 
 			uint8_t *dst = &slot1->data_buf[0];
 			int8_t *src = grid_data;
 			int n = pge_collision_data_len;
-			assert(n < 0x10);
+			assert(n <= int(sizeof(slot1->data_buf)));
 			while (n--) {
 				*dst++ = *src;
 				*src++ = value;
@@ -2175,6 +2207,8 @@ int Game::pge_ZOrder(LivePGE *pge, int16_t num, pge_ZOrderCallback compare, uint
 }
 
 void Game::pge_sendMessage(uint8_t src_pge_index, uint8_t dst_pge_index, int16_t num) {
+    if (src_pge_index >= _res._pgeNum || dst_pge_index >= _res._pgeNum ||
+        !_pgeLive[src_pge_index].init_PGE || !_pgeLive[dst_pge_index].init_PGE) return;
 	debug(DBG_GAME, "Game::pge_sendMessage() src=0x%X dst=0x%X num=0x%X", src_pge_index, dst_pge_index, num);
 	if (src_pge_index == 75 || src_pge_index == 76 || src_pge_index == 77 || src_pge_index == 78 ||
 	    dst_pge_index == 75 || dst_pge_index == 76 || dst_pge_index == 77 || dst_pge_index == 78) {
@@ -2214,6 +2248,7 @@ void Game::pge_sendMessage(uint8_t src_pge_index, uint8_t dst_pge_index, int16_t
 		le->next_entry = next;
 		le->src_pge = src_pge_index;
 		le->msg_num = num;
+        if (_authoring) _authoring->messageSent(*this, src_pge_index, dst_pge_index, num);
 	}
 }
 

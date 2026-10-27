@@ -110,6 +110,50 @@ ASSET AND SOUNDTRACK SELECTION
       selected-source MOD/PRF, then native music. This does not replace effects,
       voices or embedded SEQ/MCD movie audio. Raw ROM/VGM playback is not included.
 
+EDITOR PROJECT PLAYTEST
+  --project=FILE
+      Load a .r2project.json made with reminiscence2-editor and play it using
+      your prepared Amiga, DOS/GOG or Sega CD assets. Use --datapath and,
+      when several editions are available, --asset-set to choose the edition.
+      Project artwork is resolved relative to the JSON file's own folder.
+      This first editor profile uses 256x224 rooms and original movement,
+      with independent Back / Playfield / Front art and modular objects.
+      Starts in a 3x window. Arrows move/climb; Space draws/holsters the gun;
+      Shift acts/fires; Enter activates a nearby switch or restarts after death.
+      Escape exits this playtest. Custom saves, inventory UI, campaign story
+      and the normal QoL overlay are not available in this initial profile.
+      Native campaign projects retain the original scripts, inventory, story
+      and QoL menus. They use the seven sibling level-N.r2project.json files;
+      original assets fill rooms without art overrides. Preview saves stay in
+      the project's .native-playtest-saves folder. Normal saves and preferences
+      are never written by either project runner.
+      Cannot combine with --continue or asset/cutscene listing/playback.
+      For editing, run ./edit-local.sh; see docs/LEVEL_EDITOR.md for a guide.
+  --editor-session=FILE
+      Editor-managed native preview control file; requires --project with a
+      native campaign project. The editor normally supplies this itself.
+      Pause/apply/resume/restart commands and acknowledgements are described in
+      docs/formats/CUSTOM_PROJECTS.md. Ordinary project launches can omit it.
+
+CAMPAIGN PLAYER
+  --campaign=FILE
+      Play a .r2campaign.json: linked levels, nonlinear routes, catalog movies,
+      and authored text/photo screens. Assets are selected with --datapath and
+      --asset-set. Level exit nodes emit route names; native level completion
+      emits complete. Multiple matching routes offer a choice.
+      Story screens: Up/Down selects, Enter reveals text then continues, Esc
+      leaves. Progress autosaves every 10 seconds and at stage transitions.
+      Quick save/load bindings store actors, puzzles and carried items together.
+      Returning levels keep their world unless the designer disables Remember.
+      Saves live under --savepath/campaigns; ordinary game saves stay separate.
+      Launching an existing campaign offers Resume or New campaign.
+  --campaign-new / --campaign-resume
+      Explicitly start fresh or restore the compatible campaign save. Choose
+      only one. Edited campaign/level definitions require a new session.
+  --campaign-start=ID
+      Start at a particular stage ID for testing; requires --campaign.
+      Cannot combine campaign playback with --project or other playback modes.
+
 CUTSCENE PLAYER
   --list-cutscenes
       Inspect the selected game data and print a JSON catalog of available

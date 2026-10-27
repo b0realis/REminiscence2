@@ -124,7 +124,7 @@ struct Session {
 	bool windowModesAvailable = true;
 	int displayWidth = 0, displayHeight = 0;
 	std::vector<Resolution> windowResolutions, fullscreenResolutions;
-	bool startup = false, recovery = false;
+	bool startup = false, recovery = false, campaign = false;
 	bool assetPicker = false;
 	std::vector<assets::Source> assetSources, musicSources;
 	int assetIndex = 0;

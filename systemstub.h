@@ -12,6 +12,7 @@
 #include "runtime_options.h"
 #include "settings.h"
 #include "menu_input.h"
+#include <functional>
 
 struct PlayerInput {
 	enum {
@@ -57,6 +58,7 @@ struct ScalerParameters {
 struct SystemStub {
 	typedef void (*AudioCallback)(void *param, int16_t *stream, int len);
 
+	std::function<bool()> externalQuitRequested; // Optional editor-owned preview lifecycle.
 	PlayerInput _pi;
 	MenuInput _menuInput;
 	bool _menuInputEnabled = false;

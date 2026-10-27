@@ -1,0 +1,990 @@
+{
+  "schema": 2,
+  "id": "reminiscence2-module-lab",
+  "name": "Module Lab",
+  "serial": 100,
+  "rooms": [
+    {
+      "id": "room-1",
+      "name": "Switch workshop",
+      "column": 0,
+      "row": 0,
+      "art": [
+        {
+          "file": "art/workshop-back.png",
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 224
+        },
+        {
+          "file": "",
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 224
+        },
+        {
+          "file": "art/workshop-front.png",
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 224
+        }
+      ],
+      "collision": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "ledges": [],
+      "exits": [
+        "",
+        "",
+        "room-2",
+        ""
+      ]
+    },
+    {
+      "id": "room-2",
+      "name": "Retrieval office",
+      "column": 1,
+      "row": 0,
+      "art": [
+        {
+          "file": "art/workshop-back.png",
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 224
+        },
+        {
+          "file": "",
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 224
+        },
+        {
+          "file": "art/workshop-front.png",
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 224
+        }
+      ],
+      "collision": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "ledges": [],
+      "exits": [
+        "",
+        "",
+        "room-3",
+        "room-1"
+      ]
+    },
+    {
+      "id": "room-3",
+      "name": "Mission control",
+      "column": 2,
+      "row": 0,
+      "art": [
+        {
+          "file": "art/workshop-back.png",
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 224
+        },
+        {
+          "file": "",
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 224
+        },
+        {
+          "file": "art/workshop-front.png",
+          "x": 0,
+          "y": 0,
+          "w": 256,
+          "h": 224
+        }
+      ],
+      "collision": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "ledges": [],
+      "exits": [
+        "",
+        "",
+        "",
+        "room-2"
+      ]
+    }
+  ],
+  "modules": [
+    {
+      "id": "module-1",
+      "name": "Door circuit",
+      "kind": 4,
+      "a": {
+        "room": "room-1",
+        "x": 192,
+        "y": 216
+      },
+      "b": {
+        "room": "room-1",
+        "x": 192,
+        "y": 216
+      },
+      "initiallyOpen": false,
+      "toggle": false,
+      "facingLeft": false,
+      "health": 2,
+      "width": 16,
+      "height": 16,
+      "sprite": {
+        "file": "",
+        "x": 0,
+        "y": 0,
+        "w": 256,
+        "h": 224
+      },
+      "frames": 1,
+      "fps": 6,
+      "layer": 1,
+      "outputs": [],
+      "nodes": [
+        {
+          "id": "node-1",
+          "name": "Access door",
+          "kind": 1,
+          "at": {
+            "room": "room-1",
+            "x": 192,
+            "y": 216
+          },
+          "graphX": 504,
+          "graphY": 24,
+          "width": 16,
+          "height": 72,
+          "layer": 1,
+          "visuals": [
+            {
+              "art": {
+                "file": "art/door-strip.png",
+                "x": 0,
+                "y": 0,
+                "w": 16,
+                "h": 72
+              },
+              "frames": 1,
+              "fps": 8,
+              "loop": true
+            },
+            {
+              "art": {
+                "file": "art/door-strip.png",
+                "x": 16,
+                "y": 0,
+                "w": 16,
+                "h": 72
+              },
+              "frames": 4,
+              "fps": 8,
+              "loop": false
+            }
+          ],
+          "enabled": true,
+          "initiallyActive": false,
+          "once": false,
+          "consumeItem": true,
+          "requiredItem": "",
+          "text": "",
+          "doneText": "",
+          "goal": 1
+        },
+        {
+          "id": "node-2",
+          "name": "Wall button",
+          "kind": 0,
+          "at": {
+            "room": "room-1",
+            "x": 128,
+            "y": 216
+          },
+          "graphX": 24,
+          "graphY": 24,
+          "width": 16,
+          "height": 24,
+          "layer": 1,
+          "visuals": [
+            {
+              "art": {
+                "file": "art/button-strip.png",
+                "x": 0,
+                "y": 0,
+                "w": 16,
+                "h": 24
+              },
+              "frames": 1,
+              "fps": 8,
+              "loop": true
+            },
+            {
+              "art": {
+                "file": "art/button-strip.png",
+                "x": 16,
+                "y": 0,
+                "w": 16,
+                "h": 24
+              },
+              "frames": 1,
+              "fps": 8,
+              "loop": true
+            }
+          ],
+          "enabled": true,
+          "initiallyActive": false,
+          "once": false,
+          "consumeItem": true,
+          "requiredItem": "",
+          "text": "",
+          "doneText": "",
+          "goal": 1
+        }
+      ],
+      "wires": [
+        {
+          "from": "node-2",
+          "to": "node-1",
+          "signal": 0,
+          "input": 3
+        }
+      ]
+    },
+    {
+      "id": "module-2",
+      "name": "Technician's lost module",
+      "kind": 4,
+      "a": {
+        "room": "room-2",
+        "x": 192,
+        "y": 216
+      },
+      "b": {
+        "room": "room-2",
+        "x": 192,
+        "y": 216
+      },
+      "initiallyOpen": false,
+      "toggle": false,
+      "facingLeft": false,
+      "health": 2,
+      "width": 16,
+      "height": 16,
+      "sprite": {
+        "file": "",
+        "x": 0,
+        "y": 0,
+        "w": 256,
+        "h": 224
+      },
+      "frames": 1,
+      "fps": 6,
+      "layer": 1,
+      "outputs": [],
+      "nodes": [
+        {
+          "id": "node-1",
+          "name": "Access door",
+          "kind": 1,
+          "at": {
+            "room": "room-2",
+            "x": 192,
+            "y": 216
+          },
+          "graphX": 504,
+          "graphY": 24,
+          "width": 16,
+          "height": 72,
+          "layer": 1,
+          "visuals": [
+            {
+              "art": {
+                "file": "art/door-strip.png",
+                "x": 0,
+                "y": 0,
+                "w": 16,
+                "h": 72
+              },
+              "frames": 1,
+              "fps": 8,
+              "loop": true
+            },
+            {
+              "art": {
+                "file": "art/door-strip.png",
+                "x": 16,
+                "y": 0,
+                "w": 16,
+                "h": 72
+              },
+              "frames": 4,
+              "fps": 8,
+              "loop": false
+            }
+          ],
+          "enabled": true,
+          "initiallyActive": false,
+          "once": false,
+          "consumeItem": true,
+          "requiredItem": "",
+          "text": "",
+          "doneText": "",
+          "goal": 1
+        },
+        {
+          "id": "node-2",
+          "name": "Signal module",
+          "kind": 3,
+          "at": {
+            "room": "room-2",
+            "x": 48,
+            "y": 216
+          },
+          "graphX": 24,
+          "graphY": 24,
+          "width": 16,
+          "height": 16,
+          "layer": 1,
+          "visuals": [
+            {
+              "art": {
+                "file": "",
+                "x": 0,
+                "y": 0,
+                "w": 16,
+                "h": 24
+              },
+              "frames": 1,
+              "fps": 8,
+              "loop": true
+            },
+            {
+              "art": {
+                "file": "",
+                "x": 0,
+                "y": 0,
+                "w": 16,
+                "h": 24
+              },
+              "frames": 1,
+              "fps": 8,
+              "loop": true
+            }
+          ],
+          "enabled": true,
+          "initiallyActive": false,
+          "once": false,
+          "consumeItem": true,
+          "requiredItem": "",
+          "text": "",
+          "doneText": "",
+          "goal": 1
+        },
+        {
+          "id": "node-3",
+          "name": "Technician",
+          "kind": 2,
+          "at": {
+            "room": "room-2",
+            "x": 128,
+            "y": 216
+          },
+          "graphX": 264,
+          "graphY": 24,
+          "width": 16,
+          "height": 48,
+          "layer": 1,
+          "visuals": [
+            {
+              "art": {
+                "file": "art/npc-strip.png",
+                "x": 0,
+                "y": 0,
+                "w": 16,
+                "h": 48
+              },
+              "frames": 1,
+              "fps": 8,
+              "loop": true
+            },
+            {
+              "art": {
+                "file": "art/npc-strip.png",
+                "x": 16,
+                "y": 0,
+                "w": 16,
+                "h": 48
+              },
+              "frames": 1,
+              "fps": 8,
+              "loop": true
+            }
+          ],
+          "enabled": true,
+          "initiallyActive": false,
+          "once": false,
+          "consumeItem": true,
+          "requiredItem": "node-2",
+          "text": "My signal module is missing. Bring it here and I can unlock the passage.",
+          "doneText": "That is the missing module. Thank you! I have opened the passage to mission control.",
+          "goal": 1
+        }
+      ],
+      "wires": [
+        {
+          "from": "node-3",
+          "to": "node-1",
+          "signal": 1,
+          "input": 1
+        }
+      ]
+    },
+    {
+      "id": "module-3",
+      "name": "Power restoration job",
+      "kind": 4,
+      "a": {
+        "room": "room-3",
+        "x": 192,
+        "y": 216
+      },
+      "b": {
+        "room": "room-3",
+        "x": 192,
+        "y": 216
+      },
+      "initiallyOpen": false,
+      "toggle": false,
+      "facingLeft": false,
+      "health": 2,
+      "width": 16,
+      "height": 16,
+      "sprite": {
+        "file": "",
+        "x": 0,
+        "y": 0,
+        "w": 256,
+        "h": 224
+      },
+      "frames": 1,
+      "fps": 6,
+      "layer": 1,
+      "outputs": [],
+      "nodes": [
+        {
+          "id": "node-1",
+          "name": "Access door",
+          "kind": 1,
+          "at": {
+            "room": "room-3",
+            "x": 192,
+            "y": 216
+          },
+          "graphX": 504,
+          "graphY": 24,
+          "width": 16,
+          "height": 72,
+          "layer": 1,
+          "visuals": [
+            {
+              "art": {
+                "file": "art/door-strip.png",
+                "x": 0,
+                "y": 0,
+                "w": 16,
+                "h": 72
+              },
+              "frames": 1,
+              "fps": 8,
+              "loop": true
+            },
+            {
+              "art": {
+                "file": "art/door-strip.png",
+                "x": 16,
+                "y": 0,
+                "w": 16,
+                "h": 72
+              },
+              "frames": 4,
+              "fps": 8,
+              "loop": false
+            }
+          ],
+          "enabled": true,
+          "initiallyActive": false,
+          "once": false,
+          "consumeItem": true,
+          "requiredItem": "",
+          "text": "",
+          "doneText": "",
+          "goal": 1
+        },
+        {
+          "id": "node-2",
+          "name": "Mission terminal",
+          "kind": 4,
+          "at": {
+            "room": "room-3",
+            "x": 48,
+            "y": 216
+          },
+          "graphX": 24,
+          "graphY": 24,
+          "width": 16,
+          "height": 24,
+          "layer": 1,
+          "visuals": [
+            {
+              "art": {
+                "file": "art/button-strip.png",
+                "x": 0,
+                "y": 0,
+                "w": 16,
+                "h": 24
+              },
+              "frames": 1,
+              "fps": 8,
+              "loop": true
+            },
+            {
+              "art": {
+                "file": "art/button-strip.png",
+                "x": 16,
+                "y": 0,
+                "w": 16,
+                "h": 24
+              },
+              "frames": 1,
+              "fps": 8,
+              "loop": true
+            }
+          ],
+          "enabled": true,
+          "initiallyActive": false,
+          "once": false,
+          "consumeItem": true,
+          "requiredItem": "",
+          "text": "Restore the power at the orange switch. The exit will unlock when the job is complete.",
+          "doneText": "Power restored. Access granted. Module Lab complete!",
+          "goal": 1
+        },
+        {
+          "id": "node-3",
+          "name": "Power switch",
+          "kind": 0,
+          "at": {
+            "room": "room-3",
+            "x": 128,
+            "y": 216
+          },
+          "graphX": 264,
+          "graphY": 24,
+          "width": 16,
+          "height": 24,
+          "layer": 1,
+          "visuals": [
+            {
+              "art": {
+                "file": "art/button-strip.png",
+                "x": 0,
+                "y": 0,
+                "w": 16,
+                "h": 24
+              },
+              "frames": 1,
+              "fps": 8,
+              "loop": true
+            },
+            {
+              "art": {
+                "file": "art/button-strip.png",
+                "x": 16,
+                "y": 0,
+                "w": 16,
+                "h": 24
+              },
+              "frames": 1,
+              "fps": 8,
+              "loop": true
+            }
+          ],
+          "enabled": true,
+          "initiallyActive": false,
+          "once": false,
+          "consumeItem": true,
+          "requiredItem": "",
+          "text": "",
+          "doneText": "",
+          "goal": 1
+        }
+      ],
+      "wires": [
+        {
+          "from": "node-3",
+          "to": "node-2",
+          "signal": 0,
+          "input": 4
+        },
+        {
+          "from": "node-2",
+          "to": "node-1",
+          "signal": 1,
+          "input": 1
+        }
+      ]
+    }
+  ],
+  "spawn": {
+    "room": "room-1",
+    "x": 32,
+    "y": 214
+  },
+  "spawnLeft": false
+}

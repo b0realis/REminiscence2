@@ -19,6 +19,8 @@
 #include "intern.h"
 #include "systemstub.h"
 #include "util.h"
+#include "editor/runtime.h"
+#include "editor/campaign.h"
 
 static Language detectLanguage(FileSystem *fs) {
 	static const struct {
@@ -108,6 +110,9 @@ int main(int argc, char *argv[]) {
 		cli::printStartup();
 	}
 	std::string requestedAsset, requestedMusic;
+
+	std::string customProject, editorControl, customCampaign, campaignStart;
+	editor::CampaignMode campaignMode = editor::CampaignMode::Ask;
 	bool explicitMusic = false;
 	bool playCutscene = false;
 	cinematics::Selection selectedCutscene;
@@ -170,6 +175,12 @@ int main(int argc, char *argv[]) {
 		                                  {"list-assets", no_argument, 0, 27},
 		                                  {"asset-set", required_argument, 0, 28},
 		                                  {"music-source", required_argument, 0, 29},
+		                                  {"project", required_argument, 0, 30},
+		                                  {"editor-session", required_argument, 0, 31},
+		                                  {"campaign", required_argument, 0, 32},
+		                                  {"campaign-start", required_argument, 0, 33},
+		                                  {"campaign-resume", no_argument, 0, 34},
+		                                  {"campaign-new", no_argument, 0, 35},
 		                                  {0, 0, 0, 0}};
 		int index;
 		const int c = getopt_long(argc, argv, "h", options, &index);
@@ -177,6 +188,29 @@ int main(int argc, char *argv[]) {
 			break;
 		}
 		switch (c) {
+		case 34:
+		case 35:
+			if (campaignMode != editor::CampaignMode::Ask) { fputs("Choose only one campaign start mode.\n", stderr); return EXIT_FAILURE; }
+			campaignMode = c == 34 ? editor::CampaignMode::Resume : editor::CampaignMode::New;
+			break;
+		case 32:
+			customCampaign = optarg;
+			if (customCampaign.empty()) { fputs("--campaign needs a campaign JSON filename.\n", stderr); return EXIT_FAILURE; }
+			break;
+		case 33:
+			campaignStart = optarg;
+			if (campaignStart.empty()) { fputs("--campaign-start needs a stage ID.\n", stderr); return EXIT_FAILURE; }
+			break;
+		case 31:
+			editorControl = optarg;
+			break;
+		case 30:
+			customProject = optarg;
+			if (customProject.empty()) {
+				fputs("--project needs a project JSON filename.\n", stderr);
+				return EXIT_FAILURE;
+			}
+			break;
 		case 27:
 			listAssets = true;
 			break;
@@ -347,6 +381,15 @@ int main(int argc, char *argv[]) {
 		fprintf(stderr, "--continue cannot be combined with cutscene-only commands.\n");
 		return EXIT_FAILURE;
 	}
+	if ((!customCampaign.empty() && (!customProject.empty() || !editorControl.empty() || continueRequested || listCutscenes || playCutscene || listAssets)) || ((!campaignStart.empty() || campaignMode != editor::CampaignMode::Ask) && customCampaign.empty()) || (!campaignStart.empty() && campaignMode == editor::CampaignMode::Resume)) { fputs("--campaign cannot be combined with other playback modes; --campaign-start needs --campaign.\n", stderr); return EXIT_FAILURE; }
+	if (!editorControl.empty() && customProject.empty()) {
+		fputs("--editor-session requires --project.\n", stderr);
+		return EXIT_FAILURE;
+	}
+	if (!customProject.empty() && (continueRequested || listCutscenes || playCutscene || listAssets)) {
+		fputs("--project cannot be combined with --continue or asset/cutscene listing/playback.\n", stderr);
+		return EXIT_FAILURE;
+	}
 	if (optind < argc && !positionalDataPath) {
 		fprintf(stderr, "Unexpected argument '%s'. Use --datapath=PATH to select game files.\n",
 		        argv[optind]);
@@ -445,12 +488,15 @@ int main(int argc, char *argv[]) {
 		preferences.musicSource.clear();
 	}
 	const bool choose = selected < 0 && library.games.size() > 1;
-	if (choose && (listCutscenes || playCutscene || continueRequested)) {
+	if (choose && (listCutscenes || playCutscene || continueRequested || !customProject.empty() || !customCampaign.empty())) {
 		fprintf(stderr, "Multiple asset sets found. Choose --asset-set=ID (see --list-assets).\n");
 		return EXIT_FAILURE;
 	}
 	if (selected < 0)
 		selected = 0;
+	if (!customCampaign.empty()) return editor::playCampaign(std::filesystem::u8path(customCampaign), library.games[selected], campaignStart, std::filesystem::u8path(savePath), campaignMode);
+	if (!customProject.empty())
+		return editor::playProject(std::filesystem::u8path(customProject), library.games[selected], std::filesystem::u8path(editorControl));
 	if (!listCutscenes && !playCutscene && !makeDir(savePath)) {
 		fprintf(stderr, "Unable to create save directory '%s'.\n", savePath);
 		return EXIT_FAILURE;

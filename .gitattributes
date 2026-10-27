@@ -1,6 +1,7 @@
 # Keep private references and generated review material out of source archives.
 # Preserve the exact whitespace of imported third-party snapshots and notes.
 third_party/imgui/** -whitespace
+third_party/editor/** -whitespace
 docs/upstream/README.md -whitespace
 
 /.local export-ignore
@@ -20,3 +21,12 @@ docs/upstream/README.md -whitespace
 /docs/reference/artwork/*.jpeg export-ignore
 /docs/reference/copy-protection/*.png export-ignore
 /docs/reference/technical/*.pdf export-ignore
+
+# Authored story demos are excluded from this public source tree.
+/examples/editor/alien-starship/** export-ignore
+/examples/editor/relay-station/** export-ignore
+/tools/create_alien_starship.py export-ignore
+/tools/create_relay_station.py export-ignore
+/tests/alien_starship_tests.cpp export-ignore
+/tests/relay_station_tests.cpp export-ignore
+/docs/screenshots/editor-relay-station-1.46.png export-ignore

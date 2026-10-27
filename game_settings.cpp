@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "game.h"
+#include "authoring_hooks.h"
 #include "file.h"
 #include "fs.h"
 #include "systemstub.h"
@@ -204,6 +205,7 @@ bool Game::startDemo(int index, std::string &reason) {
 
 bool Game::handleConfigPanel(bool recovery) {
 	settings::Session session;
+	session.campaign = _authoring && _authoring->ownsSaves();
 	session.startup = _startupMenu;
 	session.assetSources = _assetSources;
 	session.musicSources = _musicSources;
@@ -299,6 +301,7 @@ bool Game::handleConfigPanel(bool recovery) {
 		       file.open(saves::name(-1, _currentLevel, slot).c_str(), "rb", _savePath);
 	};
 	session.refreshSaves = [&] {
+		if (session.campaign) { session.saves.clear(); session.autosaves.clear(); return; }
 		session.saves = saves::scanAll(_savePath, _res._type);
 		session.autosaves = progress::scan(_savePath, _res._type);
 		session.autosaveIndex = std::min<int>(session.autosaveIndex,
@@ -318,6 +321,14 @@ bool Game::handleConfigPanel(bool recovery) {
 		                              PlayerInput::DF_SETLIFE | PlayerInput::DF_AUTOZOOM);
 	};
 	session.command = [&](settings::Action action, int slot, std::string &message) {
+		if (session.campaign) {
+			if (action == settings::Action::SaveGame) return _authoring->saveCampaign(*this, message);
+			if (action == settings::Action::LoadGame || action == settings::Action::ContinueLatest || action == settings::Action::LoadAutosave)
+				return _authoring->loadCampaign(*this, message);
+			if (action == settings::Action::StartLevel || action == settings::Action::WatchDemo || action == settings::Action::Rewind || action == settings::Action::SwitchAssets) {
+				message = "Follow the authored campaign routes; use the editor to start another stage."; return false;
+			}
+		}
 		if (action == settings::Action::SwitchAssets) {
 			if (session.assetIndex < 0 || size_t(session.assetIndex) >= _assetSources.size()) {
 				message = "Choose an available edition.";

@@ -18,6 +18,7 @@ Start with [required files by edition](../ASSETS.md). Detailed references:
 | [Audio](AUDIO.md) | FIB, SPL, VCE, MOD, PRF/MIDI/INS, Ogg, WAV, CPC/SDX2, Mac snd resources |
 | [Sega CD](../SEGA_CD.md) | CUE/BIN, ISO9660 extraction, manifest, MCD video/PCM, split-stream sprites, US embedded resources and event/level mappings |
 | [Sega CD file inventory](SEGACD_FILES.md) | Every file extracted from the tested ISO, with file sizes and use categories |
+| [Custom editor projects](CUSTOM_PROJECTS.md) | Schema-1 projects/modules, whole-image crops, collision/ledges, owned door pairs and the custom-scene runtime |
 
 ## Coordinates and edition boundaries
 

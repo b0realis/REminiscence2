@@ -22,6 +22,15 @@ PRIVATE_FORMATS = {
     ".png", ".jpg", ".jpeg", ".gif", ".webp", ".avif", ".bmp", ".svg",
     ".tif", ".tiff", ".ico", ".pdf", ".lha",
 }
+PRIVATE_CAMPAIGNS = (
+    "examples/editor/alien-starship/",
+    "examples/editor/relay-station/",
+    "tools/create_alien_starship.py",
+    "tools/create_relay_station.py",
+    "tests/alien_starship_tests.cpp",
+    "tests/relay_station_tests.cpp",
+    "docs/screenshots/editor-relay-station-1.46.png",
+)
 
 
 def check(root: Path) -> list[str]:
@@ -64,6 +73,9 @@ def check(root: Path) -> list[str]:
             if sorted(name for name in tracked if name.startswith("docs/")) != public_docs:
                 problems.append("packaging/public-docs.json must match tracked docs paths")
             for name in tracked:
+                if any(name.startswith(path) if path.endswith("/") else name == path
+                       for path in PRIVATE_CAMPAIGNS):
+                    problems.append(f"Private authored campaign content is tracked: {name}")
                 first = name.split("/", 1)[0]
                 if first in (".local", "build", "upscaled") or first.startswith("build-") or name.lower().endswith((".state", ".r2s", ".r2m")):
                     problems.append(f"Private/generated path is tracked: {name}")

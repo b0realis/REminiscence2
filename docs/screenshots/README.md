@@ -150,7 +150,79 @@ are Amiga captures; they do not demonstrate DOS/GOG or Macintosh CD assets.
 
 ![Amiga level 7](amiga-level7.png)
 
-## Image credits
+## Visual editor, 1.36
+
+![Native level editor with paired door modules](editor-workspace-1.36.png)
+
+This capture shows the actual SDL editor after its widget regression placed a
+second door/activator pair. The Workshop artwork is newly drawn project material,
+not extracted game scenery. Its provenance and GPL-3.0-or-later grant are in
+`examples/editor/workshop/README.md`. Dear ImGui UI/font notices still apply.
+
+## Module graph editor (1.37)
+
+![NPC item requirement and door connection](editor-module-graph-1.37.png)
+
+An actual SDL renderer capture of Module Lab's retrieval graph. The gold wire
+requires the signal module; the turquoise completion wire opens the door.
+The interface uses Dear ImGui; the project names and example data are original
+REminiscence2 material. No original game sprites appear in this screenshot.
+
+## Editor design guidelines (1.38)
+
+![Built-in artwork and pixel-grid guidance](editor-guidelines-1.38.png)
+
+Actual SDL-rendered Guidelines dialog over the original-art Module Lab example.
+The text and sample artwork were created for REminiscence2. Dear ImGui UI/font
+notices apply. Private original-level reference captures remain outside the repo.
+
+## Graph navigation (1.39)
+
+![Graph zoom, frame-all and connected module nodes](editor-graph-navigation-1.39.png)
+
+Actual SDL-rendered graph after automated pan/zoom and Frame all input. The
+button/door graph and UI are project-authored; there is no original game artwork
+in this capture. Native campaign editor captures remain private. Dear ImGui
+UI/font notices apply.
+
+## Playtest from the current room (1.40)
+
+![PLAY HERE and the session-only TEST marker](editor-play-here-1.40.png)
+
+Actual SDL capture after clicking Place TEST marker in the Workshop UI test.
+The room artwork is project-authored; the marker does not change the campaign's
+START. Dear ImGui UI/font notices apply. No original game artwork is shown.
+
+## Editor Settings (1.41)
+
+![Campaign setup, playtest preference and event coverage](editor-settings-1.41.png)
+
+Actual SDL-rendered settings dialog over a custom puzzle graph. It shows the
+native campaign setup button and explicit event support status. Only authored
+UI/Workshop content is shown; native campaign captures remain private. Dear
+ImGui UI/font notices apply.
+
+## Dialogue modules and three workspaces (1.42)
+
+![Separate workflows and a branching dialogue/animation puzzle](editor-dialogue-module-1.42.png)
+
+Actual SDL software-rendered Module Editing workspace after automated tab,
+module-creation, node-palette and graph-frame controls. The sample connects a
+button to a two-choice conversation, an animation and a door. The UI and all
+sample text are project-authored. No original game imagery appears. Dear ImGui
+UI/font notices apply; native campaign captures remain private.
+
+## State-machine playback (1.43)
+
+![State-machine playback with active nodes and a signal trace](editor-state-machine-1.43.png)
+
+Actual SDL software-rendered editor after Start and three single-wire steps.
+The authored airlock example shows the active state, running dialogue and last
+connection delivered. All text and nodes are project-authored; no game imagery
+or native resource tables appear. Native rule-editor captures remain private.
+Dear ImGui UI/font notices apply.
+
+## Game screenshot credits
 
 Flashback was created by Delphine Software. Its original artwork and other game
 content remain copyrighted by their respective rights holders. These screenshots
@@ -164,3 +236,8 @@ and font. Dependency notices are retained in
 The supplied publisher-manual illustrations, comic, protection sheets and cover
 scans remain private references and are not part of this gallery. Players still
 supply their own original game files.
+
+- `editor-campaign-1.45.png`: actual fourth-workspace stage routing and story inspector.
+- `editor-story-layout-1.45.png`: actual draggable 640×360 text/photo composition preview.
+- `editor-node-help-1.45.png`: actual node behavior/port help and designer-comments window.
+  These captures use original authored test content and include no Flashback game assets.

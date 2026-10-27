@@ -21,6 +21,31 @@ if [ ! -x "$engine" ]; then
     exit 1
 fi
 
+if [ "${1-}" = "--starship" ]; then
+    shift
+    demo="$project_dir/.local/editor-projects/AfterTheDrift-Classic"
+    if [ ! -f "$demo/campaign.r2campaign.json" ]; then
+        demo="$project_dir/examples/editor/alien-starship"
+    fi
+    if [ ! -f "$demo/campaign.r2campaign.json" ]; then
+        printf 'This private demo is not included. Use --campaign=/path/to/your/campaign.r2campaign.json.\n' >&2
+        exit 1
+    fi
+    set -- "--campaign=$demo/campaign.r2campaign.json" "$@"
+fi
+
+if [ "${1-}" = "--demo" ]; then
+    shift
+    demo="$project_dir/.local/editor-projects/RelayStation"
+    if [ ! -f "$demo/campaign.r2campaign.json" ]; then
+        demo="$project_dir/examples/editor/relay-station"
+    fi
+    if [ ! -f "$demo/campaign.r2campaign.json" ]; then
+        printf 'This private demo is not included. Use --campaign=/path/to/your/campaign.r2campaign.json.\n' >&2
+        exit 1
+    fi
+    set -- "--campaign=$demo/campaign.r2campaign.json" "$@"
+fi
 [ -z "$asset_choice" ] || set -- "$asset_choice" "$@"
 
 # Absolute defaults work from any directory; later arguments can override them.

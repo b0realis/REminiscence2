@@ -834,6 +834,9 @@ void Resource::load(const char *objName, int objType, const char *ext) {
 					free(dat);
 					break;
 				case OT_SPC:
+					if (size < 2)
+						error("Truncated archived SPC header");
+					free(_spc);
 					_spc = dat;
 					_spcSize = size;
 					_numSpc = READ_BE_UINT16(_spc) / 2;
@@ -1007,6 +1010,11 @@ void Resource::load_RP(File *f) {
 void Resource::load_SPC(File *f) {
 	debug(DBG_RES, "Resource::load_SPC()");
 	int len = f->size();
+	if (len < 2)
+		error("Truncated SPC header");
+	// DOS keeps its global table across levels; Amiga replaces this per level.
+	// Release on replacement instead of tying ownership to clearLevelRes().
+	free(_spc);
 	_spcSize = len;
 	_spc = (uint8_t *)malloc(len);
 	if (!_spc) {
@@ -1774,6 +1782,7 @@ void Resource::MAC_loadLevelData(int level) {
 
 	// .SPC
 	snprintf(name, sizeof(name), "Objects %c", _macLevelNumbers[level][0]);
+	free(_spc);
 	_spc = decodeResourceMacData(name, true, "PPSS");
 	_spcSize = _resourceMacDataSize;
 

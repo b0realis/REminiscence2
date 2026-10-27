@@ -23,9 +23,7 @@ struct MixerChunk {
 	const uint8_t *data;
 	uint32_t len;
 
-	MixerChunk()
-		: data(0), len(0) {
-	}
+	MixerChunk() : data(0), len(0) {}
 
 	int8_t getPCM(int offset) const {
 		if (offset < 0) {
@@ -66,13 +64,13 @@ struct Mixer {
 		MT_SOURCE_PRF,
 	};
 
-	enum {
-		MUSIC_TRACK = 1000,
-		NUM_CHANNELS = 4,
-		FRAC_BITS = 12,
-		MAX_VOLUME = 64
-	};
+	enum { MUSIC_TRACK = 1000, NUM_CHANNELS = 4, FRAC_BITS = 12, MAX_VOLUME = 64 };
 
+	using ContentHook = void (*)(void *, int16_t *, int, int, int);
+	ContentHook _contentHook = nullptr;
+	void *_contentOwner = nullptr;
+	void setContentHook(ContentHook, void *);
+	void clearContentHook(void *);
 	FileSystem *_fs;
 	SystemStub *_stub;
 	MixerChannel _channels[NUM_CHANNELS];

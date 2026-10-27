@@ -23,7 +23,8 @@ art, comic pages, screenshots, dialogue or publisher-manual passages.
 [Story journal](#story-journal) · [Keep your progress](#keep-your-progress) · [Picture and sound](#picture-and-sound) ·
 [Cutscene player](#cutscene-player) · [Build](#build) ·
 [Command reference](#command-reference) · [Configuration](#configuration) ·
-[Troubleshooting](#troubleshooting) · [Credits and license](#credits-and-license)
+[Troubleshooting](#troubleshooting) · [Create rooms](#creating-your-own-rooms) ·
+[Credits and license](#credits-and-license)
 
 ## Start playing
 
@@ -941,6 +942,50 @@ edition and language, launch command, relevant configuration, and a short
 sequence that reproduces the issue. Include terminal diagnostics. Do not attach
 commercial game files to a public issue.
 
+## Creating your own rooms
+
+The native **REminiscence2 Editor** can slice one whole-level picture into rooms,
+combine Back/Playfield/Front artwork, paint independent collision and ledges, and
+place paired doors/activators, animated props, health pickups and alien crawlers.
+Run `./edit-local.sh --campaign` to prepare and reopen the complete seven-level
+native campaign. Module Placement lists its actors and connected puzzle groups;
+Module Editing shows dependency ports, state-machine rules and delivered messages.
+Use Move/copy complete puzzle to relocate a bundle, Make behavior private before
+independent rule edits, and Pause/Step native to watch a real simulation frame.
+New actors and wiring require Restart. The full second level has no free actor
+slots; its existing puzzles can still be edited and moved. Copies remain in their
+source level and edition. See [native campaign modules](docs/NATIVE_CAMPAIGN_MODULES.md).
+
+Run `./edit-local.sh` from a built development checkout to open a private copy
+of the Workshop example. Choose your prepared Amiga, DOS/GOG or Sega CD assets
+to playtest. Editing alone needs no original assets.
+
+During an embedded playtest, arrows move/climb, Space draws the gun, Shift
+acts/fires, Enter operates a nearby activator, and Escape returns to editing.
+The playtest has Pause, Restart and One tick buttons. Custom campaigns do not
+yet have the normal game's QoL overlay, inventory menu or saves. Read the
+[editor guide](docs/LEVEL_EDITOR.md) for image slicing, modular puzzles, saving
+and the current limits.
+
+The editor's **Guidelines (F1)** button explains room sizes, art layers, collision,
+large-image slicing and visual style. **Original campaign → Edit full native
+campaign...** opens all seven levels with their original actors and scripts intact.
+**Settings** creates a native campaign project directly and selects the Play/F5
+start mode: current room, or authored beginning. The native authored mode shows
+**PLAY CAMPAIGN**. **Ctrl/Cmd+F5** always tests the current room or selected graph
+node's room. **Place TEST marker** chooses the location without changing the authored
+start; **Shift+F5** always uses that authored start. Preferences are saved per
+project folder. Native tests begin with fresh level state and the original
+actors/scripts. Pause, Apply live, Resume and Restart at edited level control
+the separate native preview. Safe art/geometry edits apply while paused; actor
+setup changes require a level restart. Native preview saves stay inside the project folder.
+
+Ctrl/Cmd-click or a selection box selects multiple custom modules; Ctrl/Cmd+C/V
+copies and pastes complete modules with independent IDs. Layer locks prevent
+accidental edits. Middle-drag/wheel pans/zooms module graphs. Click **Focus** beside
+a validation result to locate the problem. See the [editor guide](docs/LEVEL_EDITOR.md)
+for live-edit conflict rules, shortcuts and remaining custom-playtest limits.
+
 ## Credits and license
 
 Thank you to **Delphine Software** for Flashback, **Gregory Montoir** for
@@ -968,3 +1013,63 @@ Drag the app from the asset-free DMG into Applications. On first launch, choose
 location is `~/Library/Application Support/REminiscence2/assets`.
 The included `compact_assets.py` can prepare lean Amiga, GOG and Sega CD folders;
 see `MAC_PACKAGES.md` on the disk image or `tools/MAC_PACKAGES.md` in the repo.
+
+### Designing interactables
+
+Run `./edit-local.sh --modules` to try Module Lab. The editor's **EDIT MODULE
+GRAPH** view connects buttons, doors, NPCs, quest items and mission computers.
+Each node can have its own sprites, animation and room placement. Enter activates
+nearby objects and advances dialogue pages. The [module authoring guide](docs/EDITOR_MODULES.md)
+explains reusable templates, item requirements and objective chains.
+
+### Editor workspaces, dialogue and module library
+
+The editor's top tabs separate **1 Level Editing** (art, collision, exits),
+**2 Module Placement** (placing complete puzzles), and **3 Module Editing**
+(naming a puzzle, owning assets and wiring individual nodes). **Help** contains
+workflow instructions, pixel dimensions and node behavior; F1 remains available.
+
+Add a **Dialogue** node for speaker text and optional two-choice branches.
+Connect Button Used to Dialogue Activate, then Choice 1/2 or Completed to the next
+action. Enter advances pages or confirms a choice; Up/Down selects. Play animation,
+Pickup animation and Timer nodes offer Started, Completed and Stopped outputs.
+Stop cancels an action; Reset also rearms one-shot behavior. Pickup animation is a
+placed visual effect, separate from Conrad's native movement animations.
+
+A module owns its complete connected puzzle. **Owned images** supplies its node
+sprite library. **Save to library** makes a reusable template in the project's
+`modules/` folder, available under Module Placement. Each instance has independent
+state. Native campaign rules are now editable in their own graph view. Actor bindings connect
+those original events to authored dialogues and state machines; stable native
+IDs and protected script dependencies are preserved.
+See [the module guide](docs/EDITOR_MODULES.md) for examples and limits.
+
+### State-machine and puzzle playback
+
+In Module Editing, State nodes share a machine-group name. Mark one enabled state
+as Initial; Activate enters it and exits its previous sibling. Entered/Exited
+start or stop connected actions. Progress emits Completed only from an active
+state, allowing a switch or objective to gate the next transition.
+
+Start graph resets a private simulation. Play signals runs it; Pause holds it;
+Step signal / tick delivers one pending connection or advances one 30 Hz tick.
+Choose a node to simulate a switch press, entering an area, an actor event or a
+conversation choice. Green headers show active nodes and the gold connection is
+the last delivery. The trace shows signal order and node-state changes. Editing
+resets this simulation. Real playtests also have Inspect running graph.
+
+Actor nodes can patrol or be friendly, trigger dialogues with Enter, and signal
+hurt, death and patrol endpoints. In a native campaign, bind an Actor node to an
+existing actor ID to retain its artwork and connect native rule execution to new
+logic. Activate sends its configured native message. Restart the native preview
+after editing rules or modules; live geometry updates preserve existing state.
+
+### Campaign authoring and expanded modules
+
+The editor now has four authoring workspaces and 26 node types, with animated
+signals, help and designer notes. Run `./edit-local.sh --campaign-editor` to try
+the level-route editor, movies and text/photo screens. See the [campaign guide](docs/CAMPAIGN_EDITOR.md).
+Campaign progress now saves actors, puzzles, dialogue and carried items together.
+Returning levels preserve their world. Ctrl+S/Ctrl+L save/load during gameplay;
+the campaign launcher offers Resume/New. The repository includes small training
+fixtures for learning and regression tests. Full authored story demos stay private.
