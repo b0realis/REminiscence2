@@ -10,6 +10,7 @@
 namespace editor {
 constexpr int RoomWidth = 256, RoomHeight = 224, RoomStrideY = 216;
 constexpr int MaxRooms = 64, MaxModules = 64;
+constexpr int MaxModuleNodes = 64;
 enum class Layer { Back, Playfield, Front };
 enum class Kind { Door, Prop, Medkit, Crawler, Graph };
 struct Art {
@@ -60,6 +61,9 @@ enum class NodeKind {
 	CampaignTest,
 	Music,
 	Sound,
+	Lift,
+	Ambient,
+	Target,
 	Count
 };
 enum class Signal {
@@ -76,7 +80,8 @@ enum class Signal {
 	Hurt,
 	Died,
 	Reached,
-	StateChanged
+	StateChanged,
+	Hit
 };
 enum class Input {
 	Activate,
@@ -111,8 +116,11 @@ struct Node {
 	int goal = 1;
 	std::string speaker;
 	std::array<std::string, 2> choices; // both empty = continue; otherwise two branches
+	int ambientStyle = 0, ambientAmount = 2; // breathe, pulse, flow, rotor, light, dust, mist
+	int travel = 64; // target travel upward from its lower anchor, native pixels
 	int duration = 30;                  // timer ticks at 30 Hz
 	bool friendly = false, patrol = false;
+	int actorStyle = 0; // 0 native crawler; 1 authored armed guard (4x2 sprite sheet)
 	int nativeActor = -1, nativeRule = -1, message = 1, messageFrom = 0;
 	int patrolLeft = 32, patrolRight = 208, speed = 1, health = 2;
 	std::string audioFile;
@@ -178,8 +186,8 @@ struct NativeCampaign {
 	std::vector<NativePuzzle> puzzles;
 };
 struct Project {
-	int schema = 9;
-	std::string id, name = "New campaign";
+	int schema = 11;
+	std::string id, name = "New level";
 	uint32_t serial = 1;
 	std::vector<Room> rooms;
 	std::vector<Module> modules;

@@ -54,7 +54,7 @@ static void campaignChecks(const std::filesystem::path &root) {
 	check(moduleRevision(m) == revision, "Comments changed graph runtime identity");
 	p.modules.push_back(m);
 	const auto round = deserialize(serialize(p));
-	check(round.schema == 9 && round.modules[0].comments == m.comments &&
+	check(round.schema == Project{}.schema && round.modules[0].comments == m.comments &&
 	          round.modules[0].nodes[item].comments == m.nodes[item].comments,
 	      "Schema 7 lost designer comments");
 	for (int k = 0; k < int(NodeKind::Count); ++k)

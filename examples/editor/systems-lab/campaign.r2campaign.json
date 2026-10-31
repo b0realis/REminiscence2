@@ -1,0 +1,50 @@
+{
+  "schema": 1,
+  "name": "Conrad Systems Lab",
+  "entry": "lab",
+  "comments": "Conrad's private five-room starship workshop.",
+  "stages": [
+    {
+      "id": "lab",
+      "name": "Conrad personal starship lab",
+      "kind": 0,
+      "x": 24,
+      "y": 24,
+      "level": "project.r2project.json",
+      "routes": [
+        {
+          "key": "complete",
+          "label": "Debrief",
+          "to": "complete"
+        }
+      ]
+    },
+    {
+      "id": "complete",
+      "name": "Systems check complete",
+      "kind": 4,
+      "x": 340,
+      "y": 24,
+      "elements": [
+        {
+          "kind": 0,
+          "text": "SYSTEMS CHECK COMPLETE\n\nSystems stable. Repairs logged. One properly sealed airlock.\n\nConrad: Next time, a ship with less maintenance. And a coffee machine.",
+          "x": 48,
+          "y": 65,
+          "width": 544,
+          "height": 240,
+          "size": 24,
+          "color": [
+            82,
+            184,
+            176,
+            255
+          ],
+          "effect": 1,
+          "rate": 32
+        }
+      ],
+      "routes": []
+    }
+  ]
+}

@@ -22,6 +22,50 @@ static void graphChecks(const std::filesystem::path &root) {
 	machine.send(1, Input::Enable);
 	machine.use(1);
 	check(state.nodes[0].active, "Re-enabled button did not activate");
+	// Proximity modules need symmetric entry/exit, including one-shot triggers.
+	// Drive the simulator adapter too: it must not diverge from world occupancy.
+	auto proximity = makeGraph(p, 0, {room, 192, 216});
+	proximity.nodes[1].kind = NodeKind::Zone;
+	proximity.nodes[1].once = false;
+	proximity.wires = {{proximity.nodes[1].id, proximity.nodes[0].id, Signal::Entered, Input::Open},
+	                   {proximity.nodes[1].id, proximity.nodes[0].id, Signal::Exited, Input::Close}};
+	auto occupied = initialGraphState(proximity);
+	GraphMachine sensor(proximity, occupied);
+	auto eventCount = [&](Signal signal) {
+		return std::count_if(occupied.trace.begin(), occupied.trace.end(), [&](const GraphTrace &t) {
+			return t.kind == TraceKind::Signal && t.node == 1 && t.signal == signal;
+		});
+	};
+	sensor.leave(1);
+	check(eventCount(Signal::Exited) == 0, "Empty zone emitted an exit");
+	sensor.signal(1, Signal::Entered);
+	sensor.enter(1);
+	check(occupied.nodes[0].active && occupied.nodes[1].active && eventCount(Signal::Entered) == 1,
+	      "Zone entry duplicated or failed to open its connected door");
+	sensor.signal(1, Signal::Exited);
+	sensor.leave(1);
+	check(!occupied.nodes[0].active && !occupied.nodes[1].active && eventCount(Signal::Exited) == 1,
+	      "Zone exit duplicated or failed to close its connected door");
+	sensor.enter(1);
+	check(eventCount(Signal::Entered) == 2, "Repeatable zone did not rearm on leaving");
+	sensor.send(1, Input::Disable);
+	sensor.leave(1);
+	check(!occupied.nodes[1].active && eventCount(Signal::Exited) == 1,
+	      "Disabled zone emitted an exit or retained stale occupancy");
+	sensor.send(1, Input::Enable);
+	sensor.enter(1);
+	sensor.leave(1);
+	check(eventCount(Signal::Entered) == 3 && eventCount(Signal::Exited) == 2,
+	      "Re-enabled zone failed its next entry/exit pair");
+	proximity.nodes[1].once = true;
+	occupied = initialGraphState(proximity);
+	sensor.enter(1);
+	sensor.leave(1);
+	sensor.enter(1);
+	sensor.leave(1);
+	check(eventCount(Signal::Entered) == 1 && eventCount(Signal::Exited) == 1 &&
+	          occupied.nodes[1].completed && !occupied.nodes[1].active,
+	      "One-shot zone did not retain exactly one complete entry/exit pair");
 	auto copy = duplicateModule(p, pair);
 	auto other = initialGraphState(copy);
 	check(!other.nodes[0].active && copy.nodes[0].id == pair.nodes[0].id && copy.id != pair.id,
@@ -91,6 +135,32 @@ static void graphChecks(const std::filesystem::path &root) {
 	cyclic.use(0);
 	check(loop.nodes[0].completed && loop.nodes[1].completed,
 	      "Cyclic graph failed bounded dispatch");
+	// Large self-contained puzzles must survive editing, prefab import and
+	// signal propagation beyond the old 32-node boundary without losing links.
+	auto largeProject = makeProject();
+	auto large = makeGraph(largeProject, 5, {room, 48, 216});
+	for (int i = 0; i < MaxModuleNodes; ++i) {
+		large.nodes.push_back(makeNode(large, NodeKind::Relay, {room, 48, 216}));
+		if (i)
+			large.wires.push_back({large.nodes[i-1].id, large.nodes[i].id,
+			                       Signal::Used, Input::Activate});
+	}
+	largeProject.modules = {large};
+	largeProject = deserialize(serialize(largeProject));
+	savePrefab(largeProject.modules[0], root, root / "large.r2module.json");
+	auto restoredLarge = loadPrefab(largeProject, {room, 48, 216},
+	                              root / "large.r2module.json", root);
+	auto largeState = initialGraphState(restoredLarge);
+	GraphMachine largeMachine(restoredLarge, largeState);
+	largeMachine.use(0);
+	check(largeState.nodes.size() == MaxModuleNodes && largeState.nodes.back().completed,
+	      "Large imported puzzle lost its final signal");
+	rejects([&] { makeNode(restoredLarge, NodeKind::Relay, {room, 48, 216}); },
+	        "Editor exceeded module node limit");
+	auto excess = restoredLarge.nodes.back();
+	excess.id = "excess-node";
+	largeProject.modules[0].nodes.push_back(excess);
+	rejects([&] { deserialize(serialize(largeProject)); }, "Oversized imported module accepted");
 	auto invalid = p;
 	invalid.modules[0].wires[0].input = Input::Progress;
 	rejects([&] { deserialize(serialize(invalid)); }, "Incompatible port accepted");
@@ -206,8 +276,12 @@ static void graphSceneChecks(const std::filesystem::path &root, const assets::So
 	check(quest.dialogueOpen() && quest.states()[0].graph.nodes[0].active &&
 	          !quest.states()[0].graph.nodes[1].collected,
 	      "Native NPC hand-in failed");
-	check(dialogue.pixels[152 * 256 + 10] == rgba(87, 220, 202),
-	      "Dialogue did not render at native resolution");
+	Color storyColor{};
+	platform.getPaletteEntry(0xE8, &storyColor);
+	check(std::count(dialogue.pixels.begin() + 26 * 256, dialogue.pixels.begin() + 100 * 256,
+	                 rgba(storyColor.r, storyColor.g, storyColor.b)) > 20 &&
+	          dialogue.pixels[152 * 256 + 10] != rgba(87, 220, 202),
+	      "Dialogue lost native story ink/upper placement or retained its bottom panel");
 	auto x = quest.game()._pgeLive[0].pos_x;
 	platform._pi.dirMask = PlayerInput::DIR_RIGHT;
 	for (int t = 0; t < 20; ++t)

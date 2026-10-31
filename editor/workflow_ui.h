@@ -26,6 +26,56 @@ void workflowTabs() {
 		ImGui::EndTabBar();
 	}
 }
+void workflowGuide() {
+	if (!showWorkflowTips || workflow == Workflow::Help)
+		return;
+	if (p.native.enabled && workflow == Workflow::Module && !nativeExtensionGraph) {
+		ImGui::TextWrapped("Inspect an original puzzle: select a module and actor to see its "
+		                   "connections or rules. Help explains each port; the live monitor shows "
+		                   "events while the native campaign runs.");
+		return;
+	}
+	if (p.native.enabled && workflow == Workflow::Placement) {
+		ImGui::TextWrapped("Place original actors and puzzles using the palette. Select a room "
+		                   "marker to inspect it; Module Editing exposes its connections and rules. "
+		                   "Escape returns to selection.");
+		return;
+	}
+	const char *guides[] = {
+	    "Build the space: import room art on the right, or Slice image for a whole level. "
+	    "Paint collision separately, add ledges, then connect rooms using Screen transitions.",
+	    "Place a puzzle: choose a module on the left, then click the room. Select a part to "
+	    "move it; EDIT MODULE GRAPH opens its behavior. Escape returns to selection.",
+	    "Build behavior: add nodes on the left, connect an output to an input, then edit the "
+	    "selected node on the right. Start graph / Play signals tests logic; toolbar Play tests the game.",
+	    "Build the journey: add your current level or a story screen, then connect OUT to IN. "
+	    "Select a stage to edit it. The toolbar saves, checks and plays this campaign."};
+	ImGui::TextWrapped("%s", guides[int(workflow)]);
+}
+// Keep short toolbars usable at the minimum window width, without hiding actions.
+void toolbarNext(const char *label) {
+	const float width = ImGui::CalcTextSize(label).x + ImGui::GetStyle().FramePadding.x * 2;
+	if (ImGui::GetItemRectMax().x + ImGui::GetStyle().ItemSpacing.x + width <=
+	    ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMax().x)
+		ImGui::SameLine();
+}
+void itemTip(const char *text) {
+	if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled | ImGuiHoveredFlags_DelayNormal))
+		ImGui::SetTooltip("%s", text);
+}
+void chooseGameAssets() {
+	choose(
+	    [&](auto f) {
+		    library = assets::discover(f.u8string());
+		    assetIndex = 0;
+		    campaignMovieNames.clear();
+		    status = library.games.empty()
+			             ? "No supported game files found. Choose the extracted Amiga, DOS/GOG or "
+			               "Sega CD folder."
+			             : std::to_string(library.games.size()) + " editions found. Ready to play.";
+	    },
+	    false, true);
+}
 void refreshModuleLibrary() {
 	moduleLibrary.clear();
 	libraryRoot = images.root;
@@ -76,6 +126,8 @@ void registerAsset(Module &m, const Art &asset) {
 void moduleMetadata(Module &m) {
 	ImGui::SeparatorText("MODULE / NAME / ASSETS");
 	auto before = p;
+	ImGui::TextUnformatted("Module name");
+	ImGui::SetNextItemWidth(-1);
 	if (textField("##module-name", m.name, 160))
 		history.remember(before);
 	mark("module-name");

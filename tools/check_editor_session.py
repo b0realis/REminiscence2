@@ -73,10 +73,31 @@ def main():
                 applied['name'] = 'Native session regression'
                 status = wait_ack(publish('apply', applied))
                 assert status['paused'] and 'Applied' in status['message'], status
+                # Replace an actual rule through the same file protocol as the UI.
+                # Programs may serialize as backward references to shared tables.
+                previous_revision, actors = status['nativeRevision'], status['actors']
+                live_edit = copy.deepcopy(applied)
+                programs = live_edit['native']['programs']
+                behavior = live_edit['native']['actors'][1]['behavior']
+                source = behavior
+                while isinstance(programs[source], int):
+                    source = programs[source]
+                programs[behavior] = copy.deepcopy(programs[source])
+                rule = programs[behavior]['rules'][0]
+                rule['enabled'] = not rule['enabled']
+                status = wait_ack(publish('apply', live_edit))
+                assert status['paused'] and 'Applied' in status['message'], status
+                assert status['actors'] == actors and status['nativeRevision'] != previous_revision
+                live_revision = status['nativeRevision']
+                status = wait_ack(publish('apply-resume', live_edit))
+                assert not status['paused'] and '; resumed' in status['message'], status
+                status = wait_ack(publish('pause'))
+                actors = status['actors']
                 broken = copy.deepcopy(applied)
                 broken['native']['actors'][0]['data'][0] ^= 1
-                status = wait_ack(publish('apply', broken))
-                assert 'ports may change' in status['message'], status
+                status = wait_ack(publish('apply-resume', broken))
+                assert status['paused'] and 'ports may change' in status['message'], status
+                assert status['actors'] == actors and status['nativeRevision'] == live_revision
                 moved = copy.deepcopy(applied)
                 moved['native']['actors'][0]['x'] += 8
                 moved['spawn']['x'] += 8
@@ -122,7 +143,7 @@ def main():
                         child.wait(timeout=3)
                     except subprocess.TimeoutExpired:
                         child.kill(); child.wait()
-    print('Native player process: pause, atomic apply, rejection, level restart, resume and stop passed')
+    print('Native player process: live rules, apply/resume, atomic rejection, pause/step, restart and stop passed')
     return 0
 
 

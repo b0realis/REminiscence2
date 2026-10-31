@@ -30,6 +30,19 @@ static void nativeModuleUnitChecks() {
 	              {{row(100, 0x23, 9), row(100, 0x44, 1), row(100, 0x65, 2), row(100, 0x31, 2)}},
 	              {{row(200, 0x38, 9), row(200, 0x57, 1)}}};
 	n.puzzles = {{"Shared player", {0}}, {"Authored switch + door", {1, 2}}};
+	const auto counter = nativeOperandInfo(0x3e, n.programs[1], int(n.actors.size()));
+	check(counter.ranged && counter.minimum == -32768 && counter.maximum == 32767,
+	      "Counter operand inspector omitted signed range");
+	const auto message = nativeOperandInfo(0x23, n.programs[1], int(n.actors.size()));
+	check(message.ranged && message.maximum == 255 && message.values == std::vector<int>{9},
+	      "Message operand inspector confused values with targets");
+	const auto raw = nativeOperandInfo(0x44, n.programs[1], int(n.actors.size()));
+	check(!raw.ranged && raw.values == std::vector<int>{1}, "Protected source vocabulary is not visible");
+	const auto data = nativeDataInfo(n, 1);
+	check(data.size() == 4 && data[1].value == 43 && data[1].uses.find("Counter") != std::string::npos &&
+	          data[1].protection.find("scalar") != std::string::npos,
+	      "Protected scalar data is hidden or misclassified");
+
 	const auto base = n;
 	compileCollision(p);
 	validateNativeLogic(n, base);
@@ -68,6 +81,9 @@ static void nativeModuleUnitChecks() {
 	auto mixed = p;
 	mixed.native.programs[1].rules.push_back(row(100, 0x58, 0));
 	const auto before = serialize(mixed);
+	const auto mixedInfo = nativeDataInfo(mixed.native, 1);
+	check(mixedInfo[0].protection.find("mixed use") != std::string::npos,
+	      "Mixed operand explanation missing");
 	const auto mixedBase = mixed.native;
 	rejects([&] { copyNativePuzzle(mixed, 1, {}, 0, 0, mixedBase); },
 	        "Mixed actor/value field relocated");

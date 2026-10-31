@@ -60,8 +60,10 @@ void inputStatePlayback(int frame, Workspace &app) {
 		app.graphFrameAll = true;
 		app.setWorkflow(Workflow::Module);
 	}
-	if (!app.library.games.empty())
+	if (!app.library.games.empty()) {
 		click(556, "native-rule-enabled");
+		click(558, "native-operand-help");
+	}
 	if (frame == 562 && !app.library.games.empty()) {
 		OriginalLevel original(app.library.games.front(), &app.nativePreview, 0);
 		app.p = original.createProject(true);
@@ -112,19 +114,21 @@ void checkStatePlayback(int frame, Workspace &app) {
 		app.graphNode = 3;
 	}
 	if (frame == 550) {
-		screenshot(app.renderer, (output / "state-machine-playback.bmp").u8string());
+		screenshot(app.renderer, (output / "state-machine-playback.png").u8string());
 
 	}
 	if (frame == 559 && !app.library.games.empty()) {
+		require(app.testPoints.count("native-operand-value"),
+		        "Native operand explanation did not expose its raw value");
 		require(!app.p.native.programs[app.p.native.actors[app.nativeActor].behavior]
 		             .rules[app.nativeRule]
 		             .enabled,
 		        "Native rule inspector did not edit the original event node");
-		screenshot(app.renderer, (output / "native-rule-editor.bmp").u8string());
+		screenshot(app.renderer, (output / "native-rule-editor.png").u8string());
 	}
 	if (frame == 569 && !app.library.games.empty()) {
 		require(app.nativePlacementOpen, "Native placement dialog did not open");
-		screenshot(app.renderer, (output / "native-puzzle-placement.bmp").u8string());
+		screenshot(app.renderer, (output / "native-puzzle-placement.png").u8string());
 	}
 	if (frame == 575 && !app.library.games.empty()) {
 		require(!app.nativePlacementOpen, "Native puzzle copy failed in UI");
@@ -134,7 +138,7 @@ void checkStatePlayback(int frame, Workspace &app) {
 		app.graphFrameAll = true;
 	}
 	if (frame == 578 && !app.library.games.empty()) {
-		screenshot(app.renderer, (output / "native-puzzle-connections.bmp").u8string());
+		screenshot(app.renderer, (output / "native-puzzle-connections.png").u8string());
 		const auto count = app.p.native.actors.size();
 		require(app.history.undo(app.p) && app.p.native.actors.size() < count,
 		        "Native puzzle copy cannot be undone");

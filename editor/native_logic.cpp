@@ -207,6 +207,61 @@ void captureNativeLogic(Game &g, NativeCampaign &n) {
 		                                  std::to_string(actors.front()),
 		                     actors});
 }
+// Ranges shared by the validator and the educational operand inspector.
+static bool operandRange(int op, bool known, int actors, int &lo, int &hi) {
+	lo = -32768;
+	hi = 32767;
+	if (op == 0 || op == 0x3e || op == 0x55 || op == 0x56)
+		return true;
+	if (!known)
+		return false;
+	if (op == 0x30 || op == 0x31 || op == 0x4a || op == 0x58 || op == 0x59) {
+		lo = 0;
+		hi = std::min(actors - 1, (op == 0x30 || op == 0x4a) ? 254 : 255);
+		return true;
+	}
+	if (op == 0x22 || (op >= 0x23 && op <= 0x26) || (op >= 0x38 && op <= 0x3b)) {
+		lo = 0;
+		hi = 255;
+		return true;
+	}
+	return false;
+}
+NativeOperandInfo nativeOperandInfo(int op, const NativeProgram &source, int actors) {
+	NativeOperandInfo info;
+	for (const auto &r : source.rules)
+		for (int slot = 0; slot < 3; ++slot)
+			if (r.opcode[slot] == op)
+				info.values.push_back(r.argument[slot]);
+	std::sort(info.values.begin(), info.values.end());
+	info.values.erase(std::unique(info.values.begin(), info.values.end()), info.values.end());
+	info.ranged = operandRange(op, !info.values.empty(), actors, info.minimum, info.maximum);
+	info.meaning = "Original engine/resource operand";
+	if (op == 0)
+		info.meaning = "Unused: no operation";
+	else if (op == 0x3e)
+		info.meaning = "Set this actor's counter";
+	else if (op == 0x55)
+		info.meaning = "Set this actor's health";
+	else if (op == 0x56)
+		info.meaning = "Add to this actor's health (negative subtracts)";
+	else if (op == 0x22 || (op >= 0x23 && op <= 0x26) || (op >= 0x38 && op <= 0x3b))
+		info.meaning = "Message value; the actor target/sender is a separate dependency";
+	else if (op == 0x30 || op == 0x31 || op == 0x4a || op == 0x58 || op == 0x59)
+		info.meaning = "Actor ID; inspect its typed dependency port";
+	else if (op == 0x41 || op == 0x42 || op == 0x44 || op == 0x57 || op == 0x87)
+		info.meaning = "Index into this actor's data[0..3]; inspect Actor data below";
+	else if (op == 0x65 || op == 0x66 || op == 0x82)
+		info.meaning = "Index into a pair of actor data slots; inspect Actor data below";
+	info.constraint =
+	    info.ranged
+	        ? "Reviewed range: " + std::to_string(info.minimum) + ".." +
+	              std::to_string(info.maximum) + ". Full dependency validation still applies."
+	        : "Protected vocabulary: choose values used by this source behavior. Other values may "
+	          "index animation, collision, text, sound or shared engine resources whose bounds are "
+	          "not certified for arbitrary edits. The raw value remains visible for study.";
+	return info;
+}
 static bool sameRules(const std::vector<NativeRule> &a, const std::vector<NativeRule> &b) {
 	if (a.size() != b.size())
 		return false;
@@ -297,16 +352,11 @@ void validateNativeLogic(const NativeCampaign &n, const NativeCampaign &base) {
 				    "Native transition must target a rule with its destination animation state");
 			for (int k = 0; k < 3; ++k) {
 				const int op = r.opcode[k], arg = r.argument[k];
-				const bool actor =
-				    (op == 0x30 || op == 0x31 || op == 0x4a || op == 0x58 || op == 0x59) &&
-				    opcodes.count(op) && arg >= 0 && arg < int(n.actors.size()) &&
-				    ((op != 0x30 && op != 0x4a) || arg < 255);
-				const bool scalar =
-				    op == 0 || op == 0x3e || op == 0x55 || op == 0x56 ||
-				    (opcodes.count(op) &&
-					 (op == 0x22 || (op >= 0x23 && op <= 0x26) || (op >= 0x38 && op <= 0x3b)) &&
-					 arg >= 0 && arg <= 255);
-				if (!actor && !scalar && !operands.count({op, arg}))
+				int minimum, maximum;
+				const bool ranged =
+				    operandRange(op, opcodes.count(op), int(n.actors.size()), minimum, maximum) &&
+				    arg >= minimum && arg <= maximum;
+				if (!ranged && !operands.count({op, arg}))
 					throw std::runtime_error("Uncertified native operand; use this behavior's "
 					                         "original vocabulary or a typed dependency port");
 			}
@@ -390,6 +440,9 @@ void installNativeLogic(Game &g, const NativeCampaign &n) {
 	if (n.programs.empty())
 		return;
 	std::vector<ObjectNode *> compiled;
+	// Reserve before allocating raw tables, so recording a new owner cannot
+	// throw and leak the just-allocated ObjectNode under memory pressure.
+	compiled.reserve(n.programs.size());
 	auto release = [&] {
 		for (auto *p : compiled)
 			if (p) {

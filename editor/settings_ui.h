@@ -21,8 +21,8 @@ void settingsUI() {
 		if (!library.games.empty())
 			ImGui::TextWrapped("Selected assets: %s", library.games.at(assetIndex).label.c_str());
 		else
-			ImGui::TextWrapped("Choose an asset folder and edition in the palette before creating "
-			                   "a native campaign project.");
+			ImGui::TextWrapped("Use Game assets... in the toolbar to choose your extracted game "
+			                   "files before creating a native campaign project.");
 		ImGui::BeginDisabled(library.games.empty() || nativePlayer.running());
 		createNative = ImGui::Button("Create native campaign project...");
 		mark("settings-native");
@@ -63,8 +63,9 @@ void settingsUI() {
 			const char *rows[][2] = {
 			    {"Original actors and hidden helpers",
 				 "Selectable palette records and room markers"},
-			    {"Actor placement, facing and health", "Editable; restart to apply"},
-			    {"Original story and puzzle scripts", "Preserved until edited; restart applies rules"},
+			    {"Actor placement / facing", "Editable; restart to apply"},
+			    {"Initial actor health", "Live if unchanged in play; restart otherwise"},
+			    {"Original story and puzzle scripts", "Compatible rules and typed ports apply live"},
 			    {"Native rule execution / live graph trace", "Available in Module Editing"},
 			    {"Native puzzle modules / event graph editing",
 				 "Rule nodes + authored actor bindings"},

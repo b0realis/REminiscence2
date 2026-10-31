@@ -106,6 +106,14 @@ bool preferenceButtons(settings::Session &s, const settings::Preferences &openin
 	return resetCapture;
 }
 void sessionPage(settings::Session &s, const char *query) {
+	if (s.authoredScene) {
+		ImGui::SeparatorText("Authored scene / paused");
+		ImGui::TextWrapped("%s", s.edition.c_str());
+		ImGui::Text("Room %d / Health %d", s.room + 1, s.health);
+		hint("Resume continues here. Saves contains the authored checkpoint; Graphics, Audio and Controls apply during play.");
+		if (wideButton("Capture clean screenshot")) s.action = settings::Action::Screenshot;
+		return;
+	}
 	if (!s.assetSources.empty() && match(query, "Assets edition Amiga DOS GOG Macintosh source")) {
 		ImGui::SeparatorText("Game edition");
 		s.assetIndex = std::clamp(s.assetIndex, 0, int(s.assetSources.size()) - 1);
@@ -245,11 +253,15 @@ void savesPage(settings::Session &s, const char *query,
 		return;
 	if (s.campaign) {
 		ImGui::SeparatorText("Campaign progress");
-		hint("One campaign checkpoint includes actors, puzzles, dialogue and carried items. Autosaves every 10 seconds and when changing stages.");
+		hint(s.authoredScene
+		         ? "Checkpoints include actors, puzzles, dialogue and carried items. Campaigns autosave every 10 seconds; standalone playtest checkpoints last until this session closes."
+		         : "One campaign checkpoint includes actors, puzzles, dialogue and carried items. Autosaves every 10 seconds and when changing stages.");
 		ImGui::BeginDisabled(!s.canSave || s.recovery);
 		if (wideButton("Save campaign now")) s.action = settings::Action::SaveGame;
 		ImGui::EndDisabled();
+		ImGui::BeginDisabled(!s.canLoad);
 		if (wideButton("Restore campaign checkpoint...")) ImGui::OpenPopup("Restore campaign?");
+		ImGui::EndDisabled();
 		confirmation("Restore campaign?", "Replace current progress with the last campaign checkpoint?", "Restore", [&] { s.action = settings::Action::LoadGame; });
 		return;
 	}
@@ -420,6 +432,11 @@ void cheatsPage(settings::Session &s, const char *query) {
 	}
 }
 void levelsPage(settings::Session &s, const char *query) {
+	if (s.authoredScene) {
+		ImGui::SeparatorText("Authored campaign");
+		hint("Follow this level's exits. To play another designed room or stage, select it in the editor and press Play.");
+		return;
+	}
 	if (!match(query, "Level select difficulty restart start jungle earth titan morphs"))
 		return;
 	ImGui::SeparatorText("Level selection");
@@ -448,7 +465,7 @@ void levelsPage(settings::Session &s, const char *query) {
 	             "Start", [&] { s.action = settings::Action::StartLevel; });
 }
 void graphicsPage(settings::Session &s, const char *query) {
-	if (match(query, "Presentation presets Classic pixels Widescreen scenery Smooth widescreen "
+	if (!s.authoredScene && match(query, "Presentation presets Classic pixels Widescreen scenery Smooth widescreen "
 	                 "Full HD 1080p 4K point xBRZ integer filter adjacent")) {
 		ImGui::SeparatorText("Presentation presets");
 		const float width = (ImGui::GetContentRegionAvail().x - 2 * ImGui::GetStyle().ItemSpacing.x) / 3;
@@ -539,7 +556,7 @@ void graphicsPage(settings::Session &s, const char *query) {
 	}
 	slider(s, query, "Scaler factor", s.values.scale,
 	       settings::filterMinScale(s.values.filter), settings::filterMaxScale(s.values.filter), "%dx");
-	if (match(query, "Widescreen adjacent mirror blur borders")) {
+	if (!s.authoredScene && match(query, "Widescreen adjacent mirror blur borders")) {
 		combo(s, "Side content", s.values.widescreen,
 		      "Original playfield\0Adjacent rooms\0Adjacent rooms / blur\0Mirrored edges\0Blurred "
 		      "backdrop\0Player-supplied CD-i borders\0");
@@ -624,6 +641,13 @@ void enhancementsPage(settings::Session &s, const char *query) {
 		s.values.conradShirt = appearance::Shirt(choice);
 		hint("Changes only the T-shirt inside Conrad's jacket. The jacket, shoes, skin, hair and "
 		     "equipment retain their colours. Original uses your edition's T-shirt artwork.");
+	}
+	if (s.authoredScene) {
+		toggle(s, query, "Steady shield-hit sprite", s.values.reduceBlink,
+		       "Keep Conrad visible during shield-hit blinking.");
+		slider(s, query, "Gameplay speed", s.values.gameSpeed, 50, 100, "%d%%");
+		hint("Authored puzzles, checkpoints and story passages are defined by this project.");
+		return;
 	}
 	toggle(s, query, "Rewind history", s.values.rewind,
 	       "Session-only snapshots; use Ctrl+R to restore. Turning this off clears the history.");

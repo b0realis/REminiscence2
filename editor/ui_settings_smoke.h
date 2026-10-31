@@ -75,7 +75,7 @@ void checkSettings(int frame, Workspace &app) {
 		app.dropFile(app.path);
 		require(app.settingsOpen && serialize(app.p) == playtestDocument,
 		        "Settings modal blocks project drops");
-		screenshot(app.renderer, (output / "editor-settings.bmp").u8string());
+		screenshot(app.renderer, (output / "editor-settings.png").u8string());
 	}
 	if (frame == 359)
 		require(!app.scene && app.settingsOpen, "Settings modal blocks F5");
@@ -107,6 +107,6 @@ void checkSettings(int frame, Workspace &app) {
 		        "Hidden native markers must not allow invisible actor dragging");
 	if (frame == 433) {
 		require(app.settingsOpen, "Native settings panel opens");
-		screenshot(app.renderer, (output / "native-settings.bmp").u8string());
+		screenshot(app.renderer, (output / "native-settings.png").u8string());
 	}
 }

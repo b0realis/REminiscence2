@@ -126,7 +126,7 @@ set_target_properties(${engine_target} PROPERTIES CXX_EXTENSIONS OFF)
 
 # Custom content is shared by the desktop editor and the game's --project path.
 # It has no dependency on editor UI, and is also available to the Android player.
-add_library(reminiscence2_content STATIC editor/audio.cpp editor/content.cpp editor/image.cpp editor/runtime.cpp editor/graph.cpp editor/graph_runtime.cpp editor/original.cpp editor/editing.cpp editor/native.cpp editor/native_logic.cpp editor/native_modules.cpp editor/playtest.cpp editor/settings.cpp editor/campaign.cpp editor/campaign_player.cpp editor/campaign_progress.cpp editor/scene_progress.cpp)
+add_library(reminiscence2_content STATIC editor/audio.cpp editor/content.cpp editor/image.cpp editor/runtime.cpp editor/scene_settings.cpp editor/guard_actor.cpp editor/graph.cpp editor/graph_runtime.cpp editor/original.cpp editor/editing.cpp editor/native.cpp editor/native_logic.cpp editor/native_live.cpp editor/native_modules.cpp editor/playtest.cpp editor/settings.cpp editor/campaign.cpp editor/campaign_player.cpp editor/campaign_progress.cpp editor/scene_progress.cpp)
 target_link_libraries(reminiscence2_content PUBLIC reminiscence2_engine PRIVATE dear_imgui)
 target_link_libraries(${engine_target} PRIVATE reminiscence2_content)
 if(NOT ANDROID)
@@ -156,6 +156,10 @@ if(BUILD_TESTING)
         target_compile_definitions(reminiscence2-editor PRIVATE REMINISCENCE2_EDITOR_TESTING)
         add_test(NAME editor_module_example COMMAND reminiscence2-editor
             "${CMAKE_CURRENT_SOURCE_DIR}/examples/editor/module-lab/project.r2project.json" --validate)
+        add_test(NAME editor_systems_lab_example COMMAND reminiscence2-editor
+            "${CMAKE_CURRENT_SOURCE_DIR}/examples/editor/systems-lab/project.r2project.json" --validate)
+        add_test(NAME editor_systems_lab_campaign COMMAND reminiscence2-editor
+            "--campaign=${CMAKE_CURRENT_SOURCE_DIR}/examples/editor/systems-lab/campaign.r2campaign.json" --validate)
     endif()
     add_executable(editor_tests tests/editor_tests.cpp)
     target_link_libraries(editor_tests PRIVATE reminiscence2_content)
@@ -177,9 +181,17 @@ if(BUILD_TESTING)
     endif()
     add_executable(editor_native_tests tests/editor_native_tests.cpp)
     target_link_libraries(editor_native_tests PRIVATE reminiscence2_content)
+    add_executable(editor_platform_tests tests/editor_platform_tests.cpp)
+    target_link_libraries(editor_platform_tests PRIVATE reminiscence2_content)
+    add_executable(systems_lab_tests tests/systems_lab_tests.cpp)
+    target_link_libraries(systems_lab_tests PRIVATE reminiscence2_content)
     foreach(edition AMIGA DOS SEGACD)
         if(REMINISCENCE2_${edition}_DATA)
             string(TOLOWER "${edition}" editor_edition)
+            add_test(NAME editor_systems_lab_${editor_edition} COMMAND systems_lab_tests
+                "${CMAKE_CURRENT_SOURCE_DIR}/examples/editor/systems-lab" "${REMINISCENCE2_${edition}_DATA}"
+                "${CMAKE_CURRENT_BINARY_DIR}/systems-lab-${editor_edition}")
+            set_tests_properties(editor_systems_lab_${editor_edition} PROPERTIES TIMEOUT 90)
             if(TARGET alien_starship_tests)
                 add_test(NAME editor_starship_${editor_edition} COMMAND alien_starship_tests
                     "${CMAKE_CURRENT_SOURCE_DIR}/examples/editor/alien-starship" "${REMINISCENCE2_${edition}_DATA}"
@@ -195,6 +207,10 @@ if(BUILD_TESTING)
             add_test(NAME editor_${editor_edition} COMMAND editor_tests
                 "${CMAKE_CURRENT_BINARY_DIR}/editor-${editor_edition}" "${REMINISCENCE2_${edition}_DATA}")
             set_tests_properties(editor_${editor_edition} PROPERTIES TIMEOUT 30)
+            add_test(NAME editor_platform_${editor_edition} COMMAND editor_platform_tests
+                "${CMAKE_CURRENT_BINARY_DIR}/editor-${editor_edition}" "${REMINISCENCE2_${edition}_DATA}")
+            set_tests_properties(editor_platform_${editor_edition} PROPERTIES TIMEOUT 15
+                ENVIRONMENT "SDL_VIDEODRIVER=dummy;SDL_AUDIODRIVER=dummy;SDL_RENDER_DRIVER=software")
             add_test(NAME editor_native_${editor_edition} COMMAND editor_native_tests
                 "${CMAKE_CURRENT_BINARY_DIR}/native-${editor_edition}" "${REMINISCENCE2_${edition}_DATA}")
             set_tests_properties(editor_native_${editor_edition} PROPERTIES TIMEOUT 300 FIXTURES_SETUP native_${editor_edition})

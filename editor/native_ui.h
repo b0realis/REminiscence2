@@ -76,22 +76,31 @@ void nativeToolbar() {
 		return;
 	if (ImGui::Button("Pause native"))
 		attempt([&] { nativeCommand("pause"); });
-	ImGui::SameLine();
+	toolbarNext("Step native");
 	if (ImGui::Button("Step native"))
 		attempt([&] { nativeCommand("step"); });
-	ImGui::SameLine();
+	toolbarNext("Apply live");
 	if (ImGui::Button("Apply live"))
 		attempt([&] { nativeCommand("apply"); });
 	mark("native-apply");
-	ImGui::SameLine();
+	itemTip("Apply compatible art, geometry, rules and typed ports at the next frame boundary; "
+	        "stay paused. Conflicts explain why Restart is needed.");
+	toolbarNext("Apply + resume");
+	if (ImGui::Button("Apply + resume"))
+		attempt([&] { nativeCommand("apply-resume"); });
+	mark("native-apply-resume");
+	itemTip("Apply the same checks, then continue from the current state. A rejected edit leaves "
+	        "playback paused and the running world unchanged.");
+	toolbarNext("Resume native");
 	if (ImGui::Button("Resume native"))
 		attempt([&] { nativeCommand("resume"); });
-	ImGui::SameLine();
+	toolbarNext("Restart at edited level");
 	if (ImGui::Button("Restart at edited level"))
 		attempt([&] { nativeCommand("restart"); });
-	ImGui::SameLine();
+	toolbarNext("Stop native");
 	if (ImGui::Button("Stop native"))
 		attempt([&] { nativeCommand("stop"); });
+	mark("native-stop");
 	if (!nativeControl.empty()) {
 		if (SDL_GetTicks() - nativeStatusTime >= 250) {
 			nativeStatus = NativeSession::statusText(nativeControl);
@@ -163,7 +172,7 @@ void nativePalette() {
 	paletteSearch.Draw("Search", 135);
 	ImGui::Checkbox("All rooms / helpers", &nativeAllActors);
 	ImGui::TextWrapped("Fixed IDs preserve scripts, puzzles and inventory. Select a marker or "
-	                   "record. Actor setup edits require restart.");
+	                   "record. Placement and facing edits require restart; unchanged health can apply live.");
 	for (const auto &a : p.native.actors) {
 		if (!nativeAllActors && a.room != room)
 			continue;

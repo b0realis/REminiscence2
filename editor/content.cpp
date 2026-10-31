@@ -27,7 +27,8 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Node, id, name, kind, at, graphX, graphY, wid
                                    requiredItem, text, doneText, goal, speaker, choices, duration,
                                    stateGroup, friendly, patrol, patrolLeft, patrolRight, speed,
                                    health, nativeActor, nativeRule, message, messageFrom, comments,
-                                   campaignKey, audioFile, audioVolume, audioLoop)
+                                   campaignKey, audioFile, audioVolume, audioLoop, ambientStyle,
+                                   ambientAmount, actorStyle, travel)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(Wire, from, to, signal, input)
 void to_json(json &j, const Module &m) {
 	j = {{"id", m.id},
@@ -50,6 +51,17 @@ void to_json(json &j, const Module &m) {
 	     {"assets", m.assets},
 	     {"nodes", m.nodes},
 	     {"wires", m.wires}};
+	// Keep existing serialized modules/revisions unchanged. These parameters
+	// belong only to the new kind, which older readers reject explicitly.
+	for (auto &n : j["nodes"])
+		if (n["kind"] != int(NodeKind::Target)) n.erase("travel");
+	for (auto &n : j["nodes"])
+		if (n["actorStyle"] == 0) n.erase("actorStyle");
+	for (auto &n : j["nodes"])
+		if (n["kind"] != int(NodeKind::Ambient)) {
+			n.erase("ambientStyle");
+			n.erase("ambientAmount");
+		}
 }
 static void stripComments(json &j) {
 	if (j.is_object()) {
@@ -94,6 +106,12 @@ void from_json(const json &j, Module &m) {
 	m.assets = j.value("assets", std::vector<Art>{});
 	auto nodes = j.value("nodes", json::array());
 	for (auto &n : nodes) {
+		if (!n.contains("travel")) n["travel"] = 64;
+		if (!n.contains("actorStyle")) n["actorStyle"] = 0;
+		if (!n.contains("ambientStyle"))
+			n["ambientStyle"] = 0;
+		if (!n.contains("ambientAmount"))
+			n["ambientAmount"] = 2;
 		if (!n.contains("audioFile"))
 			n["audioFile"] = "";
 		if (!n.contains("audioVolume"))
@@ -281,8 +299,8 @@ void to_json(json &j, const Project &p) {
 }
 void from_json(const json &j, Project &p) {
 	p.schema = j.at("schema");
-	if (p.schema >= 1 && p.schema <= 8)
-		p.schema = 9; // Additive migration; native projects require a schema-aware player.
+	if (p.schema >= 1 && p.schema <= 10)
+		p.schema = 11; // Additive migration; native projects require a schema-aware player.
 	j.at("id").get_to(p.id);
 	j.at("name").get_to(p.name);
 	j.at("serial").get_to(p.serial);
@@ -444,8 +462,8 @@ std::vector<Issue> validate(const Project &p) {
 	std::vector<Issue> issues;
 	std::string whereRoom, whereModule;
 	auto error = [&](const std::string &s) { issues.push_back({true, s, whereRoom, whereModule}); };
-	if (p.schema != 9)
-		error("Unsupported project schema (expected 9)");
+	if (p.schema != 11)
+		error("Unsupported project schema (expected 11)");
 	if (!safeId(p.id))
 		error("Invalid campaign ID");
 	if (p.name.size() > 160)
@@ -822,6 +840,15 @@ void savePrefab(const Module &module, const std::filesystem::path &root,
 	checked.rooms[0].id = "local";
 	checked.spawn.room = "local";
 	checked.modules = {m};
+	if (std::any_of(m.nodes.begin(), m.nodes.end(),
+	                [](const Node &n) { return n.kind == NodeKind::Lift; })) {
+		auto lower = checked.rooms[0];
+		lower.id = "lower";
+		lower.row = 1;
+		lower.exits[0] = "local";
+		checked.rooms[0].exits[1] = lower.id;
+		checked.rooms.push_back(lower);
+	}
 	requireValid(checked);
 	forEachArt(m, [&](Art &a) {
 		if (!a.file.empty())
@@ -829,13 +856,13 @@ void savePrefab(const Module &module, const std::filesystem::path &root,
 			    importImage(assetPath(root, a.file), std::filesystem::absolute(dest).parent_path());
 	});
 	copyModuleAudio(m, root, std::filesystem::absolute(dest).parent_path());
-	writeText(json{{"schema", 7}, {"module", m}}.dump(2) + '\n', dest);
+	writeText(json{{"schema", 9}, {"module", m}}.dump(2) + '\n', dest);
 }
 Module loadPrefab(Project &p, const Anchor &at, const std::filesystem::path &src,
                   const std::filesystem::path &root) {
 	const auto j = parse(readText(src));
 	if (j.at("schema") != 1 && j.at("schema") != 2 && j.at("schema") != 3 && j.at("schema") != 4 &&
-	    j.at("schema") != 5 && j.at("schema") != 6 && j.at("schema") != 7)
+	    j.at("schema") != 5 && j.at("schema") != 6 && j.at("schema") != 7 && j.at("schema") != 8 && j.at("schema") != 9)
 		throw std::runtime_error("Unsupported prefab schema");
 	Module m = j.at("module").get<Module>();
 	m.a.room = m.b.room = at.room;

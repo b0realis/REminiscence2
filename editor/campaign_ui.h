@@ -40,13 +40,31 @@ void openCampaignDocument(const fs::path &file) {
 	campaignFrame = true;
 	setWorkflow(Workflow::Campaign);
 }
-void launchCampaign(bool selectedStage = false, bool resume = false) {
-	const auto issues = validateCampaign(campaign, campaignPath.parent_path(), true);
+void prepareCampaignPlayback() {
+	// Validate the route graph first, then save only a level actually referenced
+	// by this campaign. File/exit validation must see the edits about to be played,
+	// including renamed Level exit nodes, rather than the previous disk snapshot.
+	auto issues = validateCampaign(campaign);
 	if (!issues.empty())
 		throw std::runtime_error(issues.front());
+	if (serialize(p) != saved) {
+		const auto current = fs::weakly_canonical(path);
+		for (const auto &stage : campaign.stages)
+			if (stage.kind == StageKind::Level &&
+			    fs::weakly_canonical(assetPath(campaignPath.parent_path(), stage.level)) == current) {
+				saveAs(path);
+				break;
+			}
+	}
+	issues = validateCampaign(campaign, campaignPath.parent_path(), true);
+	if (!issues.empty())
+		throw std::runtime_error(issues.front());
+	saveCampaignDocument();
+}
+void launchCampaign(bool selectedStage = false, bool resume = false) {
 	if (library.games.empty())
 		throw std::runtime_error("Choose original game assets before playing a campaign");
-	saveCampaignDocument();
+	prepareCampaignPlayback();
 	char *base = SDL_GetBasePath();
 	if (!base)
 		throw std::runtime_error("Cannot locate player");
@@ -412,53 +430,77 @@ void campaignInspector() {
 	if (serializeCampaign(before) != serializeCampaign(campaign))
 		campaignRemember(before);
 }
+void chooseNewCampaign() {
+	choose(
+	    [&](auto f) {
+		    if (fs::exists(f))
+			    throw std::runtime_error("Choose a new filename for the campaign");
+		    if (campaignDirty())
+			    saveCampaignDocument();
+		    campaign = {};
+		    campaignPath = fs::absolute(f);
+		    campaignSaved = serializeCampaign(campaign);
+		    campaignUndo.clear();
+		    campaignRedo.clear();
+		    campaignStage = -1;
+		    campaignLink = -1;
+		    saveCampaignDocument();
+	    },
+	    true, false, "campaign.r2campaign.json");
+	picker.directory = campaignPath.parent_path().u8string();
+}
+void chooseCampaignSaveAs() {
+	choose(
+	    [&](auto f) {
+		    const auto destination = fs::absolute(f);
+		    if (destination.parent_path() != campaignPath.parent_path())
+			    throw std::runtime_error("Save in the same campaign folder; copy the entire "
+				                         "folder to relocate its assets");
+		    // A failed write must leave the original document location intact.
+		    saveCampaign(campaign, destination);
+		    campaignPath = destination;
+		    campaignSaved = serializeCampaign(campaign);
+		    status = "Saved campaign: " + campaignPath.u8string();
+	    },
+	    true, false, "campaign.r2campaign.json");
+	picker.directory = campaignPath.parent_path().u8string();
+}
+void validateCampaignDocument() {
+	campaignValidationResults = validateCampaign(campaign, campaignPath.parent_path(), true);
+	campaignValidationOpen = true;
+	status = campaignValidationResults.empty() ? "Campaign files and level exits validated"
+	                                           : "Campaign needs attention; see validation results";
+}
+void campaignValidationUI() {
+	if (!campaignValidationOpen)
+		return;
+	ImGui::SetNextWindowSize({570, 400}, ImGuiCond_Appearing);
+	if (ImGui::Begin("Campaign validation", &campaignValidationOpen)) {
+		if (ImGui::Button("Refresh"))
+			attempt([&] { validateCampaignDocument(); });
+		ImGui::TextWrapped("Checks the route graph and saved level files. Save level changes "
+		                   "before checking their exits.");
+		if (campaignValidationResults.empty())
+			ImGui::TextUnformatted("No issues found.");
+		for (const auto &error : campaignValidationResults) {
+			ImGui::Separator();
+			ImGui::TextWrapped("%s", error.c_str());
+		}
+	}
+	ImGui::End();
+}
 void campaignUI() {
-	ImGui::TextWrapped("4. CAMPAIGN / %s%s", campaign.name.c_str(), campaignDirty() ? " *" : "");
-	if (ImGui::Button("New campaign..."))
-		choose(
-		    [&](auto f) {
-			    if (fs::exists(f))
-				    throw std::runtime_error("Choose a new filename for the campaign");
-			    if (campaignDirty())
-				    saveCampaignDocument();
-			    campaign = {};
-			    campaignPath = fs::absolute(f);
-			    campaignSaved = serializeCampaign(campaign);
-			    campaignUndo.clear();
-			    campaignRedo.clear();
-			    campaignStage = -1;
-			    campaignLink = -1;
-			    saveCampaignDocument();
-		    },
-		    true, false, "campaign.r2campaign.json");
-	ImGui::SameLine();
-	if (ImGui::Button("Open campaign..."))
-		choose([&](auto f) { openCampaignDocument(f); });
-	ImGui::SameLine();
-	if (ImGui::Button("Save campaign"))
-		attempt([&] { saveCampaignDocument(); });
-	mark("campaign-save");
-	ImGui::SameLine();
-	if (ImGui::Button("Save as..."))
-		choose(
-		    [&](auto f) {
-			    if (fs::absolute(f).parent_path() != campaignPath.parent_path())
-				    throw std::runtime_error("Save in the same campaign folder; copy the entire "
-					                         "folder to relocate its assets");
-			    campaignPath = fs::absolute(f);
-			    saveCampaignDocument();
-		    },
-		    true, false, "campaign.r2campaign.json");
-	ImGui::SameLine();
 	ImGui::BeginDisabled(campaignPlayer.running());
-	if (ImGui::Button("Play campaign (F5)"))
-		attempt([&] { launchCampaign(); });
-	ImGui::SameLine();
+	ImGui::BeginDisabled(campaignStage < 0 || library.games.empty());
 	if (ImGui::Button("Play selected stage"))
 		attempt([&] { launchCampaign(true); });
+	ImGui::EndDisabled();
+	itemTip("Start at the selected story, movie or level; useful for testing a single section.");
 	ImGui::SameLine();
+	ImGui::BeginDisabled(library.games.empty());
 	if (ImGui::Button("Resume campaign"))
 		attempt([&] { launchCampaign(false, true); });
+	ImGui::EndDisabled();
 	ImGui::EndDisabled();
 	if (!library.games.empty() &&
 	    ImGui::BeginCombo("Playback assets", library.games[assetIndex].label.c_str())) {
@@ -477,7 +519,9 @@ void campaignUI() {
 		ImGui::TableNextColumn();
 		ImGui::BeginChild("campaign_palette", {0, -35});
 		auto before = campaign;
-		if (textField("Campaign name", campaign.name, 160))
+		ImGui::TextUnformatted("Campaign name");
+		ImGui::SetNextItemWidth(-1);
+		if (textField("##campaign-name", campaign.name, 160))
 			campaignRemember(before);
 		if (ImGui::Checkbox("Carry health", &campaign.carryHealth) |
 		    ImGui::Checkbox("Carry native inventory", &campaign.carryInventory))
@@ -524,11 +568,6 @@ void campaignUI() {
 				campaignLink = -1;
 			}
 		}
-		if (ImGui::Button("Undo"))
-			campaignHistory(false);
-		ImGui::SameLine();
-		if (ImGui::Button("Redo"))
-			campaignHistory(true);
 		before = campaign;
 		if (designerComments(campaign.comments))
 			campaignRemember(before);
@@ -536,11 +575,7 @@ void campaignUI() {
 		for (const auto &error : validateCampaign(campaign))
 			ImGui::TextWrapped("%s", error.c_str());
 		if (ImGui::Button("Check files and exits"))
-			attempt([&] {
-				auto errors = validateCampaign(campaign, campaignPath.parent_path(), true);
-				status =
-				    errors.empty() ? "Campaign files and level exits validated" : errors.front();
-			});
+			attempt([&] { validateCampaignDocument(); });
 		ImGui::EndChild();
 		ImGui::TableNextColumn();
 		campaignGraph();

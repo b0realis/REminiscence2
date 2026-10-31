@@ -1097,6 +1097,7 @@ void Game::prepareAnims() {
 }
 
 void Game::prepareAnimsHelper(LivePGE *pge, int16_t dx, int16_t dy) {
+	if (_authoring && !_authoring->drawsNativeActor(*pge)) return;
 	debug(DBG_GAME, "Game::prepareAnimsHelper() dx=0x%X dy=0x%X pge_num=%ld pge->flags=0x%X pge->anim_number=0x%X", dx, dy, pge - &_pgeLive[0], pge->flags, pge->anim_number);
 	const bool conrad = pge == &_pgeLive[0];
 	const int frame = pge->anim_number;

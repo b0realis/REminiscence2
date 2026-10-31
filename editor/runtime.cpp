@@ -70,6 +70,10 @@ Scene::Scene(Project p, const std::filesystem::path &root, const assets::Source 
 	restart();
 }
 Scene::~Scene() = default;
+void Scene::adoptNativeDefinition(Project &&next) noexcept {
+	std::swap(_project, next);
+	_images.clear();
+}
 Game &Scene::game() {
 	return *_game;
 }
@@ -85,10 +89,12 @@ void Scene::restart() {
 	_game = nullptr;
 	_files.reset();
 	_states.clear();
+	_targetHits.clear();
 	_exitRoute.clear();
 	_checkpointDue = false;
 	_tick = 0;
 	_previousUse = false;
+	_previousAdvance = false;
 	_paused = false;
 	_dialogue.clear();
 	_dialogues.clear();
@@ -249,6 +255,77 @@ void Scene::updateCollision() {
 				block(m.nodes[n].at, m.nodes[n].width, m.nodes[n].height);
 	}
 }
+// A lift uses two reciprocal room links, sharing the native 216px room stride.
+// Landing selection is contextual: an empty car comes to the caller first.
+void Scene::configureMachine(GraphMachine &machine) {
+	machine.canClose = [&](const Node &n) { return canClose(n.at, n.width, n.height); };
+	machine.liftTarget = [&](const Node &n, const NodeState &s,
+	                         Input input) -> std::optional<bool> {
+		if (dead())
+			return {};
+		// Explicit graph commands can drive an empty car or an automatic return;
+		// only a contextual call/ride needs a stationary player at the controls.
+		if (input == Input::Open || input == Input::Close)
+			return input == Input::Open;
+		if (ridingLift())
+			return {};
+		const auto &player = _game->_pgeLive[0];
+		const int upper = roomIndex(_project, n.at.room);
+		const int lower = roomIndex(_project, _project.rooms[upper].exits[1]);
+		if ((currentRoom() != upper && currentRoom() != lower) || player.pos_x + 8 < n.at.x ||
+		    player.pos_x + 8 >= n.at.x + n.width || std::abs(player.pos_y + 2 - n.at.y) > 4)
+			return {};
+		const bool callerBelow = currentRoom() == lower;
+		const bool carBelow = s.liftPosition == n.duration;
+		return callerBelow == carBelow ? !carBelow : callerBelow;
+	};
+}
+bool Scene::ridingLift() const {
+	for (const auto &module : _states)
+		for (const auto &state : module.graph.nodes)
+			if (state.liftPassenger)
+				return true;
+	return false;
+}
+void Scene::moveLift(size_t module, int node) {
+	const auto &n = _project.modules[module].nodes[node];
+	auto &s = _states[module].graph.nodes[node];
+	auto &player = _game->_pgeLive[0];
+	const int upper = roomIndex(_project, n.at.room);
+	const int lower = roomIndex(_project, _project.rooms[upper].exits[1]);
+	if (dead()) {
+		s.liftPassenger = false;
+		return;
+	}
+	if (s.active && s.changedAt == _tick && !ridingLift()) {
+		const int origin = s.liftTarget ? upper : lower;
+		s.liftPassenger = currentRoom() == origin && player.pos_x + 8 >= n.at.x &&
+		                  player.pos_x + 8 < n.at.x + n.width &&
+		                  std::abs(player.pos_y + 2 - n.at.y) <= 4;
+	}
+	if (!s.liftPassenger)
+		return;
+	const int feet = n.at.y + 216 * s.liftPosition / n.duration;
+	const int old = currentRoom();
+	player.room_location = feet <= 216 ? upper : lower;
+	player.pos_x = n.at.x + n.width / 2 - 8;
+	player.pos_y = (feet <= 216 ? feet : feet - 216) - 2;
+	if (old != currentRoom())
+		_game->pge_addToCurrentRoomList(&player, old);
+	_game->_currentRoom = currentRoom();
+	// The held gun follows the passenger; loose projectiles continue independently.
+	auto &gun = _game->_pgeLive[1];
+	if (gun.room_location == old) {
+		const int oldGunRoom = gun.room_location;
+		gun.room_location = currentRoom();
+		gun.pos_x = player.pos_x;
+		gun.pos_y = player.pos_y;
+		if (oldGunRoom != currentRoom())
+			_game->pge_addToCurrentRoomList(&gun, oldGunRoom);
+	}
+	if (!s.active)
+		s.liftPassenger = false;
+}
 bool Scene::canClose(const Anchor &at, int width, int height) const {
 	for (int i = 0; i < _game->_res._pgeNum; ++i) {
 		if (i > 0 && i < 5)
@@ -281,7 +358,7 @@ void Scene::activate(size_t index, bool onlyOutputs) {
 		}
 		if (m.kind == Kind::Graph && (i != index || !onlyOutputs)) {
 			GraphMachine machine(m, _states[i].graph, _tick, _values);
-			machine.canClose = [&](const Node &n) { return canClose(n.at, n.width, n.height); };
+			configureMachine(machine);
 			for (size_t n = 0; n < m.nodes.size(); ++n)
 				if (m.nodes[n].kind == NodeKind::Door) {
 					machine.send(int(n), Input::Open);
@@ -314,6 +391,7 @@ void Scene::tick() {
 	auto &g = *_game;
 	const auto &player = g._pgeLive[0];
 	const bool use = _stub->_pi.enter;
+	const bool advance = use || _stub->_pi.backspace;
 	if (!_borrowed && _stub->consumePauseRequest()) {
 		_paused = true;
 		_previousUse = use;
@@ -342,19 +420,23 @@ void Scene::tick() {
 		if (sameConversation && n && !n->choices[0].empty() && _page + 1 == _dialogue.size() &&
 		    direction && !(_previousDirection & direction))
 			_choice = 1 - _choice;
-		if (sameConversation && !_dialogue.empty() && use && !_previousUse &&
+		if (sameConversation && !_dialogue.empty() && advance && !_previousAdvance &&
 		    ++_page >= _dialogue.size())
 			finishDialogue();
 		_previousDirection = direction;
 		_previousUse = use;
+		_previousAdvance = advance;
 		finishTick();
 		return; // consuming a dialogue key must never activate a nearby button
 	}
 	_previousDirection = _stub->_pi.dirMask;
 	if (!dead()) {
+		if (!_borrowed && (_stub->_pi.dbgMask & PlayerInput::DF_SETLIFE))
+			g._pgeLive[0].life = 0x7FFF;
 		const bool graphUsed = graphTick(use && !_previousUse);
 		if (!_dialogue.empty()) {
 			_previousUse = use;
+			_previousAdvance = advance;
 			finishTick();
 			return;
 		}
@@ -387,6 +469,7 @@ void Scene::tick() {
 		}
 	}
 	_previousUse = use;
+	_previousAdvance = advance;
 	finishTick();
 }
 void Scene::finishTick() {
@@ -415,13 +498,32 @@ Image Scene::render() {
 			for (size_t n = 0; n < m.nodes.size(); ++n) {
 				const auto &node = m.nodes[n];
 				const auto &state = _states[i].graph.nodes[n];
+				if (node.kind == NodeKind::Lift) {
+					if (int(node.layer) != layer)
+						continue;
+					const int upper = roomIndex(_project, node.at.room);
+					const int lower = roomIndex(_project, _project.rooms[upper].exits[1]);
+					const int feet = node.at.y + 216 * state.liftPosition / node.duration;
+					// Draw both clipped sides while crossing the screen boundary.
+					if (currentRoom() == upper || currentRoom() == lower) {
+						auto platform = node;
+						platform.at.y = feet - (currentRoom() == lower ? 216 : 0);
+						drawNode(image, platform, state.active, _tick - state.changedAt, _images);
+					}
+					continue;
+				}
 				if (int(node.layer) == layer && node.at.room == room.id &&
 				    (state.enabled || node.kind == NodeKind::Door) &&
 				    !((node.kind == NodeKind::Item || node.kind == NodeKind::HealthPickup) &&
 				      state.completed) &&
-				    (node.kind != NodeKind::PickupAnimation || state.active))
-					drawNode(image, node, state.active || state.completed, _tick - state.changedAt,
-					         _images);
+				    (node.kind != NodeKind::PickupAnimation || state.active)) {
+					if (node.kind == NodeKind::Target) {
+						auto visible = node;
+						visible.at.y = targetFeet(node, state);
+						drawNode(image, visible, state.active, _tick - state.changedAt, _images);
+					} else
+						drawNode(image, node, state.active || state.completed, _tick - state.changedAt, _images);
+				}
 			}
 			if (int(m.layer) != layer || m.kind == Kind::Crawler || _states[i].consumed)
 				continue;
@@ -444,6 +546,7 @@ Image Scene::render() {
 					const auto *color = &palette[g._vid._frontLayer[i] * 3];
 					image.pixels[i] = rgba(color[0], color[1], color[2]);
 				}
+			drawGuards(image);
 		}
 	}
 	drawMessages(image);
@@ -507,6 +610,9 @@ void Scene::graphFeedback(GraphMachine &machine, size_t module) {
 		const auto &n = _project.modules[module].nodes[index];
 		auto &player = _game->_pgeLive[0];
 		switch (n.kind) {
+		case NodeKind::Lift:
+			moveLift(module, index);
+			break;
 		case NodeKind::HealthPickup:
 			if (player.life > 0 && player.life < 5)
 				player.life = std::min(5, player.life + n.health);
@@ -527,6 +633,10 @@ void Scene::graphFeedback(GraphMachine &machine, size_t module) {
 			_noticeUntil = _tick + 90;
 			break;
 		case NodeKind::Teleport: {
+			// A scripted transfer releases its passenger; the car continues empty.
+			for (auto &state : _states)
+				for (auto &node : state.graph.nodes)
+					node.liftPassenger = false;
 			const int old = player.room_location;
 			player.room_location = roomIndex(_project, n.at.room);
 			player.pos_x = n.at.x;
@@ -609,7 +719,7 @@ void Scene::finishDialogue() {
 	if (request.node >= 0) {
 		GraphMachine machine(_project.modules[request.module], _states[request.module].graph, _tick,
 		                     _values);
-		machine.canClose = [&](const Node &n) { return canClose(n.at, n.width, n.height); };
+		configureMachine(machine);
 		machine.finishDialogue(request.node, request.generation, _choice);
 		graphFeedback(machine, request.module);
 	}
@@ -619,19 +729,52 @@ void Scene::finishDialogue() {
 void Scene::advanceActions() {
 	for (size_t i = 0; i < _project.modules.size(); ++i) {
 		GraphMachine machine(_project.modules[i], _states[i].graph, _tick, _values);
-		machine.canClose = [&](const Node &n) { return canClose(n.at, n.width, n.height); };
+		configureMachine(machine);
 		machine.advance();
 		graphFeedback(machine, i);
 	}
 	updateCollision();
 }
-bool Scene::graphTick(bool use) {
+std::pair<int, int> Scene::interactionTarget() const {
 	const auto &player = _game->_pgeLive[0];
+	std::pair<int, int> best{-1, -1};
+	int distance = 24 * 24 * 2 + 1;
+	for (size_t m = 0; m < _project.modules.size(); ++m) {
+		for (size_t i = 0; i < _project.modules[m].nodes.size(); ++i) {
+			const auto &n = _project.modules[m].nodes[i];
+			const auto &s = _states[m].graph.nodes[i];
+			if (!s.enabled || (n.once && s.completed && n.kind == NodeKind::Button))
+				continue;
+			const int actor = _states[m].actors[i];
+			if (n.kind != NodeKind::Button && n.kind != NodeKind::Computer && n.kind != NodeKind::Npc &&
+			    !(n.kind == NodeKind::Actor && s.friendly && actor >= 0 &&
+			      (_game->_pgeLive[actor].init_PGE->object_type != 10 || _game->_pgeLive[actor].life > 0)))
+				continue;
+			const int room = actor >= 0 ? _game->_pgeLive[actor].room_location : roomIndex(_project, n.at.room);
+			const int x = actor >= 0 ? _game->_pgeLive[actor].pos_x : n.at.x;
+			const int y = actor >= 0 ? _game->_pgeLive[actor].pos_y + 2 : n.at.y;
+			const int dx = player.pos_x + 8 - (x + n.width / 2), dy = player.pos_y + 2 - y;
+			const int d = dx * dx + dy * dy;
+			if (room == currentRoom() && std::abs(dx) <= 24 && std::abs(dy) <= 24 && d < distance) {
+				best = {int(m), int(i)};
+				distance = d;
+			}
+		}
+	}
+	return best;
+}
+bool Scene::graphTick(bool use) {
+	if (ridingLift())
+		return true;
+	const auto &player = _game->_pgeLive[0];
+	// Resolve once per press. A teleport or Enable/Disable chain must not cause
+	// a second nearby control to consume the same key edge.
+	const auto selected = interactionTarget();
 	bool used = false;
 	for (size_t i = 0; i < _project.modules.size(); ++i) {
 		const auto &m = _project.modules[i];
 		GraphMachine machine(m, _states[i].graph, _tick, _values);
-		machine.canClose = [&](const Node &n) { return canClose(n.at, n.width, n.height); };
+		configureMachine(machine);
 		for (size_t j = 0; j < m.nodes.size(); ++j) {
 			const auto &n = m.nodes[j];
 			auto &state = _states[i].graph.nodes[j];
@@ -653,17 +796,14 @@ bool Scene::graphTick(bool use) {
 				    player.pos_y + 2 > n.at.y - n.height && player.pos_y - 48 < n.at.y;
 				if (inside && !state.inside)
 					machine.enter(int(j));
+				else if (!inside && state.inside)
+					machine.leave(int(j));
 				state.inside = inside;
 			} else if ((n.kind == NodeKind::Item ||
 			            (n.kind == NodeKind::HealthPickup && player.life < 5)) &&
 			           near && !state.completed)
 				machine.send(int(j), Input::Activate);
-			else if (near && use && !used && state.enabled &&
-			         (n.kind == NodeKind::Npc ||
-			          (n.kind == NodeKind::Actor && state.friendly &&
-			           (_game->_pgeLive[actor].init_PGE->object_type != 10 ||
-			            _game->_pgeLive[actor].life > 0)) ||
-			          n.kind == NodeKind::Computer || n.kind == NodeKind::Button)) {
+			else if (use && !used && state.enabled && selected == std::make_pair(int(i), int(j))) {
 				machine.use(int(j));
 				used = true;
 			}
@@ -695,17 +835,25 @@ void Scene::drawMessages(Image &image) {
 			for (int i = 0; i < 2; ++i)
 				text += (i == _choice ? "> " : "  ") + n->choices[i] + "\n";
 		}
-		y = 156;
-		height = 68;
+		y = 26; // Original story passages sit above the action, in the native font.
 	} else if (_tick < _noticeUntil)
 		text = _notice.substr(0, 30);
-	else
-		return;
+	else {
+		const auto selected = interactionTarget();
+		if (selected.first < 0 || ridingLift())
+			return;
+		text = "Enter: " + _project.modules[selected.first].nodes[selected.second].name;
+		if (text.size() > 30)
+			text = text.substr(0, 27) + "...";
+	}
 	const int panelWidth = notification ? std::min(252, int(text.size()) * 8 + 12) : 252;
-	rectangle(image, 2, y - 4, panelWidth, height, rgba(8, 20, 29, 235 * opacity / 255));
-	rectangle(image, 2, y - 4, panelWidth, 1, rgba(87, 220, 202, opacity));
+	if (notification) {
+		rectangle(image, 2, y - 4, panelWidth, height, rgba(8, 20, 29, 235 * opacity / 255));
+		rectangle(image, 2, y - 4, panelWidth, 1, rgba(87, 220, 202, opacity));
+	}
 	auto &vid = _game->_vid;
 	std::fill_n(vid._frontLayer, vid._layerSize, 0);
+	const uint8_t textColor = notification ? 15 : 0xE8;
 	int row = y;
 	size_t start = 0;
 	while (start < text.size() && row < 208) {
@@ -716,18 +864,23 @@ void Scene::drawMessages(Image &image) {
 		for (auto &c : line)
 			if (uint8_t(c) < 32 || uint8_t(c) >= 127)
 				c = '?';
-		vid.drawStringLen(line.c_str(), int(line.size()), 8, row, 15);
-		row += 10;
+		const int x = notification ? 8 : (256 - int(line.size()) * Video::CHAR_W) / 2;
+		vid.drawStringLen(line.c_str(), int(line.size()), x, row, textColor);
+		row += notification ? 10 : 8;
 		start = end + 1;
 	}
 	if (!_dialogue.empty()) {
-		const auto prompt =
-		    "Enter: " + std::to_string(_page + 1) + "/" + std::to_string(_dialogue.size()) +
-		    (dialogueNode() && !dialogueNode()->choices[0].empty() && _page + 1 == _dialogue.size()
-		         ? "  Up/Down: choice"
-		         : "  Continue");
-		vid.drawStringLen(prompt.c_str(), int(prompt.size()), 8, 212, 15);
+		const std::string prompt =
+		    dialogueNode() && !dialogueNode()->choices[0].empty() && _page + 1 == _dialogue.size()
+		        ? "Up/Down: choose  Enter: OK" : "Tab / Enter: continue";
+		vid.drawStringLen(prompt.c_str(), int(prompt.size()),
+		                  (256 - int(prompt.size()) * Video::CHAR_W) / 2, row + 8, textColor);
 	}
+	Color storyColor{};
+	_stub->getPaletteEntry(0xE8, &storyColor);
+	const auto foreground = notification ? rgba(222, 247, 238, opacity)
+	                                     : rgba(storyColor.r, storyColor.g, storyColor.b);
+
 	// DOS glyphs include palette-indexed shadow pixels. Treating every nonzero
 	// index as foreground thickens the letters until they become illegible.
 	// Sample native-resolution fonts too when overlaying a Macintosh campaign.
@@ -737,7 +890,7 @@ void Scene::drawMessages(Image &image) {
 			    vid._frontLayer[(yy * vid._h / image.height) * vid._w + xx * vid._w / image.width];
 			if (ink)
 				over(image.pixels[yy * image.width + xx],
-				     ink == 15 ? rgba(222, 247, 238, opacity) : rgba(6, 14, 22, opacity));
+				     ink == textColor ? foreground : rgba(6, 14, 22, opacity));
 		}
 }
 int playProject(const std::filesystem::path &path, const assets::Source &source,
@@ -760,26 +913,36 @@ int playProject(const std::filesystem::path &path, const assets::Source &source,
 		p.scale = 3;
 		p.filter = settings::Filter::Point;
 		p.widescreen = kWidescreenNone;
-		stub->configurePreferences(p);
 		auto scaler = ScalerParameters::defaults();
-		std::snprintf(scaler.name, sizeof(scaler.name), "point");
-		scaler.factor = 3;
-		stub->init("REminiscence2 - custom scene (Esc exits, Enter restarts after death)", 256, 224,
-		           false, kWidescreenNone, &scaler);
+		const auto profileDirectory = campaign ? campaign->path.parent_path() : path.parent_path() / ".playtest";
+		std::string preferenceReason;
+		settings::load((profileDirectory / "authored-preferences.cfg").u8string(), p, preferenceReason);
+		p.widescreen = kWidescreenNone;
+		stub->configurePreferences(p);
+		stub->setInputProfileDirectory(profileDirectory.u8string());
+		std::snprintf(scaler.name, sizeof(scaler.name), "%s", settings::filterScalerName(p.filter));
+		scaler.factor = p.scale;
+		stub->init("REminiscence2 - custom scene (Esc / F10: QoL menu)", 256, 224,
+		           p.fullscreen, kWidescreenNone, &scaler);
 		{
 			Scene scene(project, path.parent_path(), source, stub.get());
+			scene.game()._preferences = p;
+			p.applyCompatibility(g_options);
+			scene.game()._vid._conradShirt = p.conradShirt;
+			scene.game()._vid.refreshConradShirtPalette();
+			scene.game()._mix.setVolumes(p.masterVolume, p.musicVolume, p.effectsVolume, p.muted);
 			if (campaign)
 				campaign->enter(scene);
-			std::vector<uint8_t> rgb(256 * 224 * 3);
 			scene.game()._frameTimestamp = stub->getTimeStamp();
 			bool previousRestart = false;
-			while (!stub->_pi.quit && !stub->_pi.escape) {
+			while (!stub->_pi.quit) {
 				stub->setGameplayActive(!scene.paused());
 				stub->processEvents();
-				if (campaign)
-					campaign->poll(scene);
-				if (stub->_pi.quit || stub->_pi.escape)
-					break;
+				if (stub->_pi.quit) break;
+				if (scene.handleMenuInput(campaign, profileDirectory)) {
+					continue;
+				}
+				if (campaign) campaign->poll(scene);
 				const bool restart = stub->_pi.enter;
 				if (scene.dead() && !scene.paused() && restart && !previousRestart) {
 					stub->_pi.enter = false;
@@ -797,11 +960,7 @@ int playProject(const std::filesystem::path &path, const assets::Source &source,
 						*exitRoute = scene.exitRoute();
 					break;
 				}
-				const auto frame = scene.render();
-				for (size_t i = 0; i < frame.pixels.size(); ++i)
-					for (int c = 0; c < 3; ++c)
-						rgb[i * 3 + c] = uint8_t(frame.pixels[i] >> (c * 8));
-				stub->copyRectRgb24(0, 0, 256, 224, rgb.data());
+				scene.present();
 				stub->updateScreen(0);
 				// Share native pacing: carry fractional time and scheduler overshoot,
 				// and recover from long stalls without a burst of catch-up movement.
@@ -884,15 +1043,39 @@ void Scene::enforceDoors() {
 		}
 	}
 }
+void Scene::constrainActor(Game &, LivePGE &actor) {
+	if (_borrowed || (actor.index > 0 && actor.index < 5) ||
+	    actor.room_location >= _project.rooms.size())
+		return; // Projectiles, inventory and native offscreen actors retain their rules.
+	const auto &room = _project.rooms[actor.room_location];
+	const auto &before = _motion[actor.index];
+	const bool sameRoom = before.room == actor.room_location;
+	// Keep the last safe coordinate (and its native 8/16px grid phase) while
+	// allowing turn/idle animation to continue. Only constrain rule-driven room
+	// transitions: native animation offsets temporarily move feet below a floor,
+	// and clamping those offsets would change the 72px climbing grid phase.
+	if ((actor.pos_x < 0 && room.exits[3].empty()) ||
+	    (actor.pos_x > 240 && room.exits[2].empty()))
+		actor.pos_x = std::clamp(sameRoom ? before.x : int(actor.pos_x), 0, 240);
+	if ((actor.pos_y < 0 && room.exits[0].empty()) ||
+	    (actor.pos_y >= 216 && room.exits[1].empty()))
+		actor.pos_y = std::clamp(sameRoom ? before.y : int(actor.pos_y), 0, 214);
+}
 bool Scene::beforeActor(Game &g, LivePGE &actor) {
 	if (!_borrowed && (actor.index == 0 || actor.index >= 5))
 		_motion[actor.index] = {actor.pos_x, actor.pos_y, actor.room_location};
+	if (ridingLift() && (actor.index == 0 || actor.index == 1 || actor.index == 4))
+		return false;
 	for (size_t i = 0; i < _states.size(); ++i)
 		for (size_t j = 0; j < _states[i].actors.size(); ++j) {
 			if (_states[i].actors[j] != actor.index)
 				continue;
 			const auto &s = _states[i].graph.nodes[j];
 			const auto &n = _project.modules[i].nodes[j];
+			if (n.actorStyle == 1 && !_borrowed) {
+				tickGuard(i, j, actor);
+				return false;
+			}
 			if (!s.enabled || (s.held && (actor.init_PGE->object_type != 10 || actor.life > 0))) {
 				g.pge_clearMessages(actor.index);
 				return false;
@@ -919,12 +1102,36 @@ bool Scene::beforeActor(Game &g, LivePGE &actor) {
 		}
 	return true;
 }
+int Scene::gunRayHit(int room, int left, int right, int y, int direction) {
+	if (_borrowed || room < 0 || room >= int(_project.rooms.size())) return -1;
+	int impact = -1;
+	std::pair<int, int> target;
+	for (size_t i = 0; i < _states.size(); ++i) {
+		const auto &m = _project.modules[i];
+		for (size_t j = 0; j < m.nodes.size(); ++j) {
+			const auto &n = m.nodes[j];
+			const auto &s = _states[i].graph.nodes[j];
+			if (n.kind != NodeKind::Target || !s.enabled || n.at.room != _project.rooms[room].id) continue;
+			const int feet = targetFeet(n, s);
+			const int a = std::max(left, n.at.x), b = std::min(right, n.at.x + n.width);
+			if (y < feet - n.height || y >= feet || a >= b) continue;
+			const int x = direction > 0 ? a : b - 1;
+			if (impact < 0 || (direction > 0 ? x < impact : x > impact)) {
+				impact = x;
+				target = {int(i), int(j)};
+			}
+		}
+	}
+	if (impact >= 0 && std::find(_targetHits.begin(), _targetHits.end(), target) == _targetHits.end())
+		_targetHits.push_back(target);
+	return impact;
+}
 void Scene::afterSimulation(Game &g) {
 	enforceDoors();
 	for (size_t i = 0; i < _states.size(); ++i) {
 		const auto &m = _project.modules[i];
 		GraphMachine machine(m, _states[i].graph, _tick, _values);
-		machine.canClose = [&](const Node &n) { return canClose(n.at, n.width, n.height); };
+		configureMachine(machine);
 		for (size_t j = 0; j < _states[i].actors.size(); ++j) {
 			const int id = _states[i].actors[j];
 			if (id < 0)
@@ -966,9 +1173,12 @@ void Scene::afterSimulation(Game &g) {
 				}
 			}
 		}
+		for (const auto &[module, node] : _targetHits)
+			if (module == int(i)) machine.signal(node, Signal::Hit);
 		graphFeedback(machine, i);
 	}
 	_nativeEvents.clear();
+	_targetHits.clear();
 }
 } // namespace editor
 

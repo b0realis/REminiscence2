@@ -24,7 +24,7 @@ imported native levels. Campaigns currently use one selected asset edition per r
 
 ## Build a campaign
 
-1. Choose **4 Campaign**, then **New campaign…**, or open an existing document.
+1. Choose **4 Campaign**, then **New campaign** in the top toolbar, or **Open campaign**.
 2. Add **Level**, **Movie**, **Story screen**, **Route choice**, or **End** stages.
 3. Select a Level stage and **Import / replace level…**. This copies the project
    and referenced artwork under the campaign folder. **Add current level** does
@@ -38,6 +38,20 @@ imported native levels. Campaigns currently use one selected asset edition per r
 6. **Check files and exits**, save, then **Play campaign** (F5). **Play selected
    stage** starts at that stage for testing. Campaign Undo/Redo is separate from
    level Undo/Redo. Command/Ctrl-S saves the active workspace's document.
+
+While this tab is active, all main toolbar document actions target the campaign,
+including **Save as…**, **Undo/Redo**, **Validate** and **PLAY CAMPAIGN**. The level
+document and its undo history remain separate. Save as stays within the campaign
+folder so relative asset paths remain valid; copy the complete folder to relocate
+the campaign. **Validate** lists all route/file problems in a refreshable window.
+File validation reads saved levels, so save edited level exits before checking.
+
+Campaign playback saves current room/module edits when the open level is linked
+by this campaign, then checks its images and exit names before launching. This
+also applies to **Play selected stage** and **Resume campaign**. An unrelated
+open level stays unsaved. If you imported a copy of a level, use **Open level in
+editor** to edit that campaign copy. Definition changes may require a new run
+instead of resuming an older save.
 
 Several routes with the same exit name offer a player choice, using their **Choice
 label**. Different exit names select different paths automatically. For example,

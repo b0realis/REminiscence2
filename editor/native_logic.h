@@ -10,6 +10,24 @@ void validateNativeLogic(const NativeCampaign &, const NativeCampaign &original)
 void installNativeLogic(Game &, const NativeCampaign &);
 bool sameNativeLogic(const NativeCampaign &, const NativeCampaign &);
 const char *nativeOpcodeName(int);
+// The inspector uses the same certified range policy as validation. Opaque
+// resource operands expose the source behavior's values rather than guesses.
+struct NativeOperandInfo {
+	std::string meaning, constraint;
+	bool ranged = false;
+	int minimum = 0, maximum = 0;
+	std::vector<int> values;
+};
+NativeOperandInfo nativeOperandInfo(int opcode, const NativeProgram &source, int actorCount);
+struct NativeDataInfo {
+	int slot = 0, value = 0;
+	std::string uses, protection;
+};
+std::vector<NativeDataInfo> nativeDataInfo(const NativeCampaign &, int actor);
+// Called only between simulation frames, after structural/resource validation.
+// Existing row identities and actor slots must remain stable.
+void validateNativeLive(const Game &, const NativeCampaign &before, const NativeCampaign &after);
+void applyNativeLiveActors(Game &, const NativeCampaign &before, const NativeCampaign &after);
 // Each reference names its storage location. data >= 0 refers to InitPGE.data;
 // otherwise rule/operand identifies a literal operand. Dynamic collision and
 // inventory targets are reported separately, never guessed from integer values.

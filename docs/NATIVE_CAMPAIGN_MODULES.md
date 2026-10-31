@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
-# Modular native campaign (1.44)
+# Studying and editing the native campaign
 
 All seven original levels can be opened as editable native puzzle modules. This
 keeps the original interpreter, actor templates, animations, messages, inventory,
@@ -104,10 +104,57 @@ The connections view shows:
   an actor. Only messages actually accepted into the native message queue appear.
 
 The rule view retains the executed-row/state trace. Authored extension graphs
-have their own node-state/signal monitor. Monitoring requires matching native
-project content; after wiring or rule changes, restart to see the new revision.
-**Apply live** still handles compatible art/geometry changes, preserving running
-puzzle state. New actors, placement, wiring and rule changes require **Restart**.
+have their own node-state/signal monitor. Monitoring requires matching native project content. After **Apply live**, the
+monitor follows the new revision; old trace highlights are cleared, while the
+actual game's queued messages remain intact.
+
+## Live editing: what changes without restarting
+
+Use **Pause native → edit → Apply live → Step native / Resume native** to inspect
+one change carefully. **Apply + resume** performs the same checks and continues
+play automatically on success. A rejected update leaves the world unchanged and
+paused, with a specific reason. Apply is explicit: typing in the editor does not
+silently change a running puzzle.
+
+| Edit | Live behavior |
+| --- | --- |
+| Room art and compatible collision/exits | Applied as authored differences; preserves puzzle-modified cells and rejects new collision overlapping live actors |
+| Rule conditions/actions, certified operands, transitions, movement/flags, enabled state | Applied without resetting animation cursors, counters, inventory or actor activity; existing row indices must retain their animation-state types |
+| Append a rule branch | Supported when existing rows remain stable and all destinations validate |
+| Make behavior private | Supported when the copy retains the source resource identity and row layout |
+| Rewire a certified actor/room dependency | Supported; new evaluations use the new connection; already queued messages keep their original destination |
+| Initial health | Supported only for a living actor whose current and initial health still match the last applied document; does not overwrite damage or resurrect actors |
+| Move actor, change facing/initial state, remove/restore/copy actors | Restart required: room lists, collision, inventory and activation may already differ from initial setup |
+| Change existing row state types/remove rows, change resource identity, switch level | Restart required |
+| Add/change authored extension modules | Restart required; running dialogue, timers and graph state are not migrated to changed definitions |
+
+Updates run at a complete simulation boundary. All validation, image checks and
+replacement table allocations finish before committing changes. Compatible
+extension graphs keep their progress and receive the updated native definition.
+Rewind history is cleared after application. Cutscenes, native dialogues and menus
+can defer the boundary until they finish or are skipped. **Stop native** remains
+available. Custom standalone scenes still use Stop → edit → Play.
+
+## Understand protected operands
+
+In **Module Editing → Actor state-machine rules**, select a rule to inspect its
+two conditions, action, transition, movement and flags. Operands show a reviewed
+meaning and either an editable range or a **Source values** selector. Expand
+**Operand help / raw value** for the opcode, decimal/hex value, original values
+and the reason for a restriction. Unknown semantics are described as unreviewed,
+not assigned guessed meanings. The editor and validator share the range policy.
+
+Expand **Actor data / protected operands** in either the rule or connection
+inspector to see every `data[0..3]` slot, including numeric fields with no wire.
+Each lists its reviewed uses and why it is protected or edited through a typed
+port. Disabled rules still count when determining mixed use. Changing a field
+that serves both an actor reference and a counter could break a puzzle, so these
+fields remain visible for study without unrestricted writes. Full validation
+still checks source constraints, ownership and resource compatibility.
+
+Shared behaviors affect every owner. The rule inspector shows the owner count;
+use **Make behavior private** before experimenting on one actor. Module and node
+comments are a place for the designer's observations, separate from source data.
 
 ## Campaign coverage and limits
 
@@ -129,6 +176,8 @@ Original actor 255 is retained where present. The editor checks capacity before
 editing anything; New Washington supports moving, reconnecting and modifying its
 existing modules, but cannot add actor copies.
 
+These capacity limits are intentional and remain part of the native format.
+
 Other concrete boundaries:
 
 - Copies stay in the same level and edition. Cross-level/resource-bank imports
@@ -144,8 +193,9 @@ Other concrete boundaries:
 - Dynamic lookups and global story effects can intentionally couple modules.
   A copy is an independent set of actors/rules, not a separate copy of the player,
   inventory, cinematic manager or campaign progression.
-- Native authored-graph progress remains transient playtest state, outside the
-  original campaign save/rewind format. Native base actors still use native saves.
+- Native authored-graph progress is preserved across compatible live updates.
+  It is outside ordinary native save/rewind state; authored campaign snapshots
+  have their own progress format. Native base actors still use native saves.
 - Macintosh assets were unavailable; this workflow is validated with the three
   installed editions above. Tests cover original-state parity, every copyable
   bundle's references, representative execution, and editor interactions—not a
@@ -178,7 +228,19 @@ deleting a condition cannot turn an original numeric field into an unchecked lin
 
 `editor/native_modules.cpp` owns port analysis, closure, isolation, placement and
 installation; `editor/native_logic.cpp` retains rule capture/validation/compilation.
+`editor/native_live.cpp` checks compatibility with the actual running actors
+before a live transaction. NativeSession installs replacement tables between
+frames, preserving interpreter row indices and InitPGE addresses; it adopts the
+new definition in an unchanged extension Scene without resetting its progress.
 `AuthoringHooks::behaviorIdentity` preserves sprite-bank and transport semantics.
 `messageSent` observes accepted deliveries without changing queue ordering.
 Interpreter guards bound actor/data indices, inventory ancestry/traversal and
 collision writes when authored rewiring exposes unusual branches.
+
+`tests/editor_native_live_checks.h` exercises rule replacement, private behaviors,
+appended branches, typed rewiring, health conflicts and transaction rejection
+against each installed edition's seven levels. It checks that live actor memory,
+inventory/counters and queued messages survive compatible updates. The separate
+`tools/check_editor_session.py` drives the real player command protocol, including
+**Apply + resume** and rejected edits that must remain paused. Synthetic operand
+and module tests run in public CI without distributing original game scripts.

@@ -437,6 +437,7 @@ uint16_t Game::pge_processOBJ(LivePGE *pge) {
 }
 
 void Game::pge_setupOtherPieges(LivePGE *pge, InitPGE *init_pge) {
+	if (_authoring) _authoring->constrainActor(*this, *pge);
 	const int8_t *room_ct_data = 0;
 	if (pge->pos_x <= -10) {
 		pge->pos_x += 256;

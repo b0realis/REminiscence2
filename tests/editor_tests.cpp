@@ -34,6 +34,12 @@ template <class F> static void rejects(F f, const char *why) {
 #include "editor_state_checks.h"
 #include "editor_native_module_unit_checks.h"
 #include "editor_gameplay_audit_checks.h"
+#include "editor_lift_checks.h"
+#include "editor_ambient_checks.h"
+#include "editor_guard_checks.h"
+#include "editor_target_checks.h"
+#include "editor_interaction_checks.h"
+#include "editor_scene_boundary_checks.h"
 int main(int argc, char **argv) {
 	try {
 		using namespace editor;
@@ -81,6 +87,10 @@ int main(int argc, char **argv) {
 		campaignChecks(root);
 		campaignProgressChecks(root);
 		graphChecks(root);
+		liftGraphChecks(root);
+		ambientChecks(root);
+		targetChecks();
+		guardFixture(root);
 		actionChecks(root);
 		stateMachineChecks();
 		editingChecks(root);
@@ -125,12 +135,12 @@ int main(int argc, char **argv) {
 		check(serialize(p) == before, "Failed slice destroyed project");
 		rejects([&] { assetPath(root, "../secret.png"); }, "Path traversal accepted");
 		auto bad = before;
-		auto offset = bad.find("\"schema\": 9");
-		bad.replace(offset, 11, "\"schema\": 10");
+		auto offset = bad.find("\"schema\": 11");
+		bad.replace(offset, 12, "\"schema\": 12");
 		rejects([&] { deserialize(bad); }, "Future schema accepted");
 		bad = before;
-		offset = bad.find("\"schema\": 9");
-		bad.replace(offset, 11, "\"schema\": 18446744073709551615");
+		offset = bad.find("\"schema\": 11");
+		bad.replace(offset, 12, "\"schema\": 18446744073709551615");
 		rejects([&] { deserialize(bad); }, "Unsigned JSON overflow accepted");
 		auto independent = makeProject();
 		independent.modules.push_back(
@@ -158,6 +168,9 @@ int main(int argc, char **argv) {
 			const auto library = assets::discover(argv[2]);
 			check(!library.games.empty(), "No original assets found");
 			gameplayAuditChecks(root, library.games.front(), platform);
+			interactionSceneChecks(root, library.games.front());
+			sceneBoundaryChecks(root, library.games.front());
+			sceneMenuChecks(root, library.games.front());
 			{
 				OriginalLevel native(library.games.front(), &platform);
 				check(native.startRoom() == 27 && native.actors().size() == 107,
@@ -222,6 +235,10 @@ int main(int argc, char **argv) {
 				std::cout << "Original level study: " << maps
 				          << " maps, 107 actors, exact CT copy and edited playtest passed\n";
 			}
+			liftChecks(root, library.games.front());
+			ambientSceneChecks(root, library.games.front());
+			guardSceneChecks(root, library.games.front());
+			targetSceneChecks(root, library.games.front());
 			graphSceneChecks(root, library.games.front(), platform);
 			actionSceneChecks(root, library.games.front(), platform);
 			actorSceneChecks(root, library.games.front(), platform);

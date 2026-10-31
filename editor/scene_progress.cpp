@@ -72,7 +72,8 @@ std::string Scene::saveSession() const {
 		              {"started", s.graph.started},
 		              {"life", s.lastLife},
 		              {"nodes", json::array()}};
-		for (const auto &n : s.graph.nodes)
+		for (size_t k = 0; k < s.graph.nodes.size(); ++k) {
+			const auto &n = s.graph.nodes[k];
 			state["nodes"].push_back({{"enabled", n.enabled},
 			                          {"active", n.active},
 			                          {"completed", n.completed},
@@ -85,6 +86,19 @@ std::string Scene::saveSession() const {
 			                          {"progress", n.progress},
 			                          {"changedAt", n.changedAt},
 			                          {"generation", n.generation}});
+			if (_project.modules[i].nodes[k].actorStyle == 1) {
+				auto &v = state["nodes"].back();
+				v["guard"] = {n.guardPhase, n.guardTicks, n.guardAnim};
+			}
+			if (_project.modules[i].nodes[k].kind == NodeKind::Target)
+				state["nodes"].back()["targetPhase"] = n.targetPhase;
+			if (_project.modules[i].nodes[k].kind == NodeKind::Lift) {
+				auto &v = state["nodes"].back();
+				v["liftPosition"] = n.liftPosition;
+				v["liftTarget"] = n.liftTarget;
+				v["liftPassenger"] = n.liftPassenger;
+			}
+		}
 		j["modules"].push_back(std::move(state));
 	}
 	for (const auto &r : _dialogues)
@@ -124,6 +138,7 @@ void Scene::restoreSession(const std::string &text, bool revisit) {
 	auto states = _states; // Everything is parsed and checked before live state changes.
 	const auto &modules = j.at("modules");
 	require(modules.is_array() && modules.size() == states.size());
+	int passengers = 0;
 	for (size_t i = 0; i < states.size(); ++i) {
 		auto &s = states[i];
 		const auto &v = modules[i];
@@ -154,6 +169,38 @@ void Scene::restoreSession(const std::string &text, bool revisit) {
 			n.count = number(a.at("count"), 32);
 			n.changedAt = number(a.at("changedAt"), tick);
 			n.generation = number(a.at("generation"), UINT32_MAX);
+			n.liftPosition = 0;
+			n.liftTarget = n.liftPassenger = false;
+			const auto &node = _project.modules[i].nodes[k];
+			if (node.actorStyle == 1) {
+				const auto &guard = a.at("guard");
+				require(guard.is_array() && guard.size() == 3);
+				n.guardPhase = number(guard[0], 5);
+				n.guardTicks = number(guard[1], 90);
+				n.guardAnim = number(guard[2], 119);
+			}
+			if (node.kind == NodeKind::Target) {
+				n.targetPhase = number(a.at("targetPhase"), node.duration - 1);
+				require(!n.active || n.enabled);
+			}
+			if (node.kind == NodeKind::Lift) {
+				n.liftPosition = number(a.at("liftPosition"), node.duration);
+				n.liftTarget = a.at("liftTarget").get<bool>();
+				n.liftPassenger = a.at("liftPassenger").get<bool>();
+				require(n.enabled && (!n.liftPassenger || n.active));
+				if (n.active) {
+					const auto elapsed =
+					    n.liftTarget ? n.liftPosition : node.duration - n.liftPosition;
+					// Saves happen after finishTick; permit only the current/previous tick.
+					require(!n.completed && elapsed < node.duration &&
+					        tick - n.changedAt >= uint64_t(elapsed) &&
+					        tick - n.changedAt <= uint64_t(elapsed + 1));
+				} else
+					require(n.liftPosition == (n.liftTarget ? node.duration : 0));
+				require(!n.liftPassenger || ++passengers <= 1);
+				if (revisit)
+					n.liftPassenger = false;
+			}
 			require(a.at("progress").is_array() && a.at("progress").size() <= s.graph.nodes.size());
 			n.progress.clear();
 			for (const auto &p : a.at("progress"))
@@ -275,7 +322,9 @@ void Scene::restoreSession(const std::string &text, bool revisit) {
 	_notice.clear();
 	_noticeUntil = 0;
 	_nativeEvents.clear();
+	_targetHits.clear();
 	_previousUse = false;
+	_previousAdvance = false;
 	_paused = false;
 	_previousDirection = 0;
 	_motion = {};

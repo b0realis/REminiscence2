@@ -5,6 +5,7 @@
  */
 
 #include "game.h"
+#include "authoring_hooks.h"
 #include "resource.h"
 #include "util.h"
 
@@ -356,6 +357,10 @@ int Game::col_detectHitCallback5(LivePGE *pge1, LivePGE *pge2, int16_t unk1, int
 }
 
 int Game::col_detectHitCallbackHelper(LivePGE *pge, int16_t msgNum) {
+	if (_authoring) {
+		const int hit = _authoring->acceptsHit(*pge, msgNum);
+		if (hit >= 0) return hit;
+	}
 	InitPGE *init_pge = pge->init_PGE;
 	assert(init_pge->obj_node_number < _res._numObjectNodes);
 	ObjectNode *on = _res._objectNodesMap[init_pge->obj_node_number];
@@ -475,7 +480,12 @@ int Game::col_detectGunHit(LivePGE *pge, int16_t arg2, int16_t arg4, col_Callbac
 	// Observe the existing gun ray; never run a second collision query or send
 	// an extra damage message for cosmetic weapons. Track room wrapping in the
 	// firing room's coordinates so the beam cannot pass a native collision.
-	const bool track = effectivePistolStyle() == weapon::Style::Laser && isConradShotEffect(pge);
+	const bool conradShot = isConradShotEffect(pge);
+	const bool track = effectivePistolStyle() == weapon::Style::Laser && conradShot;
+	int muzzleX = 0, muzzleY = 0;
+	const bool customRay = _authoring && conradShot && conradFlashOrigin(pge, muzzleX, muzzleY);
+	muzzleX /= _vid._layerScale;
+	muzzleY /= _vid._layerScale;
 	int roomOffset = 0;
 	auto endpoint = [&](int cell, bool impact) {
 		if (track)
@@ -517,6 +527,19 @@ int Game::col_detectGunHit(LivePGE *pge, int16_t arg2, int16_t arg4, col_Callbac
 			if ((this->*callback2)(pge, var8, varA, arg2) != 0) {
 				endpoint(grid_pos_x, true);
 				return 0;
+			}
+			if (customRay) {
+				int left = grid_pos_x * 16, right = left + 16;
+				// Never count a plate behind the muzzle, including the starting cell.
+				if (pge_room == pge->room_location) {
+					if (pos_dx > 0) left = std::max(left, muzzleX);
+					else right = std::min(right, muzzleX + 1);
+				}
+				const int hit = left < right ? _authoring->gunRayHit(pge_room, left, right, muzzleY, pos_dx) : -1;
+				if (hit >= 0) {
+					if (track) _weaponFx.trace((roomOffset + hit) * _vid._layerScale, true);
+					return 1;
+				}
 			}
 			grid_pos_x += pos_dx;
 			++varA;

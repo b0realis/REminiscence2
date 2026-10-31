@@ -62,7 +62,7 @@ void checkPlaytest(int frame, Workspace &app) {
 		            app.testStarts.at(playtestRoom).at.y == 214,
 		        "TEST marker widget uses the clicked room position");
 		require(serialize(app.p) == playtestDocument, "TEST marker changed the document");
-		screenshot(app.renderer, (output / "play-here.bmp").u8string());
+		screenshot(app.renderer, (output / "play-here.png").u8string());
 	}
 	if (frame == 300) {
 		require(app.scene && !app.paused && app.scene->project().spawn.room == playtestRoom &&

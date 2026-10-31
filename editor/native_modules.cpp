@@ -127,6 +127,35 @@ void relocate(NativeCampaign &n, const std::vector<int> &ids, const std::map<int
 	}
 }
 } // namespace
+std::vector<NativeDataInfo> nativeDataInfo(const NativeCampaign &n, int actor) {
+	if (actor < 0 || actor >= int(n.actors.size()))
+		return {};
+	const auto &a = n.actors[actor];
+	if (a.behavior < 0 || a.behavior >= int(n.programs.size()))
+		return {};
+	const auto uses = dataUses(n.programs[a.behavior]);
+	std::vector<NativeDataInfo> result;
+	for (int d = 0; d < 4; ++d) {
+		std::string reason;
+		const int use = uses.mask[d];
+		if (actor == 0)
+			reason = "Protected player/shared-service setup.";
+		else if (use == ActorUse || use == RoomUse)
+			reason = "Use the typed Target port to edit; the original source must also certify "
+			         "this reference.";
+		else if (!use)
+			reason = "No reviewed use in this behavior. Kept unchanged; not assumed to be a spare "
+			         "field.";
+		else if (use == ValueUse)
+			reason = "Protected scalar/resource value; this is not an actor ID.";
+		else
+			reason = "Protected mixed use: this slot serves more than one purpose. Rewiring it "
+			         "could alter a numeric value or resource.";
+		result.push_back(
+		    {d, a.data[d], uses.labels[d].empty() ? "No reviewed use" : uses.labels[d], reason});
+	}
+	return result;
+}
 std::vector<NativePort> nativePorts(const NativeCampaign &n, int actor) {
 	if (actor < 0 || actor >= int(n.actors.size()))
 		return {};

@@ -1,8 +1,9 @@
 # REminiscence2 validation
 
-Full story demos and their walkthrough sources are private. Historical results
-below include those local checks; a public checkout runs the editor training and
-engine regressions without either authored story campaign.
+After the Drift and Relay Station and their walkthrough sources remain private.
+Historical results below include those local checks. The Systems Lab and its
+walkthrough are public from 1.76; a public checkout also runs the editor training
+and engine regressions without either private story campaign.
 
 Before publishing 1.51, a fresh export of the staged public tree built successfully
 and passed **26/26 asset-free CTest checks** in **16.72 seconds**. Packaging-tool
@@ -10,6 +11,62 @@ checks passed **17/17**. Neither story demo, its generator, walkthrough source n
 its screenshot was present in the exported tree. The public Ogg regression uses
 an independent synthetic tone; optional private walkthroughs remain available
 locally. Documentation boundaries and staged whitespace checks passed.
+
+## Patch 1.76 — public editor updates and Systems Lab
+
+The public five-room Systems Lab includes its current project/campaign graphs,
+registered artwork, animation strips, synthesized effects, interaction inventory
+and native-input walkthrough. Its media references are relative and complete;
+no original game banks, supplied references, private captures or saved progress
+are included. After the Drift and Relay Station remain excluded.
+
+The local launchers open the public template when no working copy exists;
+editing creates a local copy without replacing existing edits. The example
+README documents asset requirements, controls, room routes and graph patterns.
+The dialogue review's proposed presentation changes are not implemented here.
+
+The rebuilt Apple Silicon player/editor and full local CTest suite passed
+**71/71 checks in 46.74 seconds**, including Systems Lab project/campaign
+validation and walkthroughs with **Amiga, DOS/GOG and Sega CD** assets. The suite
+also includes the optional private story checks available in this workspace.
+The public walkthrough checks 33 control groups, climbing, upper cabins,
+proximity doors, native combat/target hits, dialogue choices, airlock interlocks
+and save/restore. Documentation boundaries, shell syntax, PNG decoding, JSON
+parsing, changed-file credential/path checks and staged whitespace checks passed.
+Logs: `build/publish-1.76-build.log` and `build/publish-1.76-tests.log`.
+
+## Patch 1.75 — authored boundaries, pause menu and story text
+
+Authored actors cannot transition through missing room links. The guard runs at
+native rule transitions, preserving transient animation offsets and the original
+72px climbing grid. Walking, running, rolling, turning away from closed edges,
+and connected transitions in all four directions have asset-backed regressions.
+Native campaign transition semantics are unchanged.
+
+The custom CLI player now opens the shared QoL overlay on Esc/F10 instead of
+exiting. SDL regressions exercise both keys, resume, frozen simulation and
+teardown with all three supported asset editions. Authored save/restore,
+graphics/cosmetics application, fresh input and explicit Exit Game are covered.
+Custom presentation applies settings without loading an original campaign map.
+The RGB upload buffer is reused between frames.
+
+Dialogue uses native font glyphs and story ink above the action, with fresh
+Tab/Backspace or Enter presses for pagination. Choice signals and queued text
+remain covered by the existing action/save tests. The private laboratory has a
+shorter opening passage and a registered imagegen background edit; existing
+foreground pixels, platforms, controls and collision remain unchanged.
+
+The Apple Silicon build passed **66/66 CTest checks**. After the final RGB-buffer
+reuse adjustment, all **9 focused editor/menu/platform checks** and the private
+lab walkthroughs passed again with Amiga, DOS/GOG and Sega CD assets.
+
+Validation logs: `build/lab-1.75-final-tests.log`,
+`build/lab-1.75-final-focused.log` and
+`build/lab-1.75-build-final.log`. Private lab walkthroughs and captured frames:
+`build/systems-lab-1.75-{amiga,gog,segacd}`. The walkthrough exercises all 33
+control groups, eight upper cabins, proximity doors, moving-target hits, pressure
+interlocks and saved animation state. Documentation-boundary and whitespace
+checks pass. No release was published by this patch.
 
 ## Patch 1.51 — working ASan retry and memory fixes
 

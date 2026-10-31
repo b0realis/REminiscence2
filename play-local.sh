@@ -21,9 +21,18 @@ if [ ! -x "$engine" ]; then
     exit 1
 fi
 
+if [ "${1-}" = "--lab" ]; then
+    shift
+    demo="$project_dir/.local/editor-projects/SystemsLab"
+    if [ ! -f "$demo/campaign.r2campaign.json" ]; then
+        demo="$project_dir/examples/editor/systems-lab"
+    fi
+    set -- "--campaign=$demo/campaign.r2campaign.json" "$@"
+fi
+
 if [ "${1-}" = "--starship" ]; then
     shift
-    demo="$project_dir/.local/editor-projects/AfterTheDrift-Classic"
+    demo="$project_dir/.local/editor-projects/AfterTheDrift-Organic28"
     if [ ! -f "$demo/campaign.r2campaign.json" ]; then
         demo="$project_dir/examples/editor/alien-starship"
     fi

@@ -1,0 +1,508 @@
+[
+  {
+    "module": "ambience-1",
+    "button": "fan-control-off",
+    "mode": "toggle",
+    "alternate": "fan-control-on",
+    "effects": [
+      "fan"
+    ],
+    "name": "Turn off Ventilator",
+    "at": {
+      "room": "room-1",
+      "x": 122,
+      "y": 144
+    },
+    "width": 8
+  },
+  {
+    "module": "ambience-1",
+    "button": "room-light-off",
+    "mode": "toggle",
+    "alternate": "room-light-on",
+    "effects": [
+      "lamp",
+      "light"
+    ],
+    "name": "Turn off Task light",
+    "at": {
+      "room": "room-1",
+      "x": 112,
+      "y": 216
+    },
+    "width": 8
+  },
+  {
+    "module": "ambience-1",
+    "button": "navigation",
+    "mode": "pulse",
+    "dialogue": "navigation-log",
+    "effects": [
+      "beacon"
+    ],
+    "timer": "navigation-timer",
+    "name": "Flight service panel",
+    "at": {
+      "room": "room-1",
+      "x": 213,
+      "y": 72
+    },
+    "width": 6
+  },
+  {
+    "module": "targets",
+    "button": "droid-talk",
+    "mode": "read",
+    "dialogue": "droid-talk-log",
+    "name": "Talk to training droid",
+    "at": {
+      "room": "room-2",
+      "x": 120,
+      "y": 216
+    },
+    "width": 16
+  },
+  {
+    "module": "targets",
+    "button": "droid-wreck",
+    "mode": "read",
+    "dialogue": "droid-wreck-log",
+    "requiresDeath": true,
+    "name": "Inspect disabled droid",
+    "at": {
+      "room": "room-2",
+      "x": 120,
+      "y": 216
+    },
+    "width": 16
+  },
+  {
+    "module": "ambience-2",
+    "button": "room-light-off",
+    "mode": "toggle",
+    "alternate": "room-light-on",
+    "effects": [
+      "lamp",
+      "light"
+    ],
+    "name": "Turn off Range light",
+    "at": {
+      "room": "room-2",
+      "x": 137,
+      "y": 144
+    },
+    "width": 8
+  },
+  {
+    "module": "ambience-2",
+    "button": "cradle",
+    "mode": "pulse",
+    "dialogue": "cradle-log",
+    "effects": [
+      "charging"
+    ],
+    "timer": "cradle-timer",
+    "name": "Charging cradle",
+    "at": {
+      "room": "room-2",
+      "x": 40,
+      "y": 72
+    },
+    "width": 12
+  },
+  {
+    "module": "ambience-2",
+    "button": "diagnostic-console",
+    "mode": "choice",
+    "dialogue": "diagnostic-console-log",
+    "effects": [
+      "diagnostic-glow"
+    ],
+    "name": "Droid diagnostics",
+    "at": {
+      "room": "room-2",
+      "x": 73,
+      "y": 72
+    },
+    "width": 12
+  },
+  {
+    "module": "ambience-2",
+    "button": "telemetry",
+    "mode": "choice",
+    "dialogue": "telemetry-log",
+    "effects": [
+      "monitor",
+      "telemetry-glow"
+    ],
+    "name": "Range telemetry",
+    "at": {
+      "room": "room-2",
+      "x": 183,
+      "y": 72
+    },
+    "width": 12
+  },
+  {
+    "module": "ambience-2",
+    "button": "recorder",
+    "mode": "read",
+    "dialogue": "recorder-log",
+    "name": "Shot recorder",
+    "at": {
+      "room": "room-2",
+      "x": 208,
+      "y": 72
+    },
+    "width": 8
+  },
+  {
+    "module": "ambience-2",
+    "button": "power-rack",
+    "mode": "read",
+    "dialogue": "power-rack-log",
+    "name": "Range power rack",
+    "at": {
+      "room": "room-2",
+      "x": 228,
+      "y": 72
+    },
+    "width": 8
+  },
+  {
+    "module": "android-repair",
+    "button": "r03-talk",
+    "mode": "read",
+    "dialogue": "r03-talk-log",
+    "name": "Talk to R-03",
+    "at": {
+      "room": "room-3",
+      "x": 92,
+      "y": 216
+    },
+    "width": 12
+  },
+  {
+    "module": "workshop-life",
+    "button": "scope-control",
+    "mode": "choice",
+    "dialogue": "scope-control-log",
+    "effects": [
+      "scope",
+      "scope-glow"
+    ],
+    "name": "Oscilloscope",
+    "at": {
+      "room": "room-3",
+      "x": 169,
+      "y": 144
+    },
+    "width": 12
+  },
+  {
+    "module": "workshop-life",
+    "button": "sample-control",
+    "mode": "choice",
+    "dialogue": "sample-control-log",
+    "effects": [
+      "sample",
+      "sample-glow"
+    ],
+    "name": "Containment console",
+    "at": {
+      "room": "room-3",
+      "x": 205,
+      "y": 144
+    },
+    "width": 12
+  },
+  {
+    "module": "workshop-life",
+    "button": "exo",
+    "mode": "pulse",
+    "dialogue": "exo-log",
+    "effects": [
+      "suit-test"
+    ],
+    "timer": "exo-timer",
+    "name": "Exoskeleton cradle",
+    "at": {
+      "room": "room-3",
+      "x": 105,
+      "y": 144
+    },
+    "width": 14
+  },
+  {
+    "module": "ambience-3",
+    "button": "room-light-off",
+    "mode": "toggle",
+    "alternate": "room-light-on",
+    "effects": [
+      "lamp",
+      "light"
+    ],
+    "name": "Turn off Workshop light",
+    "at": {
+      "room": "room-3",
+      "x": 67,
+      "y": 216
+    },
+    "width": 8
+  },
+  {
+    "module": "ambience-3",
+    "button": "research",
+    "mode": "choice",
+    "dialogue": "research-log",
+    "effects": [
+      "research-glow"
+    ],
+    "name": "Research terminal",
+    "at": {
+      "room": "room-3",
+      "x": 43,
+      "y": 72
+    },
+    "width": 12
+  },
+  {
+    "module": "ambience-3",
+    "button": "repair-arm",
+    "mode": "pulse",
+    "dialogue": "repair-arm-log",
+    "effects": [
+      "arm-motion"
+    ],
+    "timer": "repair-arm-timer",
+    "name": "Repair arm",
+    "at": {
+      "room": "room-3",
+      "x": 77,
+      "y": 72
+    },
+    "width": 10
+  },
+  {
+    "module": "ambience-3",
+    "button": "ship-server",
+    "mode": "read",
+    "dialogue": "ship-server-log",
+    "name": "Ship systems server",
+    "at": {
+      "room": "room-3",
+      "x": 170,
+      "y": 72
+    },
+    "width": 10
+  },
+  {
+    "module": "ambience-3",
+    "button": "archive",
+    "mode": "read",
+    "dialogue": "archive-log",
+    "name": "Personal archive",
+    "at": {
+      "room": "room-3",
+      "x": 190,
+      "y": 72
+    },
+    "width": 10
+  },
+  {
+    "module": "ambience-3",
+    "button": "battery-off",
+    "mode": "toggle",
+    "alternate": "battery-on",
+    "effects": [
+      "battery-status"
+    ],
+    "name": "Turn off Battery LEDs",
+    "at": {
+      "room": "room-3",
+      "x": 218,
+      "y": 72
+    },
+    "width": 10
+  },
+  {
+    "module": "ambience-4",
+    "button": "room-light-off",
+    "mode": "toggle",
+    "alternate": "room-light-on",
+    "effects": [
+      "lamp",
+      "light"
+    ],
+    "name": "Turn off Airlock light",
+    "at": {
+      "room": "room-4",
+      "x": 174,
+      "y": 216
+    },
+    "width": 8
+  },
+  {
+    "module": "ambience-4",
+    "button": "flight-console",
+    "mode": "choice",
+    "dialogue": "flight-console-log",
+    "effects": [
+      "flight-glow"
+    ],
+    "name": "Flight status workstation",
+    "at": {
+      "room": "room-4",
+      "x": 36,
+      "y": 216
+    },
+    "width": 18
+  },
+  {
+    "module": "ambience-4",
+    "button": "scrubber-off",
+    "mode": "toggle",
+    "alternate": "scrubber-on",
+    "effects": [
+      "scrubber-fan"
+    ],
+    "name": "Turn off Cabin blower",
+    "at": {
+      "room": "room-4",
+      "x": 66,
+      "y": 72
+    },
+    "width": 10
+  },
+  {
+    "module": "ambience-4",
+    "button": "reservoir",
+    "mode": "read",
+    "dialogue": "reservoir-log",
+    "name": "Atmosphere controls",
+    "at": {
+      "room": "room-4",
+      "x": 34,
+      "y": 72
+    },
+    "width": 12
+  },
+  {
+    "module": "ambience-4",
+    "button": "locker",
+    "mode": "read",
+    "dialogue": "locker-log",
+    "name": "Emergency locker",
+    "at": {
+      "room": "room-4",
+      "x": 169,
+      "y": 72
+    },
+    "width": 10
+  },
+  {
+    "module": "ambience-4",
+    "button": "eva-suit",
+    "mode": "pulse",
+    "dialogue": "eva-suit-log",
+    "effects": [
+      "eva-test"
+    ],
+    "timer": "eva-suit-timer",
+    "name": "EVA suit self-test",
+    "at": {
+      "room": "room-4",
+      "x": 194,
+      "y": 72
+    },
+    "width": 10
+  },
+  {
+    "module": "moving-target",
+    "button": "plate-console",
+    "mode": "target",
+    "dialogue": "plate-console-log",
+    "effects": [
+      "plate"
+    ],
+    "name": "Target computer",
+    "at": {
+      "room": "room-5",
+      "x": 165,
+      "y": 144
+    },
+    "width": 12
+  },
+  {
+    "module": "ambience-5",
+    "button": "room-light-off",
+    "mode": "toggle",
+    "alternate": "room-light-on",
+    "effects": [
+      "lamp",
+      "light"
+    ],
+    "name": "Turn off Gallery light",
+    "at": {
+      "room": "room-5",
+      "x": 125,
+      "y": 216
+    },
+    "width": 8
+  },
+  {
+    "module": "ambience-5",
+    "button": "spare-discs",
+    "mode": "read",
+    "dialogue": "spare-discs-log",
+    "name": "Spare target discs",
+    "at": {
+      "room": "room-5",
+      "x": 47,
+      "y": 72
+    },
+    "width": 12
+  },
+  {
+    "module": "ambience-5",
+    "button": "range-locker",
+    "mode": "read",
+    "dialogue": "range-locker-log",
+    "name": "Range supply cabinet",
+    "at": {
+      "room": "room-5",
+      "x": 79,
+      "y": 72
+    },
+    "width": 10
+  },
+  {
+    "module": "ambience-5",
+    "button": "analysis",
+    "mode": "choice",
+    "dialogue": "analysis-log",
+    "effects": [
+      "upper-screen-glow"
+    ],
+    "name": "Ballistics analysis screen",
+    "at": {
+      "room": "room-5",
+      "x": 183,
+      "y": 72
+    },
+    "width": 12
+  },
+  {
+    "module": "ambience-5",
+    "button": "range-service",
+    "mode": "read",
+    "dialogue": "range-service-log",
+    "name": "Carriage service rack",
+    "at": {
+      "room": "room-5",
+      "x": 210,
+      "y": 72
+    },
+    "width": 10
+  }
+]

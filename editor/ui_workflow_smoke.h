@@ -37,8 +37,12 @@ void inputWorkflows(int frame, Workspace &app) {
 	click(454, "workflow-help");
 	click(462, "workflow-module");
 	click(466, "module-create");
+	click(470, "node-search");
+	if (frame == 472)
+		io.AddInputCharactersUTF8("paginated");
 	click(474, "add-node-8");
 	if (frame == 478) {
+		app.nodeSearch.Clear();
 		auto &m = app.p.modules[0];
 		m.nodes[0].speaker = "Station attendant";
 		m.nodes[0].text = "The airlock is ready. Release the outer door?";
@@ -93,7 +97,7 @@ void inputWorkflows(int frame, Workspace &app) {
 void checkWorkflows(int frame, Workspace &app) {
 	if (frame == 458) {
 		require(app.workflow == Workflow::Help, "Top Help tab did not open");
-		screenshot(app.renderer, (output / "workflow-help.bmp").u8string());
+		screenshot(app.renderer, (output / "workflow-help.png").u8string());
 	}
 	if (frame == 470)
 		require(app.workflow == Workflow::Module && app.p.modules.size() == 1 &&
@@ -104,13 +108,13 @@ void checkWorkflows(int frame, Workspace &app) {
 		            app.p.modules[0].nodes[0].kind == NodeKind::Dialogue,
 		        "Dialogue node palette");
 	if (frame == 486)
-		screenshot(app.renderer, (output / "dialogue-module.bmp").u8string());
+		screenshot(app.renderer, (output / "dialogue-module.png").u8string());
 	if (frame == 492)
 		require(app.moduleLibrary.size() == 1 && std::filesystem::exists(app.moduleLibrary[0]),
 		        "Save to local module library GUI");
 	if (frame == 498) {
 		require(app.workflow == Workflow::Placement && !app.graphView, "Module Placement tab");
-		screenshot(app.renderer, (output / "module-placement.bmp").u8string());
+		screenshot(app.renderer, (output / "module-placement.png").u8string());
 	}
 	if (frame == 508)
 		require(app.p.modules.size() == 2 && app.p.modules[0].id != app.p.modules[1].id &&
@@ -120,6 +124,6 @@ void checkWorkflows(int frame, Workspace &app) {
 	if (frame == 520) {
 		require(app.workflow == Workflow::Level && serialize(app.p) == playtestDocument,
 		        "Level workspace allowed deleting or dragging a placed module");
-		screenshot(app.renderer, (output / "level-editing.bmp").u8string());
+		screenshot(app.renderer, (output / "level-editing.png").u8string());
 	}
 }

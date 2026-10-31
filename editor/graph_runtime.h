@@ -4,11 +4,17 @@
 #include <deque>
 #include <set>
 #include <map>
+#include <optional>
 namespace editor {
 struct NodeState {
 	bool enabled = true, active = false, completed = false, collected = false, inside = false;
 	bool friendly = false, patrol = false, held = false;
 	int count = 0;
+	// Guard clock advances only with gameplay, including across saved sessions.
+	int guardPhase = 0, guardTicks = 0, guardAnim = 0;
+	int targetPhase = 0; // triangular movement clock; frozen by Stop
+	int liftPosition = 0; // 0..duration; zero is the upper landing
+	bool liftTarget = false, liftPassenger = false;
 	std::set<int> progress; // distinct contributing nodes, never repeated button presses
 	uint64_t changedAt = 0, generation = 0; // invalidates canceled dialogue callbacks
 };
@@ -30,6 +36,7 @@ struct GraphState {
 	std::deque<size_t> pending;
 	std::set<size_t> delivered;
 };
+int targetFeet(const Node &, const NodeState &);
 GraphState initialGraphState(const Module &);
 // One transaction delivers each wire at most once. Cyclic author graphs are
 // bounded without recursion, while each independent interaction starts fresh.
@@ -38,6 +45,7 @@ public:
 	GraphMachine(const Module &, GraphState &, uint64_t tick = 0,
 	             std::map<std::string, bool> *shared = nullptr);
 	std::function<bool(const Node &)> canClose;
+	std::function<std::optional<bool>(const Node &, const NodeState &, Input)> liftTarget;
 	bool automatic = true; // false retains deliveries for the graph debugger
 	void start();
 	bool step();                   // exactly one queued wire; same evaluator as normal gameplay
@@ -47,6 +55,7 @@ public:
 	void use(int node); // local player interaction; dialogue and mission text
 	void send(int node, Input, int source = -1);
 	void enter(int node);
+	void leave(int node);
 	void advance(); // timed actions; no player proximity checks
 	void finishDialogue(int node, uint64_t generation, int choice = 0);
 	std::vector<std::pair<int, uint64_t>> dialogues;

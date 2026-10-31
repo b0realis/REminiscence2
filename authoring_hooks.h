@@ -14,7 +14,17 @@ struct AuthoringHooks {
 	virtual void afterActors(Game &) {}
 	virtual bool beforeSimulation(Game &) { return true; }
 	virtual bool beforeActor(Game &, LivePGE &) { return true; }
+	// Authored scenes may seal absent room links before native scripts wrap the
+	// actor's coordinates. Original campaigns keep their native transition rules.
+	virtual void constrainActor(Game &, LivePGE &) {}
 	virtual void afterSimulation(Game &) {}
+	// -1 delegates hit eligibility to the original script. Custom actors keep
+	// the native pistol ray, occlusion and cosmetic impact positions.
+	virtual int acceptsHit(const LivePGE &, int) const { return -1; }
+	// Return the exact impact X, or -1. Called along the native gun ray after
+	// actor/wall tests; custom target feedback is delivered after simulation.
+	virtual int gunRayHit(int, int, int, int, int) { return -1; }
+	virtual bool drawsNativeActor(const LivePGE &) const { return true; }
 	virtual bool allowRule(Game &, LivePGE &, const Object &) { return true; }
 	virtual void ruleExecuted(Game &, LivePGE &, const Object &) {}
 	virtual void messageSent(Game &, int source, int target, int message) {}

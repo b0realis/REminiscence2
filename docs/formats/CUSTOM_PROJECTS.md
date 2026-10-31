@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
-# Editor projects (schema 9) and portable modules (schema 7)
+# Editor projects (schema 11) and portable modules (schema 9)
 
 Implemented by `editor/content.*`, `graph.*`, `graph_runtime.*`, `image.*` and
 `runtime.*`, `native.*` and `editing.cpp` in engine 1.47.
@@ -17,7 +17,7 @@ empty strings, and 30 ticks respectively.
 
 | Field | Contract |
 | --- | --- |
-| `schema` | Integer 9; schemas 1..8 migrate to 9; other versions rejected |
+| `schema` | Integer 11; schemas 1..10 migrate to 11; other versions rejected |
 | `id` | Stable campaign ID; letters, digits, underscore/hyphen, 1–80 bytes |
 | `name` | Display name, at most 160 bytes |
 | `serial` | Counter for locally unique room/module IDs; bounded signed-32-bit positive range |
@@ -91,7 +91,7 @@ Holding Enter does not continually reactivate: the runner records the previous
 input state and reacts to a fresh press. Pickups emit activation when consumed.
 Props/crawlers do not currently emit gameplay events.
 
-A portable `.r2module.json` contains `schema: 7` (schemas 1..6 remain readable) and one `module` record. Saving
+A portable `.r2module.json` contains `schema: 9` (schemas 1..8 remain readable) and one `module` record. Saving
 clears outgoing connections and substitutes local room placeholders. Loading
 allocates a new ID, translates anchors and graph parts by the same delta and
 assigns them to the chosen room. Validation precedes dependency copying; the
@@ -102,7 +102,7 @@ module's embedded pair does not depend on the `outputs` list.
 
 ## Graph records and execution
 
-A kind-4 module has up to 32 `nodes` and 128 `wires`. There are at most 256 graph
+A kind-4 module has up to 64 `nodes` and 128 `wires`. There are at most 256 graph
 nodes across a project. Node IDs are unique **inside the module**; separate
 module instances can use the same node IDs without sharing state. A duplicate
 retains node IDs, internal wires and item requirements, with a new module ID.
@@ -148,6 +148,13 @@ without recursion. Mission progress stores a set of contributing node indices;
 repeated events from one node cannot impersonate several objectives. Item
 collection is one-shot; consuming an item does not respawn it. Reset clears a computer or rearms an action node. Enabling/disabling gates behavior without changing collision.
 Each playtest has separate state and no author JSON is mutated during play.
+
+Zone outputs are Entered (4) and Exited (9). Overlap edges are dispatched once;
+leaving the current room counts as an exit. A one-shot zone permits only its
+first entry/exit pair. The active flag tracks an accepted entry until leaving;
+completed preserves one-shot history. The saved inside flag tracks physical
+overlap. Disabled zones update overlap but emit neither event. No schema or
+signal-number changes are needed.
 
 NPC use checks the module's item state, optionally consumes it, emits Completed
 once, and displays paginated text. Mission acceptance is explicit; previously
@@ -499,3 +506,116 @@ before master/mute, with separate music/effects gains. Voice data is immutable
 except cursors and state protected by the SDL audio lock. Linear interpolation
 resamples to output rate. No allocation, graph callbacks or file I/O happens in
 the audio callback. Destruction removes only the owning hook before freeing PCM.
+
+## Carrying lift node (1.55)
+
+`NodeKind` **26 = Lift** appends to the enum; existing values and project schema 9
+remain unchanged. No new project fields are required. `at` is the upper landing
+(Y=216), `width` is a multiple of 16, at least 32, `height` is 1..8, and `duration`
+is the full trip in 30 Hz ticks (30..18000). X aligns to 16 pixels. `enabled`
+must be true and `initiallyActive` false. The car starts at the upper landing.
+Custom projects only: `rooms[origin].exits[1]` must name a different room whose
+`exits[0]` links back. Both landings share X/Y; native room stride is 216 pixels.
+Inputs are Activate/Open/Close; outputs Started/Completed/Opened/Closed.
+
+Runtime node snapshots add `liftPosition` (0..duration), `liftTarget` (false upper,
+true lower) and `liftPassenger` only for Lift states. `active` means traveling,
+`changedAt` records departure, and elapsed ticks determine position. Idle cars
+must be at their target endpoint. At most one state may own the player, only while
+active. A campaign revisit detaches the old passenger; resuming the same level
+retains it. Loading validates these fields before mutating live state. Projects
+without Lift nodes retain their existing serialized snapshots and module revisions.
+
+This is controlled passenger motion, not a moving collision body. Existing landing
+collision is retained for other actors and for Conrad while the car is away.
+The passenger alone bypasses native movement until arrival; independent actors and
+projectiles continue simulating. Authors must keep the shaft clear and provide
+safe call controls at both ends. Original campaign lifts still use native scripts.
+
+## Procedural background machinery (1.56)
+
+`NodeKind` **27 = Ambient / Background machinery** appends to the enum. Project
+schema stays at 9; older readers reject this unknown kind rather than silently
+misreading its behaviour. Only Ambient node records emit `ambientStyle` (0=Breathe,
+1=Pulse, 2=Flow, 3=Fan rotor, 4=Light pool, 5=Dust motes, 6=Vent mist) and
+`ambientAmount` (1..3). Styles 3..6 were added in 1.71; previous readers reject
+these unsupported values. Absent values default to 0 and 2.
+Other node serialization and existing module revision hashes remain unchanged.
+
+`duration` is its loop period, 60..600 ticks at 30 Hz. `at`, `width` and `height`
+define a region entirely inside the room, at least 8×8 pixels. Only custom projects
+and Layer::Back are allowed. `initiallyActive` and `once` must be false; sprite
+files must be empty. Inputs: Activate, Stop, Reset, Enable, Disable. Outputs:
+Started and Stopped. The shared action runtime owns phase (`tick - changedAt`),
+restarts and cancellation; Ambient never times out or emits Completed.
+
+The renderer copies the selected region before sampling, preventing directional
+smearing or accumulated distortion. A squared elliptical falloff leaves boundary
+pixels unchanged. Nearest-pixel displacement and bounded RGB gain animate the
+existing background; alpha is retained. No physics, native scripts or original
+asset files are changed. Edit mode shows selection bounds; PLAY renders motion.
+
+Rotor uses normalized ellipse coordinates to rotate the blade annulus while
+retaining the bearing (squared radius <0.08) and rim (>=0.90). Light uses bounded
+additive RGB with four falloff steps, so black recesses can be illuminated.
+Dust/Mist use 4, 6 or 8 deterministic particles according to `ambientAmount`;
+they fade at loop endpoints and do not consume random gameplay state. The
+region's existing alpha is retained. All effects use the same saved phase and
+stop/reset semantics; no particle buffers or additional save fields are needed.
+
+
+## Authored armed guards
+
+Project schema 10 / prefab schema 8 add `actorStyle` to Actor nodes (kind 13).
+Omitted or zero retains native crawler behavior and is omitted on serialization
+so existing module revision hashes remain stable. Value 1 selects the authored
+guard; other values are rejected. It is forbidden in native campaign projects
+and on other node kinds. Guards require Playfield layer, a nonempty Idle art
+crop with dimensions divisible by 4×2, `frames=1`, and display dimensions
+16–64 × 24–72. All other actor health/patrol limits remain in force.
+
+The sheet has eight left-facing poses in row order: idle, walk A, walk B, aim,
+fire, hurt, fall, dead. Nearest sampling and alpha compositing preserve pixels.
+The bottom opaque sample anchors each frame to the actor's feet. The original
+crawler template is used only as a collision/save proxy; its AI and rendering
+are suppressed. Native pistol messages 1–4 from the certified projectile slot
+cause damage. Guards use native player-hit messages, retaining posture rules,
+invulnerability and cheats. Original game sessions have no guard hooks.
+
+Guard node session state adds `guard: [phase,ticks,animation]`. Phases are
+0 patrol, 1 aim, 2 fire, 3 recover, 4 hurt, 5 dead; bounds are 0–5, 0–90 and 0–119
+respectively. Validation occurs before applying the snapshot. These
+clocks advance only during gameplay simulation, not while paused or reading a
+dialogue. Authors should restart an old private save after changing an actor's
+behavior or sprite definition; changed module revisions reject incompatible saves.
+
+
+## Moving target plates (schema 11 / prefab 9)
+
+`NodeKind` **28 = Target** is an indestructible pistol target for custom scenes.
+`travel` is an integer number of native pixels above `at.y`, its lower edge at
+rest. Width/height define the exact rectangular hit box and sprite dimensions.
+The entire path must fit inside its room (`0 <= travel <= at.y - height`). The
+Playfield layer is required. `duration` is one complete up/down cycle in 30 Hz
+ticks (2..18000); movement follows a triangle wave, starting at the lower stop.
+Zero travel creates a stationary target. Start through Activate; `initiallyActive`
+and `once` must be false. This kind has no original actor slot.
+
+Inputs: Activate starts a fresh cycle at the lower stop; Stop freezes motion;
+Reset stops and returns to the lower stop; Enable/Disable control visibility and
+hit eligibility (Disable also stops motion). Outputs: Started, Stopped, and the
+new **Signal 14 = Hit**. A stopped, enabled plate remains hittable. There is no
+Completed/death event. The pause menu freezes motion; dialogue retains the normal running graph clock.
+
+The original gun ray checks walls/actors before target rectangles in each 16px
+cell. Its vertical centerline comes from the edition's original muzzle sprite;
+Original, Heavy and Laser therefore share the same hit test. Only Conrad's shots
+trigger Hit, and the first target struck consumes the shot. Laser tracing ends
+at the exact plate edge. Feedback is queued until native actor simulation ends.
+Wire Hit → light.Reset followed by Hit → light.Activate to restart a short light
+pulse for every successful hit. Missed and blocked shots emit nothing.
+
+Saved target state adds `targetPhase` (0..duration-1) beside the common node
+state. It preserves moving or stopped position; malformed phases are rejected
+before any live state changes. `travel` is omitted from other node kinds' JSON
+so existing module revision hashes remain unchanged.

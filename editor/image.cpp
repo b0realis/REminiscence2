@@ -5,6 +5,7 @@
 #include "file.h"
 #include <zlib.h>
 #include <algorithm>
+#include <cmath>
 #include <fstream>
 #include <stdexcept>
 #define STB_IMAGE_IMPLEMENTATION
@@ -222,12 +223,150 @@ void drawModule(Image &out, const Module &m, int part, bool open, uint64_t tick,
 		          rgba(170, 245, 224));
 	}
 }
+// Animate the already-composited background, before any physical scenery or
+// actor is drawn. Each sample comes from an immutable regional copy: drawing
+// order within the region cannot smear pixels or accumulate deformation.
+static void backgroundMotion(Image &out, const Node &n, uint64_t age) {
+	if (out.width < 1 || out.height < 1 || out.pixels.size() != size_t(out.width) * out.height)
+		return;
+	const int left = std::clamp(n.at.x, 0, out.width);
+	const int top = int(std::clamp<int64_t>(int64_t(n.at.y) - n.height, 0, out.height));
+	const int width = std::clamp(n.width, 0, std::min(256, out.width - left));
+	const int height = std::clamp(n.height, 0, std::min(224, out.height - top));
+	if (width < 8 || height < 8)
+		return;
+	std::vector<uint32_t> source(size_t(width) * height);
+	for (int y = 0; y < height; ++y)
+		std::copy_n(out.pixels.begin() + size_t(top + y) * out.width + left, width,
+		            source.begin() + size_t(y) * width);
+	constexpr double tau = 6.283185307179586;
+	const int period = std::clamp(n.duration, 60, 600);
+	const double phase = double(age % period) * tau / period;
+	const double strength = std::clamp(n.ambientAmount, 1, 3);
+	const double breath = std::sin(phase);
+	// Particles are reconstructed from simulation age, never from a global RNG
+	// or render count. Pause, save/load and repeated renders therefore agree.
+	if (n.ambientStyle == 5 || n.ambientStyle == 6) {
+		const bool mist = n.ambientStyle == 6;
+		const int count = 2 + int(strength) * 2;
+		uint32_t seed = uint32_t(left * 65537 + top * 257 + width * 17 + height);
+		auto random = [&] {
+			seed = seed * 1664525u + 1013904223u;
+			return double(seed >> 8) / 16777216.0;
+		};
+		for (int i = 0; i < count; ++i) {
+			const double offset = random(), lane = random();
+			const double t = std::fmod(double(age % period) / period + offset, 1.0);
+			const double fade = std::sin(t * tau * .5);
+			const int x = int(width * (.2 + .6 * lane + .06 * std::sin(t * tau + offset * tau)));
+			const int y = int(height * (.85 - .7 * t));
+			for (int tail = 0; tail < (mist ? 3 : 1); ++tail) {
+				const int px = x + tail, py = y + (tail == 2 ? 1 : 0);
+				if (px < 0 || py < 0 || px >= width || py >= height)
+					continue;
+				const double u = 2.0 * (px + .5) / width - 1.0;
+				const double v = 2.0 * (py + .5) / height - 1.0;
+				if (u * u + v * v >= 1.0)
+					continue;
+				auto &pixel = out.pixels[size_t(top + py) * out.width + left + px];
+				const int gain = int((mist ? 46 : 65) * fade * fade / (1.0 + tail));
+				uint32_t color = pixel & 0xff000000u;
+				for (int shift : {0, 8, 16})
+					color |= uint32_t(std::min(255, int((pixel >> shift) & 255) + gain)) << shift;
+				pixel = color;
+			}
+		}
+		return;
+	}
+	const double rotorCos = std::cos(phase), rotorSin = std::sin(phase);
+	for (int y = 0; y < height; ++y) {
+		const double v = 2.0 * (y + .5) / height - 1.0;
+		for (int x = 0; x < width; ++x) {
+			const double u = 2.0 * (x + .5) / width - 1.0;
+			const double radius = u * u + v * v;
+			if (radius >= 1.0)
+				continue;
+			// Zero displacement and brightness at the edge prevents rectangular
+			// seams. Integer sampling keeps the original pixel edges crisp.
+			const double mask = (1.0 - radius) * (1.0 - radius);
+			int dx = 0, dy = 0;
+			double glow = 0;
+			if (n.ambientStyle == 0) {
+				dx = int(std::lround(-u * strength * 2.0 * mask * breath));
+				dy = int(std::lround(-v * strength * 2.0 * mask * breath));
+				glow = .025 * strength * mask * breath;
+			} else if (n.ambientStyle == 1) {
+				glow = .08 * strength * mask * std::sin(phase - radius * tau);
+			} else if (n.ambientStyle == 2) {
+				const double wave = std::sin(phase + v * tau);
+				dx = int(std::lround(strength * mask * wave));
+				dy = int(std::lround(.5 * strength * mask * std::sin(phase + u * tau)));
+				glow = .05 * strength * mask * wave;
+			} else if (n.ambientStyle == 3) {
+				// Fit the selection inside the fan casing. Keep the outer rim and
+				// central bearing still; rotate only its blade annulus.
+				if (radius < .08 || radius >= .90)
+					continue;
+				const int sx = int(std::lround((u * rotorCos + v * rotorSin + 1) * width * .5 - .5));
+				const int sy = int(std::lround((v * rotorCos - u * rotorSin + 1) * height * .5 - .5));
+				dx = sx - x;
+				dy = sy - y;
+			}
+			const uint32_t pixel = source[size_t(std::clamp(y + dy, 0, height - 1)) * width +
+			                              std::clamp(x + dx, 0, width - 1)];
+			uint32_t color = pixel & 0xff000000u;
+			for (int shift : {0, 8, 16}) {
+				const int value = (pixel >> shift) & 255;
+				// A bounded additive pool illuminates even a black recess. The
+				// four intensity steps retain the room's restrained pixel look.
+				const double light = n.ambientStyle == 4 ?
+				    std::floor(mask * (4.0 + .6 * breath)) / 4.0 * strength *
+				        (shift == 0 ? 9 : shift == 8 ? 17 : 19) : 0;
+				color |= uint32_t(std::clamp(int(std::lround(value * (1.0 + glow) + light)), 0, 255))
+				         << shift;
+			}
+			out.pixels[size_t(top + y) * out.width + left + x] = color;
+		}
+	}
+}
+// The authored sheet is four columns by two rows, with left-facing poses.
+// Scale a single cell using the same nearest sampling as room artwork; mirror
+// the complete cell around the collision actor's center without changing it.
+void drawGuard(Image &out, const Node &n, int frame, bool left, int x, int feet, Images &images) {
+	auto art = n.visuals[0].art;
+	art.w /= 4; art.h /= 2;
+	art.x += (frame % 4) * art.w;
+	art.y += (frame / 4) * art.h;
+	Image sprite{n.width, n.height, std::vector<uint32_t>(n.width * n.height)};
+	blit(sprite, images.get(art.file), art, 0, 0, n.width, n.height);
+	int bottom = n.height - 1;
+	while (bottom > 0 && std::none_of(sprite.pixels.begin() + bottom * n.width,
+	                                sprite.pixels.begin() + (bottom + 1) * n.width,
+	                                [](uint32_t c) { return (c >> 24) >= 128; })) --bottom;
+	const int origin = x + 8 - n.width / 2;
+	for (int y = 0; y < n.height; ++y)
+		for (int xx = 0; xx < n.width; ++xx) {
+			const int tx = origin + xx, ty = feet - bottom - 1 + y;
+			if (tx >= 0 && tx < out.width && ty >= 0 && ty < out.height)
+				over(out.pixels[ty * out.width + tx],
+				     sprite.pixels[y * n.width + (left ? xx : n.width - xx - 1)]);
+		}
+}
 void drawNode(Image &out, const Node &n, bool active, uint64_t age, Images &images, bool editing) {
+	if (n.kind == NodeKind::Actor && n.actorStyle == 1 && editing) {
+		drawGuard(out, n, 0, true, n.at.x, n.at.y, images);
+		return;
+	}
+	if (n.kind == NodeKind::Ambient) {
+		if (active && !editing)
+			backgroundMotion(out, n, age);
+		return; // Editor selection outlines the region; PLAY previews its motion.
+	}
 	if (!editing && n.kind == NodeKind::Animation && !active && n.visuals[0].art.file.empty())
 		return;
 	if (!editing &&
-	    (n.kind >= NodeKind::Damage || n.kind == NodeKind::Actor || n.kind == NodeKind::Relay ||
-	     n.kind == NodeKind::Zone || n.kind == NodeKind::Dialogue ||
+	    ((n.kind >= NodeKind::Damage && n.kind != NodeKind::Lift && n.kind != NodeKind::Target) || n.kind == NodeKind::Actor ||
+	     n.kind == NodeKind::Relay || n.kind == NodeKind::Zone || n.kind == NodeKind::Dialogue ||
 	     (n.kind == NodeKind::Timer || n.kind == NodeKind::State) ||
 	     (n.kind == NodeKind::Item && active)))
 		return;
@@ -240,7 +379,20 @@ void drawNode(Image &out, const Node &n, bool active, uint64_t age, Images &imag
 		const unsigned count = unsigned(std::clamp(animation.frames, 1, 128));
 		crop.x += int(animation.loop ? frame % count : std::min(frame, uint64_t(count - 1))) *
 		          std::clamp(crop.w, 1, 16384);
-		blit(out, images.get(crop.file), crop, n.at.x, n.at.y - n.height, n.width, n.height);
+		blit(out, images.get(crop.file), crop, n.at.x,
+		     n.at.y - (n.kind == NodeKind::Lift ? 0 : n.height), n.width, n.height);
+		return;
+	}
+	if (n.kind == NodeKind::Target) {
+		const int top = n.at.y - n.height;
+		rectangle(out, n.at.x, top, n.width, n.height, rgba(84, 105, 111));
+		rectangle(out, n.at.x + 2, top + 2, std::max(1, n.width - 4), std::max(1, n.height - 4), rgba(193, 208, 198));
+		rectangle(out, n.at.x + n.width / 2 - 2, top + n.height / 2 - 2, 4, 4, rgba(208, 117, 47));
+		return;
+	}
+	if (n.kind == NodeKind::Lift) {
+		rectangle(out, n.at.x, n.at.y, n.width, n.height, rgba(54, 87, 99));
+		rectangle(out, n.at.x, n.at.y, n.width, std::min(2, n.height), rgba(111, 224, 190));
 		return;
 	}
 	if (n.kind == NodeKind::Door) {

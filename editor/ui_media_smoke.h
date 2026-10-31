@@ -78,7 +78,7 @@ void checkMedia(int frame, Workspace &app) {
 	}
 	if (frame == 656) {
 		require(app.audition.device != 0, "Audio Listen did not open preview");
-		screenshot(app.renderer, (output / "audio-node.bmp").u8string());
+		screenshot(app.renderer, (output / "audio-node.png").u8string());
 	}
 	if (frame == 661) {
 		require(app.audition.device == 0, "Stop listening left the audio device open");
@@ -88,7 +88,6 @@ void checkMedia(int frame, Workspace &app) {
 	}
 	if (frame == 670) {
 		require(app.clipTexture[0] != nullptr, "Sprite animation preview did not render");
-		screenshot(app.renderer, (output / "animation-node.bmp").u8string());
-		app.quit = true;
+		screenshot(app.renderer, (output / "animation-node.png").u8string());
 	}
 }

@@ -91,6 +91,18 @@ void nativePlacementDialog() {
 	}
 	ImGui::End();
 }
+void nativeDataInspector() {
+	if (ImGui::CollapsingHeader("Actor data / protected operands")) {
+		ImGui::TextWrapped("Original four-slot actor data. Uses are derived from all rules, "
+		                   "including disabled rows; a number is not automatically an actor ID.");
+		for (const auto &info : nativeDataInfo(p.native, nativeActor)) {
+			ImGui::Separator();
+			ImGui::Text("data[%d] = %d (0x%04X)", info.slot, info.value, unsigned(info.value) & 0xffff);
+			ImGui::TextWrapped("Uses: %s", info.uses.c_str());
+			ImGui::TextWrapped("%s", info.protection.c_str());
+		}
+	}
+}
 void nativePortsInspector() {
 	if (nativeActor < 0 || nativeActor >= int(p.native.actors.size()))
 		return;
@@ -156,7 +168,7 @@ void nativePortsInspector() {
 						const auto before = p;
 						reconnectNativePort(p, port, target, nativeDefaults);
 						history.remember(before);
-						status = "Dependency rewired; restart to apply. Literal operands get a "
+						status = "Dependency rewired; Apply live to test. Literal operands get a "
 						         "private behavior automatically.";
 					});
 			}
@@ -179,6 +191,7 @@ void nativePortsInspector() {
 		ImGui::BulletText("%s", description.c_str());
 	ImGui::TextWrapped("These are native runtime lookups, not fixed wires. Message values and "
 	                   "native animation states remain in the actor's rule nodes.");
+	nativeDataInspector();
 }
 void nativeConnectionsUI() {
 	ImGui::TextWrapped("CAMPAIGN PUZZLE MODULES / select an actor node to inspect or reconnect its "
@@ -254,7 +267,7 @@ void nativeConnectionsUI() {
 			nativeActor = members.count(e->target) ? e->target : e->source;
 	}
 	ImGui::TextWrapped("Use Play, Pause and Step native above. Monitoring appears only for the "
-	                   "matching project revision; restart after rule or wiring edits.");
+	                   "matching project revision; Apply live after compatible rule or wiring edits.");
 	ImGui::EndChild();
 	ImGui::TableNextColumn();
 	Module display;

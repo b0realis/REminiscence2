@@ -56,11 +56,6 @@ static Project snapshot(Game &g) {
 	p.spawnLeft = a.facingLeft;
 	return p;
 }
-static bool sameSetup(const NativeActor &a, const NativeActor &b) {
-	return a.type == b.type && a.behavior == b.behavior && a.data == b.data &&
-	       a.source == b.source && a.objectKind == b.objectKind && a.room == b.room && a.x == b.x &&
-	       a.y == b.y && a.life == b.life && a.facingLeft == b.facingLeft && a.removed == b.removed;
-}
 static std::string readText(const fs::path &path, uintmax_t limit = 8 * 1024 * 1024) {
 	if (fs::file_size(path) > limit)
 		throw std::runtime_error("Editor session file exceeds size limit");
@@ -153,7 +148,8 @@ void NativeSession::loaded(Game &g) {
 	_drawing = false;
 	_restartRequired = false;
 }
-void NativeSession::apply(Game &g, const Project &candidate, bool restart) {
+void NativeSession::apply(Game &g, const Project &input, bool restart) {
+	Project candidate = input;
 	Project original;
 	if (_originals.count(candidate.native.level))
 		original = _originals.at(candidate.native.level);
@@ -164,6 +160,10 @@ void NativeSession::apply(Game &g, const Project &candidate, bool restart) {
 		original = reference.createProject(true);
 	}
 	verify(candidate, original);
+	if (candidate.native.programs.empty()) {
+		candidate.native.programs = original.native.programs;
+		candidate.native.puzzles = original.native.puzzles;
+	}
 	Images checked;
 	checked.root = _root;
 	validateImages(candidate, checked);
@@ -187,10 +187,13 @@ void NativeSession::apply(Game &g, const Project &candidate, bool restart) {
 		_restartRequired = true;
 		throw std::runtime_error("Restart at edited level to switch the running campaign level");
 	}
-	if (!candidate.native.programs.empty() && !sameNativeLogic(candidate.native, _project.native)) {
+	try {
+		validateNativeLive(g, _project.native, candidate.native);
+	} catch (...) {
 		_restartRequired = true;
-		throw std::runtime_error("State-machine rules changed: restart to apply safely");
+		throw;
 	}
+	const bool logicChanged = !sameNativeLogic(candidate.native, _project.native);
 	bool sameModules = _project.modules.size() == candidate.modules.size();
 	for (size_t i = 0; sameModules && i < _project.modules.size(); ++i)
 		sameModules = moduleRevision(_project.modules[i]) == moduleRevision(candidate.modules[i]);
@@ -198,16 +201,6 @@ void NativeSession::apply(Game &g, const Project &candidate, bool restart) {
 		_restartRequired = true;
 		throw std::runtime_error("Module logic changed: restart to apply safely");
 	}
-	if (candidate.native.actors.size() != _project.native.actors.size()) {
-		_restartRequired = true;
-		throw std::runtime_error("Puzzle modules added: restart to allocate their actor slots");
-	}
-	for (size_t i = 0; i < candidate.native.actors.size(); ++i)
-		if (!sameSetup(candidate.native.actors[i], _project.native.actors[i])) {
-			_restartRequired = true;
-			throw std::runtime_error(
-			    "Actor setup changed: restart required to preserve script/inventory dependencies");
-		}
 	const auto old = compileCollision(_project), next = compileCollision(candidate);
 	for (size_t i = 0; i < next.size(); ++i)
 		if (old[i] != next[i]) {
@@ -231,19 +224,33 @@ void NativeSession::apply(Game &g, const Project &candidate, bool restart) {
 				}
 			}
 		}
-	// Everything is preflighted. Apply only authored differences; keep doors,
-	// inventory, counters, messages, actor links and all unrelated live CT state.
+	// Prepare all allocating copies before replacing executable tables. A bad
+	// candidate or allocation failure leaves the running world unchanged.
+	auto nextLevels = _levels;
+	nextLevels[g._currentLevel] = candidate;
+	auto overlayProject = _overlay ? std::optional<Project>(candidate) : std::nullopt;
+	const auto revision = nativeRevision(candidate.native);
+	std::string appliedMessage = "Applied compatible edits between frames; running puzzle state preserved";
+	if (logicChanged)
+		installNativeLogic(g, candidate.native); // transactional allocation + table swap
+	applyNativeLiveActors(g, _project.native, candidate.native);
 	for (size_t i = 0; i < next.size(); ++i)
 		if (old[i] != next[i])
 			g._res._ctData[i] = next[i];
-	_project = candidate;
-	_definitionRevision = nativeRevision(_project.native);
-	_levels[g._currentLevel] = candidate;
+	std::swap(_project, candidate);
+	_definitionRevision = revision;
+	_levels.swap(nextLevels);
 	_images = std::move(checked);
+	if (overlayProject)
+		_overlay->adoptNativeDefinition(std::move(*overlayProject));
+	// Old trace entries describe the prior rule revision, not the new code.
+	// This does not clear the real native message queues.
+	_events.clear();
+	_messages.clear();
 	g.clearStateRewind();
 	g._vid.fullRefresh();
 	_restartRequired = false;
-	_message = "Applied art/geometry between frames; native puzzle and actor state preserved";
+	_message = std::move(appliedMessage);
 }
 void NativeSession::playHere(Game &g, const Project &candidate, const PlaytestStart &start) {
 	validatePlaytestStart(candidate, start);
@@ -283,7 +290,7 @@ void NativeSession::playHere(Game &g, const Project &candidate, const PlaytestSt
 void NativeSession::publish(const fs::path &control, const std::string &action, const Project &p,
                             const PlaytestStart *start) {
 	json command = {{"id", makeProject().id}, {"action", action}};
-	if (action == "apply" || action == "restart" || action == "play-here" || action == "play-start")
+	if (action == "apply" || action == "apply-resume" || action == "restart" || action == "play-here" || action == "play-start")
 		command["project"] = serialize(p);
 	if (start)
 		command["start"] = {{"room", start->at.room},
@@ -401,10 +408,15 @@ void NativeSession::command(Game &g) {
 			apply(g, deserialize(j.at("project").get<std::string>()), true);
 			_paused = false;
 			_message = "Playing from the authored level start";
-		} else if (action == "apply" || action == "restart") {
+		} else if (action == "apply" || action == "apply-resume" || action == "restart") {
 			_paused = true;
+			_stepPending = false;
 			apply(g, deserialize(j.at("project").get<std::string>()), action == "restart");
 			refreshPaused(g);
+			if (action == "apply-resume") {
+				_paused = false;
+				_message += "; resumed";
+			}
 		} else
 			throw std::runtime_error("Unknown editor session command");
 	} catch (const std::exception &e) {
@@ -702,7 +714,7 @@ std::map<std::string, GraphState> NativeSession::readGraphs(const fs::path &cont
 	try {
 		auto j = envelope(readText(control.u8string() + ".status", 65536));
 		for (const auto &graph : j.value("graphs", json::array())) {
-			if (result.size() >= 64 || graph.at("nodes").size() > 32 ||
+			if (result.size() >= MaxModules || graph.at("nodes").size() > MaxModuleNodes ||
 			    graph.at("trace").size() > 16)
 				break;
 			GraphState s;

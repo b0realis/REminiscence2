@@ -7,10 +7,20 @@ if [ ! -x "$editor" ]; then
     printf 'Build the editor first:\n  cmake --build "%s/build/package-arm64" --target reminiscence2-editor -j 8\n' "$project_dir" >&2
     exit 1
 fi
+# Edit a local copy of the public five-room Systems Lab; preserve existing edits.
+if [ "${1-}" = "--lab" ]; then
+    shift
+    demo="$project_dir/.local/editor-projects/SystemsLab"
+    if [ ! -f "$demo/project.r2project.json" ]; then
+        mkdir -p "$demo"
+        cp -R "$project_dir/examples/editor/systems-lab/." "$demo/"
+    fi
+    exec "$editor" "$demo/project.r2project.json" --assets="$project_dir/.local/assets" --campaign="$demo/campaign.r2campaign.json" "$@"
+fi
 # Alien-starship continuation; keep the earlier Relay Station demonstration too.
 if [ "${1-}" = "--starship" ]; then
     shift
-    demo="$project_dir/.local/editor-projects/AfterTheDrift-Classic"
+    demo="$project_dir/.local/editor-projects/AfterTheDrift-Organic28"
     if [ ! -f "$demo/campaign.r2campaign.json" ]; then
         if [ ! -f "$project_dir/examples/editor/alien-starship/campaign.r2campaign.json" ]; then
             printf 'This private demo is not included. Open your own project in the editor.\n' >&2

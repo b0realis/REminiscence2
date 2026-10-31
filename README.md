@@ -56,35 +56,41 @@ chosen window mode/fixed resolution and use consistent filtering for side scener
 
 See the [0.5.6 integration ledger](docs/UPSTREAM_056.md),
 [validation record](docs/VALIDATION.md), and [roadmap](docs/ROADMAP.md).
-The [visual level editor](docs/LEVEL_EDITOR.md) provides Back, Playfield and Front
-layers, collision/ledge authoring, room links and reusable objects. Version 1.37
-adds a [node-based module editor](docs/EDITOR_MODULES.md) for doors/buttons,
-NPC/item quests and mission/action chains, with separate animation assets per
-node. Run `./edit-local.sh --modules` for the playable Module Lab, or
-`./edit-local.sh` for the room/ledge Workshop. Version 1.39 adds full native
-campaign editing: all seven levels retain their original actors and scripts,
-with controlled live art/geometry updates in a separate game window. Start with
-`./edit-local.sh --original-level`, then **Edit full native campaign...**.
-Custom modules gain multi-select/copy-paste, layer locks, graph pan/zoom and
-clickable validation. Native actor setup changes require a level restart;
-original actor bundles are not automatically converted into reusable modules.
-Version 1.40 adds **PLAY HERE / F5** for the current room or selected graph node,
-with session-only TEST markers and **Shift+F5** for the authored level start.
-Version 1.41 adds **Settings** for native campaign setup and a saved Play/F5
-start preference. Custom puzzles are connected modules.
-Version 1.42 adds distinct **Level Editing / Module Placement / Module Editing**
-tabs and **Help**, with named modules, owned image libraries and reusable local
-templates. Dialogue nodes offer speaker text and branching choices; animation,
-pickup-effect and timer nodes connect through activation, completion and stop
-signals. Version 1.44 adds [complete native campaign modules](docs/NATIVE_CAMPAIGN_MODULES.md):
-typed puzzle connections, safe complete-bundle copies, private rule tables, real
-message tracing and frame stepping. Run `./edit-local.sh --campaign` to prepare
-and open all seven levels. New Washington's original actor table is full, so it
-supports editing/moving existing modules rather than adding copies. Version 1.43 adds State nodes, graph playback with signal stepping,
-actor patrol/friendly controls, full native rule-table editing and live event
-monitoring. Native actor bindings connect original events to authored dialogue
-and state machines. Native IDs stay stable; automatic actor-bundle cloning is
-still unavailable. See the [module workflow guide](docs/EDITOR_MODULES.md).
+The separate **REminiscence2 Editor** is a visual workshop for studying and
+modifying Flashback levels, and for building new campaigns. It is a homage to
+Delphine Software and the artists, animators, designers and programmers who made
+this game: an invitation for today's game designers to learn from their craft.
+It shares the player's engine code; players do not need the editor installed.
+
+Its four workspaces separate **Level Editing**, **Module Placement**, **Module
+Editing** and **Campaign** authoring. Inspect original puzzles as connected actor
+modules, follow their native rule tables and messages, or author new dialogue,
+state machines, encounters and illustrated interludes. Protected operands expose
+their raw values, source vocabulary and reasons for protection. Compatible native
+rule/port edits can be applied between frames without restarting the level;
+**Apply + resume** continues from the same progress. Structural changes still
+require a restart, with the reason shown before any live mutation.
+
+Start with `./edit-local.sh --campaign` for the seven original levels,
+`./edit-local.sh --modules` for the authored Module Lab, or `./edit-local.sh` for
+the room/ledge Workshop. Native actor/resource limits deliberately remain:
+New Washington has no free actor slots. Native puzzle copies stay within the
+same level and edition; they are not portable custom prefabs. Original assets
+are supplied by the player and source campaign studies remain private.
+
+The editable [Conrad Systems Lab](examples/editor/systems-lab/README.md) is a
+five-room starship workshop with connected puzzles, accessible upper cabins,
+animated machinery, droid encounters and a moving shooting target. Open it with
+`./edit-local.sh --lab`, or play with `./play-local.sh --gog --lab --campaign-new`
+(`--amiga` and `--segacd` are also supported). The example includes its authored
+art, synthesized sounds, campaign and module graphs; supply your own game assets
+for Conrad and the native gameplay resources.
+
+See the [editor README and learning walkthrough](editor/README.md),
+[editor guide](docs/LEVEL_EDITOR.md), [module authoring](docs/EDITOR_MODULES.md),
+[campaign authoring](docs/CAMPAIGN_EDITOR.md), and
+[native editing limits and live-update matrix](docs/NATIVE_CAMPAIGN_MODULES.md).
+
 Linux, macOS and Windows CI runs native builds and tests. See the
 [release recipes](docs/RELEASES.md) for desktop packages and the Quest flat-panel
 APK. A native SDL3 backend remains future work.
@@ -427,4 +433,5 @@ the level-route editor, movies and text/photo screens. See the [campaign guide](
 Campaign progress now saves actors, puzzles, dialogue and carried items together.
 Returning levels preserve their world. Ctrl+S/Ctrl+L save/load during gameplay;
 the campaign launcher offers Resume/New. The repository includes small training
-fixtures for learning and regression tests. Full authored story demos stay private.
+fixtures and the five-room Systems Lab for learning and regression tests.
+After the Drift and Relay Station remain private.

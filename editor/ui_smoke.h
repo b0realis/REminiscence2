@@ -32,6 +32,12 @@ struct UiSmoke {
 			if (frame == at + 1)
 				io.AddMouseButtonEvent(0, false);
 		};
+		auto widget = [&](int at, const char *id) {
+			if (frame == at || frame == at + 1) {
+				const auto point = app.testPoints.at(id);
+				click(at, point.x, point.y);
+			}
+		};
 		if (frame == 4 || frame == 5 || frame == 8 || frame == 9) {
 			const auto at = app.testPoints.at("world-view");
 			click(frame < 8 ? 4 : 8, at.x, at.y);
@@ -44,16 +50,16 @@ struct UiSmoke {
 			const auto at = app.testPoints.at("room-origin");
 			click(15, at.x + 96 * app.zoom, at.y + 214 * app.zoom);
 		} // Door palette -> room.
-		click(20, 247, 24);
+		widget(20, "toolbar-undo");
 		if (frame == 22 || frame == 23 || frame == 28 || frame == 29) {
 			const auto at = app.testPoints.at("room-origin");
 			click(frame < 28 ? 22 : 28, at.x + 196 * app.zoom, at.y + 166 * app.zoom);
 		} // Selection must preserve redo history.
-		click(24, 291, 24); // Undo / redo placement.
+		widget(24, "toolbar-redo"); // Undo / redo placement.
 
-		click(32, 123, 24); // Select original panel, save.
+		widget(32, "toolbar-save"); // Select original panel, save.
 		if (!app.library.games.empty()) {
-			click(36, 544, 24); // Play.
+			widget(36, "play-here"); // Play.
 			if (frame == 40)
 				io.AddKeyEvent(ImGuiKey_RightArrow, true);
 			if (frame == 70)
@@ -88,8 +94,8 @@ struct UiSmoke {
 			if (frame == 99)
 				io.AddMouseButtonEvent(0, false);
 		}
-		click(106, 247, 24);
-		click(110, 291, 24);
+		widget(106, "toolbar-undo");
+		widget(110, "toolbar-redo");
 		if (frame == 114)
 			io.AddKeyEvent(ImGuiKey_F1, true);
 		if (frame == 115)
@@ -146,6 +152,7 @@ struct UiSmoke {
 		inputStatePlayback(frame, app);
 		inputCampaign(frame, app);
 		inputMedia(frame, app);
+		inputUsability(frame, app);
 		io.AddMousePosEvent(pointer.x, pointer.y);
 	}
 	void check(int frame, Workspace &app) {
@@ -154,7 +161,7 @@ struct UiSmoke {
 		};
 		if (frame == 7) {
 			require(app.world, "World view button");
-			capture("world.bmp");
+			capture("world.png");
 		}
 		if (frame == 11)
 			require(!app.world, "Return to room view");
@@ -168,7 +175,7 @@ struct UiSmoke {
 			require(app.p.modules.size() == originalModules + 1, "Redo placement");
 		if (frame == 31) {
 			require(app.selected == 0, "Select tall door by panel area");
-			capture("workspace.bmp");
+			capture("workspace.png");
 		}
 		if (frame == 35)
 			require(loadProject(app.path).modules.size() == originalModules + 1, "Save button");
@@ -178,7 +185,7 @@ struct UiSmoke {
 			if (frame == 72) {
 				require(app.scene && app.scene->game()._pgeLive[0].pos_x > 32,
 				        "Playtest keyboard movement");
-				capture("playtest.bmp");
+				capture("playtest.png");
 			}
 			if (frame == 77)
 				require(!app.scene && app.p.modules.size() == originalModules + 1,
@@ -193,7 +200,7 @@ struct UiSmoke {
 		if (frame == 102) {
 			const auto &n = app.p.modules.back().nodes[1];
 			require(n.graphX == graphX + 30 && n.graphY == graphY + 25, "Drag graph node header");
-			capture("module-graph.bmp");
+			capture("module-graph.png");
 			const int savedX = n.graphX;
 			app.saveAs(app.path);
 			auto loaded = loadProject(app.path);
@@ -211,7 +218,7 @@ struct UiSmoke {
 			        "Redo keeps the selected graph open");
 		if (frame == 118) {
 			require(app.guidelines, "F1 opens guidelines");
-			capture("guidelines.bmp");
+			capture("guidelines.png");
 		}
 		if (frame == 123) {
 			require(!app.guidelines && app.graphView,
@@ -242,7 +249,7 @@ struct UiSmoke {
 			if (!app.library.games.empty()) {
 				require(bool(app.reference) && app.referenceRoom == 27,
 				        "Original L1 toolbar button");
-				capture("original-reference.bmp");
+				capture("original-reference.png");
 			}
 		}
 		if (frame == 165) {
@@ -267,6 +274,7 @@ struct UiSmoke {
 		checkStatePlayback(frame, app);
 		checkCampaign(frame, app);
 		checkMedia(frame, app);
+		checkUsability(frame, app);
 		if (app.quit) {
 			std::puts("Editor UI regression passed");
 		}
@@ -278,4 +286,5 @@ struct UiSmoke {
 #include "ui_state_smoke.h"
 #include "ui_campaign_smoke.h"
 #include "ui_media_smoke.h"
+#include "ui_usability_smoke.h"
 };

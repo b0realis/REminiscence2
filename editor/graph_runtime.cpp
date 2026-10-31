@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "graph_runtime.h"
 #include <stdexcept>
+#include <algorithm>
 namespace editor {
+int targetFeet(const Node &n, const NodeState &s) {
+	const int period = std::max(2, n.duration);
+	const int phase = std::clamp(s.targetPhase, 0, period - 1);
+	return n.at.y - n.travel * std::min(phase, period - phase) / (period / 2);
+}
 GraphState initialGraphState(const Module &m) {
 	GraphState state;
 	state.revision = moduleRevision(m);
@@ -10,8 +16,8 @@ GraphState initialGraphState(const Module &m) {
 		s.enabled = n.enabled;
 		s.friendly = n.friendly;
 		s.patrol = n.patrol;
-		s.active =
-		    n.kind != NodeKind::State && n.kind != NodeKind::CampaignSet && n.initiallyActive;
+		s.active = n.kind != NodeKind::State && n.kind != NodeKind::CampaignSet &&
+		           n.kind != NodeKind::Lift && n.initiallyActive;
 		state.nodes.push_back(s);
 	}
 	return state;
@@ -65,6 +71,17 @@ void GraphMachine::drain() {
 void GraphMachine::signal(int node, Signal signal) {
 	if (node < 0 || node >= int(_state.nodes.size()) || !_state.nodes[node].enabled)
 		return;
+	// The graph simulator uses the same occupancy state as the world adapter.
+	if (_module.nodes[node].kind == NodeKind::Zone) {
+		if (signal == Signal::Entered) {
+			enter(node);
+			return;
+		}
+		if (signal == Signal::Exited) {
+			leave(node);
+			return;
+		}
+	}
 	if (_module.nodes[node].kind == NodeKind::Actor && signal == Signal::Died)
 		_state.nodes[node].completed = true;
 	emit(node, signal);
@@ -95,7 +112,8 @@ void GraphMachine::complete(int i) {
 }
 bool GraphMachine::action(NodeKind k) {
 	return k == NodeKind::Music || k == NodeKind::Sound || k == NodeKind::Dialogue ||
-	       k == NodeKind::Animation || k == NodeKind::PickupAnimation || k == NodeKind::Timer;
+	       k == NodeKind::Animation || k == NodeKind::PickupAnimation || k == NodeKind::Timer ||
+	       k == NodeKind::Ambient;
 }
 bool GraphMachine::hasItem(const Node &n) const {
 	const int item = nodeIndex(_module, n.requiredItem);
@@ -123,8 +141,27 @@ void GraphMachine::deliver(int i, Input input, int source) {
 		return;
 	const auto &n = _module.nodes[i];
 	auto &s = _state.nodes[i];
+	if (n.kind == NodeKind::Lift) {
+		if (!s.enabled || s.active ||
+		    (input != Input::Activate && input != Input::Open && input != Input::Close))
+			return;
+		const auto target =
+		    liftTarget ? liftTarget(n, s, input)
+			           : std::optional<bool>(input == Input::Activate ? s.liftPosition == 0
+			                                                          : input == Input::Open);
+		if (!target || s.liftPosition == (*target ? n.duration : 0))
+			return;
+		s.liftTarget = *target;
+		s.active = true;
+		s.completed = false;
+		s.changedAt = _tick;
+		++s.generation;
+		worldCommands.push_back(i); // Bind the passenger before the first movement tick.
+		emit(i, Signal::Started);
+		return;
+	}
 	if (input == Input::Enable || input == Input::Disable) {
-		if (input == Input::Disable && (action(n.kind) || n.kind == NodeKind::State) && s.active) {
+		if (input == Input::Disable && (action(n.kind) || n.kind == NodeKind::State || n.kind == NodeKind::Target) && s.active) {
 			s.active = false;
 			++s.generation;
 			emit(i, n.kind == NodeKind::State ? Signal::Exited : Signal::Stopped);
@@ -134,7 +171,22 @@ void GraphMachine::deliver(int i, Input input, int source) {
 	}
 	if (!s.enabled)
 		return;
-	if (n.kind == NodeKind::CampaignSet) {
+	if (n.kind == NodeKind::Target) {
+		if (input == Input::Activate && !s.active) {
+			s.active = true;
+			// Stop freezes the carriage in place. Rebase its clock on resume so
+			// a nearby pause switch never teleports the plate to the lower stop.
+			// Reset remains the explicit way to return to the beginning.
+			s.changedAt = _tick - std::min<uint64_t>(_tick, std::max(0, s.targetPhase));
+			++s.generation;
+			emit(i, Signal::Started);
+		} else if (input == Input::Stop || input == Input::Reset) {
+			const bool running = s.active;
+			s.active = false;
+			if (input == Input::Reset) s.targetPhase = 0;
+			if (running) emit(i, Signal::Stopped);
+		}
+	} else if (n.kind == NodeKind::CampaignSet) {
 		if (input == Input::Activate || input == Input::Reset) {
 			_values["flag:" + n.campaignKey] = input == Input::Activate && n.initiallyActive;
 			s.completed = false;
@@ -324,22 +376,61 @@ void GraphMachine::enter(int i) {
 		return;
 	const auto &n = _module.nodes[i];
 	auto &s = _state.nodes[i];
-	if (n.kind != NodeKind::Zone || !s.enabled || (n.once && s.completed))
+	if (n.kind != NodeKind::Zone || !s.enabled || s.active || (n.once && s.completed))
 		return;
 	s.active = s.completed = true;
 	s.changedAt = _tick;
 	emit(i, Signal::Entered);
 	drain();
 }
+void GraphMachine::leave(int i) {
+	message.clear();
+	notice.clear();
+	if (i < 0 || i >= int(_state.nodes.size()) || _module.nodes[i].kind != NodeKind::Zone)
+		return;
+	auto &s = _state.nodes[i];
+	if (!s.active)
+		return;
+	// Clear occupancy even while disabled. Keep completed so a one-shot trigger
+	// cannot rearm merely by walking away, saving, or toggling Enable.
+	s.active = false;
+	s.changedAt = _tick;
+	if (s.enabled) {
+		emit(i, Signal::Exited);
+		drain();
+	}
+}
 // Snapshot due actions before delivery: a completion may restart another action.
 // Its new generation must not complete using this tick's stale deadline.
 void GraphMachine::advance() {
 	start();
+	// Trips always start at a landing, so elapsed time determines position exactly,
+	// including after a saved game or a debugger time jump.
+	for (size_t i = 0; i < _module.nodes.size(); ++i) {
+		const auto &n = _module.nodes[i];
+		auto &s = _state.nodes[i];
+		if (n.kind == NodeKind::Target && s.active)
+			s.targetPhase = int((_tick - s.changedAt) % n.duration);
+		if (n.kind != NodeKind::Lift || !s.active)
+			continue;
+		const int elapsed = int(std::min<uint64_t>(_tick - s.changedAt, n.duration));
+		s.liftPosition = s.liftTarget ? elapsed : n.duration - elapsed;
+		worldCommands.push_back(int(i));
+		if (elapsed == n.duration) {
+			s.active = false;
+			s.completed = true;
+			emit(int(i), Signal::Completed);
+			emit(int(i), s.liftTarget ? Signal::Opened : Signal::Closed);
+			// Apply arrival before a subsequent tick can dispatch a return trip.
+		}
+	}
+	drain();
 	std::vector<std::pair<int, uint64_t>> due;
 	for (size_t i = 0; i < _module.nodes.size(); ++i) {
 		const auto &n = _module.nodes[i];
 		const auto &s = _state.nodes[i];
-		if (!s.enabled || !s.active || !action(n.kind) || n.kind == NodeKind::Dialogue)
+		if (!s.enabled || !s.active || !action(n.kind) ||
+		    (n.kind == NodeKind::Dialogue || n.kind == NodeKind::Ambient))
 			continue;
 		const auto &clip = n.visuals[1].art.file.empty() && !n.visuals[0].art.file.empty()
 		                       ? n.visuals[0]

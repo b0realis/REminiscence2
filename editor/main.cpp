@@ -152,7 +152,11 @@ struct Workspace {
 	uint32_t previousTime = 0;
 	double accumulator = 0;
 	bool guidelines = false;
-	ImGuiTextFilter paletteSearch;
+	ImGuiTextFilter paletteSearch, nodeSearch;
+	int nodeCategoryFilter = 0;
+	bool showWorkflowTips = true;
+	bool campaignValidationOpen = false;
+	std::vector<std::string> campaignValidationResults;
 	PreviewSystem referencePreview;
 	std::unique_ptr<OriginalLevel> reference;
 	int referenceRoom = 0;
@@ -466,7 +470,7 @@ struct Workspace {
 			}
 			mark("picker-accept");
 			ImGui::SameLine();
-			if (ImGui::Button("Cancel")) {
+			if (ImGui::Button("Cancel (Esc)") || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
 				picker.open = false;
 				ImGui::CloseCurrentPopup();
 			}
@@ -532,56 +536,147 @@ struct Workspace {
 		}
 	}
 	void toolbar() {
-		if (ImGui::Button("New"))
-			attempt([&] {
-				if (nativePlayer.running())
-					throw std::runtime_error(
-					    "Stop the native preview before creating another project");
-				if (dirty())
-					saveProject(p, path.parent_path() / "recovery.r2project.json");
-				p = makeProject();
-				testStarts.clear();
-				placingTestStart = false;
-				selection.clear();
-				nativeActor = -1;
-				nativeReference.reset();
-				tool = Tool::Select;
-				setWorkflow(Workflow::Level);
-				pendingFrom = -1;
-				path = path.parent_path() / ("Untitled-" + p.id.substr(p.id.size() - 8)) /
-				       "project.r2project.json";
-				images.root = path.parent_path();
-				images.clear();
-				thumbnailVersion.clear();
-				history = {};
-				room = 0;
-				selected = -1;
-				part = 0;
-				saved = "";
-				status = "New project in its own folder; unsaved previous work retained in its "
-				         "recovery.r2project.json";
-			});
-		ImGui::SameLine();
-		if (ImGui::Button("Open"))
-			choose([&](auto f) { open(f); });
-		ImGui::SameLine();
+		const bool campaignMode = workflow == Workflow::Campaign;
+		if (ImGui::Button(campaignMode ? "New campaign" : "New level")) {
+			if (campaignMode)
+				chooseNewCampaign();
+			else
+				attempt([&] {
+					if (nativePlayer.running())
+						throw std::runtime_error(
+						    "Stop the native preview before creating another project");
+					if (dirty())
+						saveProject(p, path.parent_path() / "recovery.r2project.json");
+					p = makeProject();
+					testStarts.clear();
+					placingTestStart = false;
+					selection.clear();
+					nativeActor = -1;
+					nativeReference.reset();
+					tool = Tool::Select;
+					setWorkflow(Workflow::Level);
+					pendingFrom = -1;
+					path = path.parent_path() / ("Untitled-" + p.id.substr(p.id.size() - 8)) /
+					       "project.r2project.json";
+					images.root = path.parent_path();
+					images.clear();
+					thumbnailVersion.clear();
+					history = {};
+					room = 0;
+					selected = -1;
+					part = 0;
+					saved = "";
+					status = "New project in its own folder; unsaved previous work retained in its "
+					         "recovery.r2project.json";
+				});
+		}
+		mark("toolbar-new");
+		toolbarNext(campaignMode ? "Open campaign" : "Open level");
+		if (ImGui::Button(campaignMode ? "Open campaign" : "Open level")) {
+			if (campaignMode) {
+				choose([&](auto f) { openCampaignDocument(f); });
+				picker.directory = campaignPath.parent_path().u8string();
+			} else
+				choose([&](auto f) { open(f); });
+		}
+		mark("toolbar-open");
+		toolbarNext("Save");
 		if (ImGui::Button("Save"))
 			attempt([&] {
-				if (workflow == Workflow::Campaign)
+				if (campaignMode)
 					saveCampaignDocument();
 				else
 					saveAs(path);
 			});
-		ImGui::SameLine();
-		if (ImGui::Button("Save as"))
-			choose([&](auto f) { saveAs(f); }, true, false, "project.r2project.json");
-		ImGui::SameLine();
+		mark("toolbar-save");
+		itemTip(campaignMode ? "Save this campaign (Ctrl/Cmd+S)."
+		                     : "Save this level, including its modules (Ctrl/Cmd+S).");
+		toolbarNext("Save as...");
+		if (ImGui::Button("Save as...")) {
+			if (campaignMode)
+				chooseCampaignSaveAs();
+			else
+				choose([&](auto f) { saveAs(f); }, true, false, "project.r2project.json");
+		}
+		mark("toolbar-save-as");
+		toolbarNext("Undo");
+		ImGui::BeginDisabled(campaignMode ? campaignUndo.empty() : history.undoStack.empty());
 		if (ImGui::Button("Undo"))
-			attempt([&] { restoreHistory(false); });
-		ImGui::SameLine();
+			attempt([&] {
+				if (campaignMode)
+					campaignHistory(false);
+				else
+					restoreHistory(false);
+			});
+		mark("toolbar-undo");
+		ImGui::EndDisabled();
+		itemTip(campaignMode ? "Undo campaign edit (Ctrl/Cmd+Z)."
+		                     : "Undo level or module edit (Ctrl/Cmd+Z).");
+		toolbarNext("Redo");
+		ImGui::BeginDisabled(campaignMode ? campaignRedo.empty() : history.redoStack.empty());
 		if (ImGui::Button("Redo"))
-			attempt([&] { restoreHistory(true); });
-		ImGui::SameLine();
+			attempt([&] {
+				if (campaignMode)
+					campaignHistory(true);
+				else
+					restoreHistory(true);
+			});
+		mark("toolbar-redo");
+		ImGui::EndDisabled();
+		itemTip("Redo the last undone edit (Ctrl/Cmd+Shift+Z).");
+		toolbarNext("Validate");
+		if (ImGui::Button("Validate"))
+			attempt([&] {
+				if (campaignMode)
+					validateCampaignDocument();
+				else
+					validateProject();
+			});
+		mark("toolbar-validate");
+		itemTip(campaignMode ? "Check campaign routes, saved level exits and media files."
+		                     : "Find missing assets, broken connections and level errors.");
+		const char *playLabel = campaignMode ? "PLAY CAMPAIGN"
+		                        : settings.authoredStart
+		                            ? (p.native.enabled ? "PLAY CAMPAIGN" : "PLAY FROM START")
+		                            : "PLAY HERE";
+		toolbarNext(playLabel);
+		ImGui::BeginDisabled(library.games.empty() || (campaignMode && campaignPlayer.running()));
+		if (ImGui::Button(playLabel))
+			attempt([&] {
+				if (campaignMode)
+					launchCampaign();
+				else
+					play(!settings.authoredStart);
+			});
+		mark("play-here");
+		ImGui::EndDisabled();
+		if (!campaignMode && ImGui::IsItemClicked(ImGuiMouseButton_Right))
+			ImGui::OpenPopup("play_origin");
+		itemTip(library.games.empty()
+		            ? "Choose Game assets below to enable playtesting. Editing works without them."
+				: campaignMode
+		            ? "F5: save linked level changes and play the campaign from its beginning."
+					: "F5: test with the selected start mode. Use Start... for an explicit start.");
+		if (!campaignMode) {
+			toolbarNext("Start...");
+			if (ImGui::Button("Start..."))
+				ImGui::OpenPopup("play_origin");
+			mark("play-options");
+			if (ImGui::BeginPopup("play_origin")) {
+				ImGui::BeginDisabled(library.games.empty());
+				if (ImGui::MenuItem("Play current room / TEST marker (Ctrl/Cmd+F5)"))
+					attempt([&] { play(true); });
+				if (ImGui::MenuItem("Play from authored start (Shift+F5)"))
+					attempt([&] { play(false); });
+				ImGui::EndDisabled();
+				ImGui::Separator();
+				if (ImGui::MenuItem("Default start mode..."))
+					settingsOpen = true;
+				mark("play-default-settings");
+				ImGui::EndPopup();
+			}
+		}
+		// Auxiliary tools stay on a separate row; document actions remain together.
 		if (ImGui::Button("Slice image...")) {
 			setWorkflow(Workflow::Level);
 			choose([&](auto f) {
@@ -589,40 +684,34 @@ struct Workspace {
 				sheetOpen = true;
 			});
 		}
-		ImGui::SameLine();
-		if (ImGui::Button("Validate"))
-			validateProject();
-		ImGui::SameLine();
-		const char *playLabel = settings.authoredStart
-		                            ? (p.native.enabled ? "PLAY CAMPAIGN" : "PLAY FROM START")
-		                            : "PLAY HERE";
-		if (ImGui::Button(playLabel))
-			attempt([&] { play(!settings.authoredStart); });
-		mark("play-here");
-		if (ImGui::IsItemHovered())
-			ImGui::SetTooltip(
-			    "F5: use Editor Settings start mode. Right-click for an explicit start.");
-		if (ImGui::BeginPopupContextItem("play_origin")) {
-			if (ImGui::MenuItem("Play here (Ctrl/Cmd+F5)"))
-				attempt([&] { play(true); });
-			if (ImGui::MenuItem("Play from authored start (Shift+F5)"))
-				attempt([&] { play(false); });
-			ImGui::EndPopup();
-		}
-		ImGui::SameLine();
-		if (ImGui::Button("Guidelines (F1)"))
-			guidelines = true;
-		mark("guidelines");
-		ImGui::SameLine();
+		itemTip(
+		    "Split a large level image into rooms. Collision and ledges are painted separately.");
+		toolbarNext("Original campaign");
 		if (ImGui::Button("Original campaign"))
 			attempt([&] { openOriginal(); });
 		mark("original");
-		ImGui::SameLine();
+		toolbarNext("Game assets...");
+		if (ImGui::Button("Game assets..."))
+			chooseGameAssets();
+		mark("toolbar-assets");
+		itemTip("Choose your extracted Amiga, DOS/GOG or Sega CD files for playtesting in any "
+		        "workspace.");
+		toolbarNext("Settings");
 		if (ImGui::Button("Settings"))
 			settingsOpen = true;
 		mark("editor-settings");
-		ImGui::SameLine();
-		ImGui::Text("%s%s", p.name.c_str(), dirty() ? " *" : "");
+		toolbarNext("Guidelines (F1)");
+		if (ImGui::Button("Guidelines (F1)"))
+			guidelines = true;
+		mark("guidelines");
+		toolbarNext("Tips");
+		ImGui::Checkbox("Tips", &showWorkflowTips);
+		mark("workflow-tips");
+		ImGui::TextWrapped(
+		    "%s: %s  |  %s", campaignMode ? "Campaign" : "Level",
+		    campaignMode ? campaign.name.c_str() : p.name.c_str(),
+		    (campaignMode ? campaignDirty() : serialize(p) != saved) ? "Unsaved changes" : "Saved");
+		itemTip((campaignMode ? campaignPath : path).u8string().c_str());
 		nativeToolbar();
 		nativePlacementDialog();
 	}
@@ -698,22 +787,23 @@ struct Workspace {
 		ImGui::Checkbox("Ledge overlay", &ledges);
 		ImGui::Checkbox("Virtual wires", &wires);
 		ImGui::SeparatorText("VISUAL LAYERS");
+		const char *layerTips[] = {
+		    "Back: distant scenery behind the player and platforms.",
+		    "Playfield: room art at the player's layer. Paint collision separately.",
+		    "Front: foreground artwork drawn over the player. Use transparent images."};
 		for (int i = 2; i >= 0; --i) {
 			ImGui::PushID(i);
 			ImGui::Checkbox(layerName(Layer(i)), &visible[i]);
+			itemTip(layerTips[i]);
 			ImGui::SameLine();
 			ImGui::Checkbox("Lock", &locked[i]);
+			itemTip("Prevent editing objects on this layer. Visibility only affects the editor "
+			        "preview.");
 			ImGui::PopID();
 		}
 		ImGui::SeparatorText("PLAYTEST ASSETS");
 		if (ImGui::Button("Choose asset folder..."))
-			choose(
-			    [&](auto f) {
-				    library = assets::discover(f.u8string());
-				    assetIndex = 0;
-				    status = std::to_string(library.games.size()) + " editions found";
-			    },
-			    false, true);
+			chooseGameAssets();
 		if (!library.games.empty() &&
 		    ImGui::BeginCombo("Edition", library.games[assetIndex].label.c_str())) {
 			for (int i = 0; i < int(library.games.size()); ++i)
@@ -1623,6 +1713,12 @@ struct Workspace {
 						play(!io.KeyShift &&
 						     (io.KeyCtrl || io.KeySuper || !settings.authoredStart));
 				});
+			if (ImGui::IsKeyPressed(ImGuiKey_Escape) &&
+			    (workflow == Workflow::Level || workflow == Workflow::Placement)) {
+				tool = Tool::Select;
+				placingTestStart = false;
+				status = "Selection tool active";
+			}
 			const bool mod = io.KeyCtrl || io.KeySuper;
 			if (mod && ImGui::IsKeyPressed(ImGuiKey_S))
 				attempt([&] {
@@ -1654,6 +1750,7 @@ struct Workspace {
 		else {
 			toolbar();
 			workflowTabs();
+			workflowGuide();
 			ImGui::Separator();
 			if (workflow == Workflow::Help)
 				helpWorkspace();
@@ -1728,6 +1825,7 @@ struct Workspace {
 		guidelinesUI();
 		settingsUI();
 		validationUI();
+		campaignValidationUI();
 		if (pendingIssue) {
 			focusIssue(*pendingIssue);
 			pendingIssue.reset();
@@ -1737,7 +1835,16 @@ struct Workspace {
 };
 static void screenshot(SDL_Renderer *renderer, const std::string &path) {
 	int w, h;
-	SDL_GetRendererOutputSize(renderer, &w, &h);
+	if (SDL_GetRendererOutputSize(renderer, &w, &h) != 0)
+		throw std::runtime_error(SDL_GetError());
+	if (fs::u8path(path).extension() == ".png") {
+		Image frame{w, h, std::vector<uint32_t>(size_t(w) * h)};
+		if (SDL_RenderReadPixels(renderer, nullptr, SDL_PIXELFORMAT_ABGR8888,
+		                         frame.pixels.data(), w * sizeof(uint32_t)) != 0)
+			throw std::runtime_error(SDL_GetError());
+		writePNG(frame, fs::u8path(path));
+		return;
+	}
 	auto *surface = SDL_CreateRGBSurfaceWithFormat(0, w, h, 24, SDL_PIXELFORMAT_RGB24);
 	if (!surface)
 		throw std::runtime_error(SDL_GetError());
@@ -1747,7 +1854,7 @@ static void screenshot(SDL_Renderer *renderer, const std::string &path) {
 		result = SDL_SaveBMP(surface, path.c_str());
 	SDL_FreeSurface(surface);
 	if (result)
-		throw std::runtime_error("Could not capture editor workspace");
+		throw std::runtime_error("Could not capture editor workspace: " + std::string(SDL_GetError()));
 }
 #ifdef REMINISCENCE2_EDITOR_TESTING
 #include "ui_smoke.h"
@@ -1765,7 +1872,7 @@ int main(int argc, char **argv) {
 			    "REminiscence2 Editor\nUsage: reminiscence2-editor [project.r2project.json] "
 			    "[--assets=FOLDER]\nImport PNG/JPEG/BMP sheets, slice rooms, paint "
 			    "collision/ledges, place linked\nmodules, save projects and play with your "
-			    "original game assets.\n--screenshot=FILE.bmp captures the actual workspace "
+			    "original game assets.\n--screenshot=FILE.png (or .bmp) captures the actual workspace "
 			    "and exits.\n--campaign=FILE opens a campaign document (also works with "
 			    "--validate).\n--module=ID opens a graph module.\n--validate checks project "
 			    "and all image/audio files without opening a window.\n--guidelines opens design "

@@ -157,7 +157,7 @@ void checkExtras(int frame, Workspace &app) {
 		require(app.graphZoom > .5f, "Graph wheel zoom");
 	if (frame == 248) {
 		require(!app.graphFrameAll && app.graphPan.x == 12, "Frame all button");
-		screenshot(app.renderer, (output / "graph-navigation.bmp").u8string());
+		screenshot(app.renderer, (output / "graph-navigation.png").u8string());
 	}
 	if (frame == 258)
 		require(app.selected == int(app.p.modules.size()) - 1 && app.graphView &&
@@ -172,6 +172,6 @@ void checkExtras(int frame, Workspace &app) {
 			require(std::filesystem::exists(app.path.parent_path() /
 			                                ("level-" + std::to_string(i) + ".r2project.json")),
 			        "Missing native sibling level");
-		screenshot(app.renderer, (output / "native-campaign.bmp").u8string());
+		screenshot(app.renderer, (output / "native-campaign.png").u8string());
 	}
 }

@@ -19,9 +19,9 @@ void nativeGraphUI() {
 		nativeConnectionsUI();
 		return;
 	}
-	ImGui::TextWrapped("NATIVE PUZZLES / lossless state-machine rules. Shared behavior edits "
-	                   "affect every actor using that behavior. Rule edits apply on Restart; Apply "
-	                   "live retains running puzzle state.");
+	ImGui::TextWrapped("NATIVE PUZZLES / original state-machine rules. Shared behavior edits "
+	                   "affect every owner. Apply live supports compatible rule/port changes; "
+	                   "existing row states and actor slots must stay stable.");
 	nativePuzzle = std::clamp(nativePuzzle, 0, int(p.native.puzzles.size()) - 1);
 	auto &puzzle = p.native.puzzles[nativePuzzle];
 	if (ImGui::BeginCombo("Puzzle module", puzzle.name.c_str())) {
@@ -182,6 +182,12 @@ void nativeGraphUI() {
 		if (ImGui::Button("Node help / comments"))
 			nodeHelpOpen = true;
 		ImGui::Text("RULE %d / STATE %d", nativeRule, r.type);
+		int owners = 0;
+		for (const auto &owner : p.native.actors)
+			owners += owner.behavior == a.behavior;
+		ImGui::TextWrapped("Behavior %d: %d actor(s) share these rules. Use Make behavior private "
+		                   "in Puzzle connections to isolate one owner.",
+		                   a.behavior, owners);
 		bool changed = ImGui::Checkbox("Rule enabled", &r.enabled);
 		mark("native-rule-enabled");
 		ImGui::TextWrapped("Conditions 1 AND 2 must pass, then Action executes. The transition "
@@ -207,8 +213,41 @@ void nativeGraphUI() {
 				}
 				ImGui::EndCombo();
 			}
-			changed |= ImGui::InputInt("Operand", &r.argument[slot]);
-			r.argument[slot] = std::clamp(r.argument[slot], -32768, 32767);
+			const auto &source = nativeDefaults.programs[nativeProgramSource(p.native, a.behavior)];
+			const auto info =
+			    nativeOperandInfo(r.opcode[slot], source, int(p.native.actors.size()));
+			ImGui::TextWrapped("%s", info.meaning.c_str());
+			if (info.ranged) {
+				changed |= ImGui::InputInt("Operand", &r.argument[slot]);
+				// Do not silently clamp on redraw: invalid existing drafts remain
+				// visible and validation explains them instead of mutating the file.
+				itemTip(info.constraint.c_str());
+			} else {
+				if (ImGui::BeginCombo("Source values", std::to_string(r.argument[slot]).c_str())) {
+					for (int value : info.values)
+						if (ImGui::Selectable(std::to_string(value).c_str(),
+						                      value == r.argument[slot])) {
+							r.argument[slot] = value;
+							changed = true;
+						}
+					ImGui::EndCombo();
+				}
+				itemTip(info.constraint.c_str());
+			}
+			const bool operandHelp = ImGui::TreeNode("Operand help / raw value");
+			if (slot == 0)
+				mark("native-operand-help");
+			if (operandHelp) {
+				ImGui::Text("Opcode 0x%02X / operand %d (0x%04X)", r.opcode[slot], r.argument[slot],
+				            unsigned(r.argument[slot]) & 0xffff);
+				if (slot == 0)
+					mark("native-operand-value");
+				ImGui::TextWrapped("%s", info.constraint.c_str());
+				ImGui::TextWrapped("Values found in the original source behavior:");
+				for (int value : info.values)
+					ImGui::BulletText("%d (0x%04X)", value, unsigned(value) & 0xffff);
+				ImGui::TreePop();
+			}
 			ImGui::PopID();
 		}
 		if (ImGui::BeginCombo("Next rule", ("#" + std::to_string(r.next) + " / state " +
@@ -247,6 +286,7 @@ void nativeGraphUI() {
 		ImGui::TextWrapped("A duplicated rule is appended with a stable new index. Connect an "
 		                   "existing transition to it using Next rule. Disable obsolete rules "
 		                   "instead of deleting referenced indices.");
+		nativeDataInspector();
 		ImGui::EndChild();
 		ImGui::EndTable();
 	}

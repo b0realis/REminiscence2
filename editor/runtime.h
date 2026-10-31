@@ -39,7 +39,11 @@ public:
 	void beforeDraw(Game &) override {}
 	void afterDraw(Game &) override {}
 	bool beforeActor(Game &, LivePGE &) override;
+	void constrainActor(Game &, LivePGE &) override;
 	void afterSimulation(Game &) override;
+	int gunRayHit(int room, int left, int right, int y, int direction) override;
+	int acceptsHit(const LivePGE &, int) const override;
+	bool drawsNativeActor(const LivePGE &) const override;
 	Image render();
 	void restart();
 	void activate(size_t module, bool onlyOutputs = false);
@@ -56,11 +60,18 @@ public:
 	bool checkpointRequested() const { return _checkpointDue; }
 	void acknowledgeCheckpoint() { _checkpointDue = false; }
 	void bindCampaign(CampaignRun *);
+	// NativeSession has validated identical extension modules and prepared this
+	// copy before its live transaction. Keep graph progress, dialogue and audio.
+	void adoptNativeDefinition(Project &&) noexcept;
 	void message(const std::string &text) {
 		_notice = text;
 		_noticeUntil = _tick + 90;
 	}
 	bool dialogueOpen() const { return !_dialogue.empty(); }
+	// Uses the same QoL overlay as the native player, with authored save/actions.
+	void showSettings(CampaignRun *, const std::filesystem::path &profileDirectory);
+	bool handleMenuInput(CampaignRun *, const std::filesystem::path &profileDirectory);
+	void present();
 
 private:
 	Project _project;
@@ -76,10 +87,13 @@ private:
 	void syncAudio(bool seek = false);
 	bool _borrowed = false;
 	std::vector<std::pair<int, int>> _nativeEvents;
+	std::vector<std::pair<int, int>> _targetHits;
 	std::vector<ModuleState> _states;
 	std::array<int8_t, 7424> _baseCollision;
 	std::vector<uint8_t> _coverage;
+	std::vector<uint8_t> _presentRgb;
 	bool _previousUse = false;
+	bool _previousAdvance = false;
 	bool _paused = false;
 	uint8_t _previousDirection = 0;
 	uint64_t _tick = 0;
@@ -100,8 +114,12 @@ private:
 	std::string _notice;
 	uint64_t _noticeUntil = 0;
 	void updateCollision();
+	void configureMachine(GraphMachine &);
+	bool ridingLift() const;
+	void moveLift(size_t module, int node);
 	bool canClose(const Anchor &, int width, int height) const;
 	bool graphTick(bool use);
+	std::pair<int, int> interactionTarget() const;
 	void showDialogue(const std::string &);
 	void graphFeedback(GraphMachine &, size_t module);
 	void advanceActions();
@@ -115,6 +133,9 @@ private:
 	};
 	std::array<MotionStart, 256> _motion;
 	void enforceDoors();
+	bool findGuard(int actor, size_t &module, size_t &node) const;
+	void tickGuard(size_t module, size_t node, LivePGE &);
+	void drawGuards(Image &);
 };
 // CLI player uses the regular platform/input layer, with no original saves,
 // story hooks or persistent preferences modified by a custom-scene playtest.

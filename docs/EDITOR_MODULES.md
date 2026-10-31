@@ -23,6 +23,24 @@ The first three tabs share one level project and undo history. Campaign has its 
 placement/drag/wire gestures. Room tools cannot accidentally drag or delete a
 selected puzzle. Module Placement does not paint collision or edit room art.
 
+The toolbar identifies the active level or campaign and shows **Saved** or
+**Unsaved changes**. New/Open, Save/Save as, Undo/Redo, Validate and Play act on
+that workspace's document. Campaign edits have their own undo history. Actions
+wrap at smaller window sizes. The **Tips** checkbox hides or shows a short guide
+for the current workspace; hover controls for explanations and shortcuts.
+
+Use **Game assets…** from any workspace to choose extracted game files. Editing
+and **Start graph / Play signals** work without them; gameplay needs a supported
+edition. **Start…** beside Play offers the current room/TEST marker or authored
+start explicitly, plus the default-start setting. Escape leaves room painting or
+module placement mode, and cancels the file picker.
+
+In Module Editing, **Find a node or action…** searches names, categories and
+behavior descriptions. For example, `collects` finds pickups and `paginated`
+finds dialogue. The category selector narrows the list to gameplay, inventory,
+story, logic, presentation or audio. **Clear node filters** restores all nodes.
+Hover a node for its behavior summary; its help window explains every port.
+
 ## One connected puzzle per module
 
 The module is the complete puzzle. Its nodes are the individual switches, doors,
@@ -107,7 +125,7 @@ Relays and area-trigger markers are hidden in gameplay.
 | Dialogue NPC / reader | Used, Completed | Enter nearby shows text. An optional required item gates completion. Completion fires once; repeat conversation uses the finished text |
 | Quest item | Completed | Activate grants it remotely, or walking nearby collects it; collected once per playtest |
 | Mission computer | Used, Completed | Activate accepts the job; Progress counts distinct source nodes; Reset clears acceptance, completion and progress |
-| Area trigger | Entered | Overlapping the rectangle emits on entry; optional one-shot; leaving and re-entering can retrigger when one-shot is off |
+| Area trigger | Entered, Exited | Emits once on each overlap edge, including leaving the room. One-shot allows only the first entry/exit pair; disable it for proximity doors. Disabled triggers emit neither event. |
 | Relay | Used | Activate forwards a signal; optional one-shot |
 | Animated prop | None | Animation and drawing layer only |
 | Dialogue | Started, Completed, Stopped, Choice 1, Choice 2 | Activate starts paginated text; optional two-choice branch; Stop cancels; Reset rearms |
@@ -143,7 +161,7 @@ individual rooms afterwards. Relative part positions and internal event/required
 item connections survive. External legacy chain links are excluded from a prefab.
 Save As copies every node's artwork and audio too. Original game assets are never exported.
 
-Limits: 32 nodes and 128 event wires per module, 256 graph nodes per project,
+Limits: 64 nodes and 128 event wires per module, 256 graph nodes per project,
 64 modules and 64 rooms. Invalid ports, missing references, invalid image paths,
 out-of-range geometry and animation strips extending past their image are
 rejected before play. Project schemas 1..8 migrate to schema 9; portable module
@@ -327,12 +345,29 @@ check prevents stale live states being shown against edited nodes or wires.
 
 ## Enemies and friendly actors
 
-**Actor (crawler)** creates an independently owned native crawler in a custom
+The Actor node defaults to **Native crawler**, which creates an independently owned native crawler in a custom
 scene. It preserves native hostile AI and artwork. **Patrol bounds** constrain
 it to the authored room and horizontal interval. Friendly mode suspends its
 native AI and uses a simple floor-aware walk at 1–4 pixels/tick; it stops at
 walls and ledges. This mode also suspends native AI damage reactions. Use a
 normal hostile actor when testing the original combat/death behavior.
+
+
+Choose **Armed guard** in a custom scene to use your own humanoid sprite sheet.
+Import a transparent four-column, two-row sheet into **Idle art**, with one frame;
+the crop covers the complete sheet and its dimensions divide evenly by 4 and 2.
+Cells in reading order are idle, walk A, walk B, aim, fire, hurt, fall and dead.
+All poses face left. The renderer mirrors them when facing right and anchors the
+lowest opaque pixel to the floor. Set the display width/height (16–64 by 24–72
+pixels); these actors render on the Playfield layer.
+
+The guard patrols safe floor, aims for one second, fires and recovers for two
+seconds. Solid tiles and closed doors block sight; guards do not shoot between
+rooms or floors. Friendly cancels a pending attack. Hold freezes patrol/attacks,
+while incoming pistol hits still work. Original, Heavy and Laser use the same
+native hit query. Death, hurt and patrol endpoints drive existing graph outputs.
+Saves preserve attack/animation phases; pause and dialogue suspend combat.
+The engine supplies behavior only: import artwork you are entitled to use.
 
 Friendly actors emit **Used** on Enter nearby. Connect that output to Dialogue,
 a quest action or a State's Progress input. Hurt, Died and Patrol endpoint are
@@ -410,9 +445,9 @@ updates retain running state. Macintosh assets remain unavailable for validation
 
 ## Expanded palette, signals and notes (1.45)
 
-The authored palette has **26 node kinds**. Native projects expose 24 of these:
+The authored palette has **29 node kinds**. Native projects expose 24 of these:
 use native door bindings and native saves instead of the custom Door/Checkpoint
-nodes. Original actors and their native state-machine rules remain available for
+nodes; the custom Lift, Background machinery and Moving target plate also stay outside native campaigns. Original actors and their native state-machine rules remain available for
 original campaign inventory, lifts, terminals and other mechanics.
 
 | Node | Behavior |
@@ -422,15 +457,17 @@ original campaign inventory, lifts, terminals and other mechanics.
 | Dialogue NPC | Talks and optionally accepts a collected item |
 | Item / pickup | Proximity collects an item (optional shared Campaign key); Completed fires once |
 | Mission computer | Counts distinct objective sources after acceptance |
-| Area trigger | Emits Entered on crossing into its rectangle |
+| Area trigger | Emits Entered/Exited on crossing into/out of its rectangle |
 | Relay | Activate emits Used; enable/disable gates it |
 | Animated prop | Decorative animation with visibility control |
 | Dialogue | Paginated text and optional two-choice branching |
 | Play animation | Timed sprite animation with Started/Completed/Stopped |
 | Pickup animation | Visual effect only; does not grant an item |
 | Timer | Delayed completion at 30 simulation ticks/second |
+| Lift | Visible two-stop platform carrying Conrad between vertically linked rooms |
+| Background machinery | Local breathing, flow, fan rotation, light pools, dust or vent mist |
 | State | Exclusive state group with Entered/Exited/Completed |
-| Actor | Custom crawler or bound native actor, patrol/friendly/message controls |
+| Actor | Native crawler, authored armed guard or bound native actor; patrol/friendly/message controls |
 | Health pickup | Restores configured health up to five; Reset restores the pickup |
 | Damage player | Activate subtracts configured health; optional One shot |
 | Counter | Each Progress increments, including repeated source signals; Reset clears |
@@ -504,3 +541,135 @@ Validation checks missing/corrupt clips and changed duration. Limits: mono/stere
 8–192 kHz, 10 minutes, 64 MiB encoded and 64 MiB decoded per clip, 128 MiB decoded
 per level, 32 audio nodes. Resampling is performed by the mixer; no allocation or
 file reads occur on the audio thread. Music playback uses PCM decoded at scene load.
+
+## Vertical routes and carrying lifts (1.55)
+
+Custom rooms use a **216-pixel vertical stride** inside a 256×224 picture. Link
+an upper room's Down exit to the lower room and its Up exit back. Paint collision
+independently from artwork: 16-pixel columns and 36-pixel rows, with standing
+surfaces normally at Y=72, 144 or 216. A ledge marks its exposed climbable edge.
+Stagger surfaces so Conrad can ascend one 72-pixel tier at a time and land after
+each drop. Test both travel directions with PLAY; a drawn platform alone cannot
+catch him. A shaft opening in the upper floor needs a matching ceiling opening
+and safe landing in the room below.
+
+Add a **Lift** node to a graph module, at Y=216 in the upper room. Its lower
+landing is the reciprocal linked room below, at the same X and Y. Use a width of
+at least 32 pixels on 16-pixel boundaries and a platform height of 1–8 pixels.
+Leave the shaft clear. Landing collision remains a safety grate, so an absent
+car does not leave a lethal hole. The moving car carries Conrad through that
+landing; it does not carry other actors.
+
+Place a Button at each landing, within the platform width, and connect **Used →
+Lift: Activate**. Stand on the landing and use the button: if the car is elsewhere,
+it travels empty to you; use it again to board and depart. Route the upper button
+through a campaign flag or item condition for a powered/locked lift. Keep a return
+button accessible to prevent stranding the player.
+
+- **Activate:** call or ride according to the caller's landing.
+- **Open / Close:** send to the lower / upper landing respectively; an actor
+  standing on the departure platform boards automatically.
+- **Started:** departure. **Completed:** arrival. **Opened / Closed:** arrival at
+  the lower / upper landing respectively.
+- **Travel (ticks):** whole journey, 30 ticks per second; minimum 30, default 120.
+
+Import idle/active platform sprites in the normal sprite inspector. The runtime
+draws them below Conrad's feet and animates them while traveling. Player movement
+is held during the ride; pausing freezes it, and campaign saves preserve the car's
+position and passenger. Moving trips ignore further commands. Lift deliberately
+has no Stop/Disable input that could strand a passenger between rooms.
+
+The node debugger displays departure, timed travel completion and arrival signals;
+use PLAY to inspect physical motion. Export/import supports Lift modules; their
+placement room must already have the reciprocal lower-room link. As with other
+multi-room modules, place the return button in the lower room after importing.
+
+## Living background machinery (1.56)
+
+Add **Background machinery** to a custom graph module. Its rectangle selects an
+elliptical region of the room artwork: X is the left edge, Feet Y is the bottom,
+and Width/Height give the region size. Place it tightly over an organ, vein or
+liquid tank. The **Living background** inspector offers:
+
+- **Breathe:** small expansion/contraction with a gentle brightness change.
+- **Pulse:** a travelling light pulse through the selected tissue.
+- **Coolant flow:** local ripples and flowing highlights.
+- **Fan rotor:** turns the existing blades once per loop. Fit the ellipse inside
+  the casing; the central bearing and outer rim stay still.
+- **Light pool:** a restrained, gently pulsing cyan light over nearby surfaces.
+- **Dust motes:** a few single-pixel particles drifting upward.
+- **Vent mist:** short pale wisps, useful when connected to an airlock cycle.
+
+Strength is 1–3 (particle density for Dust/Mist; not used by the rotor). Motion
+uses nearest-pixel sampling; effects stay inside the ellipse. Loop length is
+60–600 simulation ticks (2–20 seconds). Use
+slightly different periods for adjacent organs. The effect samples existing
+artwork each frame, so it needs no replacement sprites or duplicated atlas.
+Particles are generated deterministically from simulation time, with no global
+random state. Lights and particles do not need separate image assets either.
+
+Wire **On start: Completed → Activate** to begin. **Stop**, **Reset** or **Disable**
+restores the still artwork. **Activate** starts a stopped cycle, emitting Started;
+repeated activation while running is ignored. Stop/Disable emits Stopped. It
+loops until stopped and has no Completed signal.
+
+These nodes are restricted to the **Back** layer of custom scenes. Physical
+platform art, actors and foreground art are drawn afterward. Keep regions away
+from structural edges and space windows. Select the region in the editor and use
+**PLAY HERE** to inspect its motion. Pausing freezes the cycle; save/load preserves
+its phase. Rendering changes no collision or gameplay state.
+
+For pressure effects, connect the Cycling state's **Entered → Activate** to Vent
+mist, then Ready's **Entered → Stop**. This keeps the puff linked to the mechanism.
+
+
+### Moving target plate
+
+For a shooting drill, add **Moving target plate** from the Gameplay palette.
+Place its lower stop, choose a vertical travel distance and a round-trip time,
+then connect **On start → Activate**. Use PLAY to see it move. The plate has a
+default metal target graphic; Idle/Active sprites can replace it.
+
+**Hit** fires for each pistol round that actually crosses the plate. All pistol
+styles work. The plate is indestructible and takes no native actor slot. Stop
+freezes it; Activate resumes from that position without jumping. Reset returns it
+to its lower stop; Disable hides and deactivates it.
+Its help window documents all ports, and designer comments describe its role.
+
+For a green hit lamp, add a non-looping **Pickup animation** with a green sprite
+and short duration (one frame at 8 FPS lasts four game ticks). Wire Hit to
+**Reset**, then **Activate**, in that order. Reset lets closely spaced hits
+restart the pulse; Pickup animation hides the sprite when the pulse finishes.
+The Hit output can also feed a counter, sound, door or state machine.
+
+### Proximity doors and walk-through sensors
+
+An **Area trigger** can drive an opening Animation with **Entered**, and a
+closing Animation with **Exited**. Turn **One shot** off for repeated use.
+Both signals work in gameplay and the node simulator; leaving a room also
+fires Exited. The trigger retains its overlap state in saves.
+
+For a front-facing doorway, use an Animation behind Conrad and a separate
+Button → Teleport connection for Enter-to-travel. A Door node is a solid
+bulkhead and is appropriate when the doorway must block movement across
+the screen. Keep the trigger rectangle below any overhead walkway so walking
+on the deck above does not activate the lower door.
+
+### Nearby controls in playtests
+
+Walk near a Button, Computer, NPC or friendly actor to see its **Enter** prompt.
+The closest enabled device within 24 pixels horizontally and vertically wins,
+independent of module order. This keeps side-by-side terminals individually
+usable. Upper decks do not compete with lower controls. One press uses one
+device, including when its wires enable a neighboring switch or teleport Conrad.
+Completed one-shot Buttons stop competing; NPCs and completed Computers can
+still display their after-use text.
+
+For a repeatable fan or light switch, place two Buttons at the same anchor:
+**Turn off** starts enabled, **Turn on** starts disabled. Each Used signal
+disables itself, enables the other Button, and sends Stop or Activate to the
+Background machinery/Animation node. Give the two controls different status
+sprites and clear action names. The state, light and machinery phase persist
+in saves. For timed tests, connect a dialogue choice to a Timer and the effect;
+the Timer's Completed signal stops the effect. Computer screen glow can use a
+small Light pool region centered on the display.

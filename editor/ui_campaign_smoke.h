@@ -45,7 +45,7 @@ void inputCampaign(int frame, Workspace &app) {
 		app.storyReveal = true;
 		app.campaignFrame = true;
 	}
-	click(618, "campaign-save");
+	click(618, "toolbar-save");
 	click(626, "campaign-layout-window");
 	if (frame == 634) {
 		pointer = app.testPoints.at("campaign-story-drag");
@@ -63,7 +63,7 @@ void inputCampaign(int frame, Workspace &app) {
 void checkCampaign(int frame, Workspace &app) {
 	if (frame == 587) {
 		require(app.nodeHelpOpen, "Node help window did not open");
-		screenshot(app.renderer, (output / "node-help.bmp").u8string());
+		screenshot(app.renderer, (output / "node-help.png").u8string());
 	}
 	if (frame == 605)
 		require(app.workflow == Workflow::Campaign && app.campaign.stages.size() == 2,
@@ -77,16 +77,50 @@ void checkCampaign(int frame, Workspace &app) {
 		        "Campaign save button failed");
 		require(validateCampaign(loadCampaign(app.campaignPath)).empty(),
 		        "Saved UI campaign is invalid");
-		screenshot(app.renderer, (output / "campaign-editor.bmp").u8string());
+		screenshot(app.renderer, (output / "campaign-editor.png").u8string());
 	}
 	if (frame == 630) {
 		require(app.storyWindowOpen, "Story layout window did not open");
-		screenshot(app.renderer, (output / "campaign-screen-layout.bmp").u8string());
+		screenshot(app.renderer, (output / "campaign-screen-layout.png").u8string());
 	}
 	if (frame == 639) {
 		require(app.campaign.stages[0].elements[0].x > 40, "Story element drag did not move text");
 		app.campaignHistory(false);
 		require(app.campaign.stages[0].elements[0].x == 40, "Story placement undo failed");
-
+		// Campaign playback must include unsaved edits in its referenced level.
+		// Change an exit too: checking disk before saving would reject the new route.
+		app.path = output / "campaign-playback" / "level.r2project.json";
+		app.images.root = app.path.parent_path();
+		app.p = makeProject();
+		auto module = makeGraph(app.p, 5, app.p.spawn);
+		module.nodes.push_back(makeNode(module, NodeKind::LevelExit, app.p.spawn));
+		module.nodes.back().text = "old-exit";
+		app.p.modules = {module};
+		app.saveAs(app.path);
+		app.p.modules[0].nodes.back().text = "new-exit";
+		app.p.rooms[0].name = "Edited room";
+		app.p.rooms[0].collision[0] = 1;
+		app.campaign = {};
+		auto level = newStage(app.campaign, StageKind::Level);
+		level.level = app.path.filename().u8string();
+		app.campaign.entry = level.id;
+		app.campaign.stages.push_back(level);
+		auto ending = newStage(app.campaign, StageKind::End);
+		app.campaign.stages.push_back(ending);
+		app.campaign.stages[0].routes = {{"new-exit", "Depart", ending.id, "", true}};
+		app.campaignPath = app.path.parent_path() / "campaign.r2campaign.json";
+		app.prepareCampaignPlayback();
+		require(serialize(loadProject(app.path)) == serialize(app.p) &&
+		            app.saved == serialize(app.p) && !app.campaignDirty(),
+		        "Campaign playback missed current level edits");
+		require(validateCampaign(loadCampaign(app.campaignPath), app.images.root, true).empty(),
+		        "Campaign playback used stale exit routes");
+		// An unrelated open document must stay unsaved, even if it is dirty.
+		app.saveAs(app.path.parent_path() / "unrelated.r2project.json");
+		const auto unrelated = serialize(loadProject(app.path));
+		app.p.rooms[0].name = "Unrelated unsaved edit";
+		app.prepareCampaignPlayback();
+		require(serialize(loadProject(app.path)) == unrelated && serialize(app.p) != app.saved,
+		        "Campaign playback saved an unrelated level");
 	}
 }

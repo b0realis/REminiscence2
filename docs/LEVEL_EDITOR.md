@@ -1,7 +1,10 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 # REminiscence2 visual level editor
 
-Version 1.41 adds Editor Settings for native campaign setup and the Play/F5 start mode.
+This separate desktop tool is a homage to Delphine Software and the people who
+created Flashback. It helps game designers study their rooms, animation-driven
+state machines and connected puzzles, then test their own ideas. See the
+[editor README and learning walkthrough](../editor/README.md).
 The editor includes native campaign live updates, group selection/clipboard,
 layer locks, graph navigation and clickable validation. Import artwork,
 slice rooms, paint collision/ledges, wire puzzles and test with the original
@@ -219,7 +222,7 @@ conditions, actions and next-state connections. Offscreen
 holding-list helpers are protected: their scripts decide when they spawn or
 enter an inventory. Move/copy complete puzzle relocates the full connected bundle, including helpers,
 within its source level/edition. Original actor IDs remain stable; native deletion
-and cross-level imports are unavailable. Capacity and sprite-bank limits are checked. Authored event modules
+uses stable-slot removal/restoration; cross-level imports remain unavailable. Capacity and sprite-bank limits are checked. Authored event modules
 can now bind existing actors, observe their rules, send native messages and run
 new dialogues and state machines. Use **Create actor event module** in the actor
 inspector, or **New event module** in the native palette.
@@ -238,7 +241,8 @@ chosen sibling. The running level changes on progression, explicit restart or PL
 | F5 | Use the start mode chosen in Editor Settings |
 | Shift+F5 | Start fresh at the authored beginning, including its arrival sequence |
 | Pause native | Wait for a complete simulation boundary, then freeze the game |
-| Apply live | Validate and apply art, collision/ledge and exit edits; stay paused and redraw |
+| Apply live | Apply compatible art, geometry, rules and typed ports; preserve progress and stay paused |
+| Apply + resume | Apply the same checks, then continue play on success |
 | Resume native | Continue the preserved running state |
 | Restart at edited level | Rebuild that level from its edited initial actors and geometry |
 | Stop native | Close the game preview, including a blocked cinematic/dialogue |
@@ -246,8 +250,13 @@ chosen sibling. The running level changes on progression, explicit restart or PL
 Live apply merges only cells/links that changed in the editor. A door or puzzle
 may have independently changed the running collision map; an overlapping edit
 is rejected instead of overwriting that state. Adding collision over an active
-actor is also rejected. Actor setup, native rule edits, authored module edits and switching levels require a fresh
-test with **PLAY HERE** or **Restart at edited level**. Rejected edits leave the live game unchanged and explain the
+actor is also rejected. Actor placement/slot changes, incompatible rule layouts, authored module changes
+and switching levels require a fresh test with **PLAY HERE** or **Restart at edited level**.
+Compatible native conditions/actions, transitions, appended branches, private
+behavior copies and typed ports can be updated live. Initial health can change
+only while a living actor still has its previously authored health. The
+[live-update matrix](NATIVE_CAMPAIGN_MODULES.md#live-editing-what-changes-without-restarting)
+describes the precise boundaries. Rejected edits leave the live game unchanged and explain the
 reason in the status line. Cutscenes, dialogue and native menus must finish or be
 closed/skipped before Pause/Apply can reach a simulation boundary; Stop remains
 available. Wait for a command's acknowledgement before issuing another.
@@ -444,10 +453,27 @@ build/package-arm64/reminiscence2 \
   --project=.local/editor-projects/Workshop/project.r2project.json
 ```
 
-This opens a 3× window. Escape exits; Enter restarts after death. The custom
-runner has no campaign menus, journal, inventory menu, quicksave/rewind or normal
-QoL overlay yet. Original saves and preferences are not written by a custom
-playtest. Original sound effects use the selected edition; Music/Sound nodes import WAV
+This opens a 3× window by default. **Esc or F10 opens the QoL overlay**;
+Resume returns to the same scene and the turquoise **EXIT GAME** button exits.
+Graphics, audio, keybindings, controller settings, cosmetic pistol/T-shirt choices
+and a checkpoint save/restore are available. Campaign playback stores its full
+checkpoint on disk; standalone `--project` play keeps a session checkpoint.
+Settings are saved separately in `authored-preferences.cfg`, beside campaign saves
+or in the standalone project's `.playtest` folder. Original campaign saves are
+not used by this runner. Native level selection and side-room scenery do not apply
+to authored scenes; choose another test room in the editor.
+
+Unconnected room edges are sealed automatically during authored simulation,
+including running/rolling and vertical movement. Only explicit room links allow
+screen transitions; teleport and lift nodes retain their designed routes.
+This does not change the original campaign's native room rules.
+
+Dialogue uses the selected edition's original font and story-text colour at the
+top of the playfield. **Tab/Backspace or Enter** advances one page per fresh press;
+**Up/Down** selects a choice. A confirmation press never also activates a nearby
+control. **Enter** restarts after death.
+
+Original sound effects use the selected edition; Music/Sound nodes import WAV
 or Ogg clips, with preview, looping and wired start/stop controls. Authored graph dialogue and mission text work in both the
 editor and command-line player; see the [module guide](EDITOR_MODULES.md).
 

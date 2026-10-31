@@ -25,7 +25,7 @@ const char *nodeName(NodeKind k) {
 	                       "Pickup animation",
 	                       "Timer",
 	                       "State",
-	                       "Actor (crawler)",
+	                       "Actor (crawler / guard)",
 	                       "Health pickup",
 	                       "Damage player",
 	                       "Counter",
@@ -37,14 +37,17 @@ const char *nodeName(NodeKind k) {
 	                       "Set campaign flag",
 	                       "Test campaign flag",
 	                       "Music",
-	                       "Sound"};
+	                       "Sound",
+	                       "Lift",
+	                       "Background machinery",
+	                       "Moving target plate"};
 	return int(k) >= 0 && int(k) < int(NodeKind::Count) ? names[int(k)] : "Unknown";
 }
 const char *signalName(Signal s) {
 	const char *names[] = {"Used",    "Completed", "Opened",          "Closed",           "Entered",
 	                       "Started", "Stopped",   "Choice 1",        "Choice 2",         "Exited",
-	                       "Hurt",    "Died",      "Patrol endpoint", "Native rule fired"};
-	return int(s) >= 0 && int(s) < 14 ? names[int(s)] : "Unknown";
+	                       "Hurt",    "Died",      "Patrol endpoint", "Native rule fired", "Hit"};
+	return int(s) >= 0 && int(s) < 15 ? names[int(s)] : "Unknown";
 }
 const char *inputName(Input s) {
 	const char *names[] = {"Activate", "Open",         "Close",        "Toggle", "Progress",
@@ -54,6 +57,8 @@ const char *inputName(Input s) {
 }
 std::vector<Signal> nodeSignals(NodeKind k) {
 	switch (k) {
+	case NodeKind::Target:
+		return {Signal::Hit, Signal::Started, Signal::Stopped};
 	case NodeKind::Actor:
 		return {Signal::Used, Signal::Hurt, Signal::Died, Signal::Reached, Signal::StateChanged};
 	case NodeKind::State:
@@ -67,6 +72,10 @@ std::vector<Signal> nodeSignals(NodeKind k) {
 	case NodeKind::PickupAnimation:
 	case NodeKind::Timer:
 		return {Signal::Started, Signal::Completed, Signal::Stopped};
+	case NodeKind::Ambient:
+		return {Signal::Started, Signal::Stopped};
+	case NodeKind::Lift:
+		return {Signal::Started, Signal::Completed, Signal::Opened, Signal::Closed};
 	case NodeKind::Door:
 		return {Signal::Opened, Signal::Closed};
 	case NodeKind::Npc:
@@ -86,7 +95,7 @@ std::vector<Signal> nodeSignals(NodeKind k) {
 	case NodeKind::ItemCondition:
 		return {Signal::Choice1, Signal::Choice2};
 	case NodeKind::Zone:
-		return {Signal::Entered};
+		return {Signal::Entered, Signal::Exited};
 	case NodeKind::Prop:
 		return {};
 	default:
@@ -94,6 +103,8 @@ std::vector<Signal> nodeSignals(NodeKind k) {
 	}
 }
 std::vector<Input> nodeInputs(NodeKind k) {
+	if (k == NodeKind::Lift)
+		return {Input::Activate, Input::Open, Input::Close};
 	std::vector<Input> result{Input::Enable, Input::Disable};
 	if (k == NodeKind::CampaignSet || k == NodeKind::CampaignTest)
 		result.insert(result.begin(), {Input::Activate, Input::Reset});
@@ -112,7 +123,8 @@ std::vector<Input> nodeInputs(NodeKind k) {
 	else if (k == NodeKind::Computer)
 		result.insert(result.begin(), {Input::Activate, Input::Progress, Input::Reset});
 	else if (k == NodeKind::Music || k == NodeKind::Sound || k == NodeKind::Dialogue ||
-	         k == NodeKind::Animation || k == NodeKind::PickupAnimation || k == NodeKind::Timer)
+	         k == NodeKind::Animation || k == NodeKind::PickupAnimation || k == NodeKind::Timer ||
+	         k == NodeKind::Ambient || k == NodeKind::Target)
 		result.insert(result.begin(), {Input::Activate, Input::Stop, Input::Reset});
 	else if (k == NodeKind::Button || k == NodeKind::Relay || k == NodeKind::Item)
 		result.insert(result.begin(), Input::Activate);
@@ -125,8 +137,8 @@ int nodeIndex(const Module &m, const std::string &id) {
 	return -1;
 }
 Node makeNode(const Module &m, NodeKind kind, const Anchor &at) {
-	if (m.nodes.size() >= 32)
-		throw std::runtime_error("Maximum 32 nodes per module");
+	if (m.nodes.size() >= MaxModuleNodes)
+		throw std::runtime_error("Maximum " + std::to_string(MaxModuleNodes) + " nodes per module");
 	Node n;
 	for (int id = 1;; ++id) {
 		n.id = "node-" + std::to_string(id);
@@ -149,6 +161,26 @@ Node makeNode(const Module &m, NodeKind kind, const Anchor &at) {
 	if (kind == NodeKind::Door) {
 		n.height = 72;
 		n.visuals[1].loop = false;
+	}
+	if (kind == NodeKind::Lift) {
+		n.width = 64;
+		n.height = 8;
+		n.duration = 120;
+		n.at.x = std::min(n.at.x, 192);
+		n.at.y = 216;
+	}
+	if (kind == NodeKind::Target) {
+		n.width = n.height = 24;
+		n.at.x = std::min(n.at.x, 232);
+		n.at.y = 216;
+		n.travel = 96;
+		n.duration = 180;
+	}
+	if (kind == NodeKind::Ambient) {
+		n.layer = Layer::Back;
+		n.width = n.height = 48;
+		n.duration = 120;
+		n.at.x = std::min(n.at.x, 208);
 	}
 	if (kind == NodeKind::Npc) {
 		n.height = 48;
@@ -307,8 +339,8 @@ void validateGraph(const Project &p, const Module &m, std::vector<Issue> &issues
 			error("node data needs a graph module");
 		return;
 	}
-	if (m.nodes.size() > 32 || m.wires.size() > 128) {
-		error("maximum 32 nodes and 128 wires per module");
+	if (m.nodes.size() > MaxModuleNodes || m.wires.size() > 128) {
+		error("maximum " + std::to_string(MaxModuleNodes) + " nodes and 128 wires per module");
 		return;
 	}
 	std::set<std::string> ids, initialGroups;
@@ -334,6 +366,14 @@ void validateGraph(const Project &p, const Module &m, std::vector<Issue> &issues
 			error("invalid speaker, choices (supply both or neither), or timer duration");
 		if (n.kind >= NodeKind::Dialogue && n.kind <= NodeKind::Timer && n.initiallyActive)
 			error("action nodes must start through Activate");
+		if (n.actorStyle < 0 || n.actorStyle > 1 ||
+		    (n.actorStyle == 1 && (n.kind != NodeKind::Actor || p.native.enabled || n.layer != Layer::Playfield ||
+		                          n.visuals[0].art.file.empty() ||
+		                          n.visuals[0].frames != 1 || n.visuals[0].art.w % 4 ||
+		                          n.visuals[0].art.h % 2 || n.width < 16 || n.width > 64 ||
+		                          n.height < 24 || n.height > 72)))
+			error("Armed guard requires a custom scene and one 4x2 sheet in Idle art; "
+			      "crop dimensions must divide by 4x2, display size 16..64 by 24..72");
 		if (n.kind == NodeKind::Actor &&
 		    (n.patrolLeft < 0 || n.patrolRight > 240 || n.patrolRight - n.patrolLeft < 16 ||
 		     n.speed < 1 || n.speed > 4 || n.health < 1 || n.health > 100 ||
@@ -370,6 +410,30 @@ void validateGraph(const Project &p, const Module &m, std::vector<Issue> &issues
 		if (n.kind == NodeKind::Door && (n.at.x % 16 || n.at.y < 72 || n.at.y % 72 ||
 		                                 n.width % 16 || n.height % 72 || n.height > n.at.y))
 			error("door needs 16px columns and 72px floor/height alignment");
+		if (n.kind == NodeKind::Target &&
+		    (p.native.enabled || n.layer != Layer::Playfield || n.initiallyActive || n.once ||
+		     n.duration < 2 || n.travel < 0 || n.travel > n.at.y - n.height))
+			error("Moving target needs a custom Playfield, travel within the room, period >=2 "
+			      "ticks, repeatable hits, and starts through Activate");
+		if (n.kind == NodeKind::Ambient &&
+		    (p.native.enabled || n.layer != Layer::Back || n.initiallyActive || n.once ||
+		     n.ambientStyle < 0 || n.ambientStyle > 6 || n.ambientAmount < 1 ||
+		     n.ambientAmount > 3 || n.duration < 60 || n.duration > 600 || n.width < 8 ||
+		     n.height < 8 || n.at.y < n.height || !n.visuals[0].art.file.empty() ||
+		     !n.visuals[1].art.file.empty()))
+			error("Background machinery needs a custom Back layer region >=8px, style 0..6, "
+			      "strength 1..3, period 60..600 ticks, no sprites, and starts through Activate");
+		if (n.kind == NodeKind::Lift) {
+			const int upper = roomIndex(p, n.at.room);
+			const int lower = upper < 0 ? -1 : roomIndex(p, p.rooms[upper].exits[1]);
+			if (p.native.enabled || lower < 0 || lower == upper ||
+			    (lower >= 0 && p.rooms[lower].exits[0] != n.at.room))
+				error("Lift needs custom rooms with reciprocal down/up links");
+			if (n.at.y != 216 || n.at.x % 16 || n.width < 32 || n.width % 16 || n.height > 8 ||
+			    n.duration < 30 || !n.enabled || n.initiallyActive)
+				error("Lift needs upper landing Y=216, 16px columns, width >=32, height <=8, "
+				      "duration >=30 ticks, enabled and initially inactive");
+		}
 		for (const auto &a : n.visuals) {
 			if (a.frames < 1 || a.frames > 128 || a.fps < 1 || a.fps > 30 || a.art.x < 0 ||
 			    a.art.y < 0 || a.art.x > 16384 || a.art.y > 16384 || a.art.w < 1 || a.art.h < 1 ||
@@ -434,16 +498,24 @@ const char *nodeCategory(NodeKind k) {
 	if (k == NodeKind::Item || k == NodeKind::HealthPickup || k == NodeKind::ItemCondition)
 		return "Pickups / inventory";
 	if (k == NodeKind::Actor || k == NodeKind::Damage || k == NodeKind::Teleport ||
-	    k == NodeKind::Checkpoint || k == NodeKind::LevelExit)
+	    k == NodeKind::Checkpoint || k == NodeKind::LevelExit || k == NodeKind::Lift || k == NodeKind::Target)
 		return "Gameplay";
 	if (k == NodeKind::Dialogue || k == NodeKind::Npc || k == NodeKind::Computer)
 		return "Story / objectives";
-	if (k == NodeKind::Prop || k == NodeKind::Animation || k == NodeKind::PickupAnimation)
+	if (k == NodeKind::Prop || k == NodeKind::Animation || k == NodeKind::PickupAnimation ||
+	    k == NodeKind::Ambient)
 		return "Presentation";
 	return "Logic / triggers";
 }
 const char *nodeHelp(NodeKind k) {
 	switch (k) {
+	case NodeKind::Target:
+		return "Indestructible pistol target. Hit fires once per native shot intersecting its "
+		       "rectangle, respecting walls and actors in front. Works with every pistol style. "
+		       "Activate loops upward from the lower anchor and back; duration is a round trip "
+		       "at 30 Hz. Stop freezes it; Activate resumes in place. Reset returns it to the lower stop. Disable hides it "
+		       "and stops hits. Wire Hit to Reset then Activate on a light animation to flash "
+		       "for every hit. It uses no native actor slots. Custom scenes only.";
 	case NodeKind::Button:
 		return "Press Enter near the button to emit Used. Activate simulates a press. One shot "
 		       "prevents repeated uses.";
@@ -451,6 +523,14 @@ const char *nodeHelp(NodeKind k) {
 		return "Open/Close/Toggle change the collision gate and its visual state. A close is "
 		       "refused while an actor overlaps. Disable blocks inputs but retains collision. "
 		       "Native doors use Actor message bindings.";
+	case NodeKind::Lift:
+		return "Two-stop platform between this room and its linked room below. Both landings "
+		       "use Y=216 and the same X. Wire a button at each landing to Activate: call the "
+		       "empty car, then press again to ride. Open sends it down; Close sends it up. "
+		       "Started fires on departure; Completed and Opened/Closed on arrival. Duration "
+		       "is the full trip in 30 Hz ticks. Conrad is carried, controls pause until arrival, "
+		       "and saves retain travel progress. Leave the shaft clear and keep landing floors "
+		       "as safety grates. Custom scenes only; the car cannot be stopped mid-shaft.";
 	case NodeKind::Npc:
 		return "Enter talks to this NPC. Used fires on interaction. Completed fires when the "
 		       "required module-local item has been collected, optionally consuming it. "
@@ -464,11 +544,25 @@ const char *nodeHelp(NodeKind k) {
 		       "including objectives completed before acceptance. Completed fires at the goal. "
 		       "Reset clears acceptance and progress.";
 	case NodeKind::Zone:
-		return "Emits Entered when Conrad crosses into the authored rectangle. One shot limits it "
-		       "to the first entry. Connect to damage, teleport, checkpoint or any action.";
+		return "Emits Entered when Conrad overlaps the rectangle and Exited when he leaves, including "
+		       "a room transition. One shot allows only the first entry/exit pair. Turn it off for "
+		       "proximity doors: Entered opens or starts an animation; Exited closes or stops it. "
+		       "Disabled triggers emit neither event.";
 	case NodeKind::Relay:
 		return "Activate emits Used. Fan an event out to several receivers, or use Enable/Disable "
 		       "as a gate. One shot limits repeated activation.";
+	case NodeKind::Ambient:
+		return "Animates existing background artwork inside a soft elliptical region. Breathe "
+		       "gently expands tissue, Pulse sends light through it, Flow ripples liquid. "
+		       "Fan rotor turns existing blades: fit its region inside the casing. Light pool "
+		       "adds a quiet cyan glow; Dust motes and Vent mist add sparse drifting pixels. "
+		       "Strength controls motion, light or particle count (1-3); the rotor always makes "
+		       "one turn per loop. Period is 2-20 seconds. Connect On "
+		       "start to Activate; Stop/Disable restores the still artwork, Reset rearms. "
+		       "Started/Stopped are emitted; the loop has no Completed event. Custom Back "
+		       "layer only, before platforms and actors. No collision, no new image file. "
+		       "Place tightly over machinery or in empty background space; keep structural "
+		       "edges clear. Pause and saves preserve all animation phases.";
 	case NodeKind::Prop:
 		return "Decorative sprite/animation, with no collision or automatic events. Enable/Disable "
 		       "controls visibility.";
@@ -497,7 +591,9 @@ const char *nodeHelp(NodeKind k) {
 		       "exits the old state before entering this one. Progress emits Completed once while "
 		       "active. Stop exits; Reset also clears completion.";
 	case NodeKind::Actor:
-		return "Custom scenes use crawler AI/art. Native projects bind an existing actor: Activate "
+		return "Custom scenes choose native crawler or an armed guard with an imported 4x2 sprite sheet. "
+		       "Guard poses: idle, walk A/B, aim, fire, hurt, fall, dead. Friendly cancels attacks. "
+		       "Native projects bind an existing actor: Activate "
 		       "sends a native message. Used/Hurt/Died/Patrol endpoint/Native rule fired expose "
 		       "events. Friendly prevents attack AI; Patrol/Hold controls movement.";
 	case NodeKind::HealthPickup:

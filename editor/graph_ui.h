@@ -75,13 +75,25 @@ void nodeInspector(Module &m) {
 			    "emits after the watched rule executes; Activate sends the specified native "
 			    "message. Native logic still runs unless Friendly is enabled.");
 		}
+		if (!p.native.enabled && ImGui::Combo("Actor behavior", &n.actorStyle, "Native crawler\0Armed guard\0")) {
+			changed = true;
+			if (n.actorStyle == 1) {
+				n.width = 40; n.height = 48; n.layer = Layer::Playfield;
+				n.visuals[0].frames = 1;
+			}
+		}
 		changed |= ImGui::Checkbox("Friendly (no attack AI)", &n.friendly);
 		changed |= ImGui::Checkbox("Patrol bounds", &n.patrol);
 		changed |= ImGui::SliderInt("Patrol left", &n.patrolLeft, 0, n.patrolRight - 16);
 		changed |= ImGui::SliderInt("Patrol right", &n.patrolRight, n.patrolLeft + 16, 240);
-		changed |= ImGui::SliderInt("Friendly walk speed", &n.speed, 1, 4);
+		changed |= ImGui::SliderInt("Walk speed", &n.speed, 1, 4);
 		changed |= ImGui::SliderInt("Health", &n.health, 1, 100);
-		ImGui::TextWrapped("Uses native crawler artwork/AI. Friendly actors use Enter to emit "
+		if (n.actorStyle == 1)
+			ImGui::TextWrapped("Guard: import one transparent 4-column, 2-row sheet as Idle art, "
+			    "one frame. Cells: idle, walk A, walk B, aim, fire, hurt, fall, dead. "
+			    "All face left, same feet baseline. Aims before firing; walls block sight. "
+			    "Friendly cancels attacks. Hold freezes movement and firing.");
+		ImGui::TextWrapped("Native crawler uses original artwork/AI. Friendly actors use Enter to emit "
 		                   "Used: connect to Dialogue or another action. Hurt, Died and patrol "
 		                   "endpoints are events. Hostile actors retain native AI within patrol "
 		                   "bounds; Friendly/Hostile and Start patrol/Hold position can be wired.");
@@ -97,8 +109,9 @@ void nodeInspector(Module &m) {
 	if (n.kind == NodeKind::Door)
 		changed |= ImGui::Checkbox("Initially open", &n.initiallyActive);
 	if (n.kind == NodeKind::Button || n.kind == NodeKind::Zone || n.kind == NodeKind::Relay ||
-	    GraphMachine::action(n.kind) || n.kind == NodeKind::Damage ||
-	    n.kind == NodeKind::Teleport || n.kind == NodeKind::Checkpoint)
+	    (GraphMachine::action(n.kind) && n.kind != NodeKind::Ambient) ||
+	    n.kind == NodeKind::Damage || n.kind == NodeKind::Teleport ||
+	    n.kind == NodeKind::Checkpoint)
 		changed |= ImGui::Checkbox("One shot", &n.once);
 	if (n.kind == NodeKind::Computer || n.kind == NodeKind::Counter) {
 		changed |= ImGui::SliderInt("Objectives", &n.goal, 1, 32);
@@ -153,8 +166,26 @@ void nodeInspector(Module &m) {
 			multiline("##after", n.doneText);
 		}
 	}
-	if (n.kind == NodeKind::Timer) {
-		changed |= ImGui::SliderInt("Delay (ticks)", &n.duration, 1, 18000);
+	if (n.kind == NodeKind::Target) {
+		ImGui::SeparatorText("MOVING PISTOL TARGET");
+		changed |= ImGui::SliderInt("Vertical travel (pixels)", &n.travel, 0, std::max(0, n.at.y - n.height));
+		changed |= ImGui::SliderInt("Round trip (ticks)", &n.duration, 2, 18000);
+		ImGui::Text("%.2f seconds at 30 Hz", n.duration / 30.f);
+		ImGui::TextWrapped("%s", nodeHelp(n.kind));
+	}
+	if (n.kind == NodeKind::Ambient) {
+		ImGui::SeparatorText("LIVING BACKGROUND");
+		changed |= ImGui::Combo("Effect", &n.ambientStyle,
+		                       "Breathe\0Pulse\0Coolant flow\0Fan rotor\0Light pool\0Dust motes\0Vent mist\0");
+		if (n.ambientStyle != 3)
+			changed |= ImGui::SliderInt(n.ambientStyle >= 5 ? "Particle density (1-3)" : "Strength (1-3)", &n.ambientAmount, 1, 3);
+		changed |= ImGui::SliderInt("Loop (ticks)", &n.duration, 60, 600);
+		ImGui::Text("%.2f seconds at 30 Hz", n.duration / 30.f);
+		ImGui::TextWrapped("%s", nodeHelp(n.kind));
+	}
+	if (n.kind == NodeKind::Timer || n.kind == NodeKind::Lift) {
+		changed |= ImGui::SliderInt(n.kind == NodeKind::Lift ? "Travel (ticks)" : "Delay (ticks)",
+		                            &n.duration, n.kind == NodeKind::Lift ? 30 : 1, 18000);
 		ImGui::Text("%.2f seconds at 30 Hz", n.duration / 30.f);
 	}
 	if ((GraphMachine::action(n.kind) && n.kind != NodeKind::Music && n.kind != NodeKind::Sound) ||
@@ -227,6 +258,16 @@ void nodeInspector(Module &m) {
 			n.height = std::max(72, n.height / 72 * 72);
 			n.at.y = std::clamp((n.at.y + 36) / 72 * 72, n.height, 216);
 		}
+		if (n.kind == NodeKind::Lift) {
+			n.at.y = 216;
+			n.at.x = n.at.x / 16 * 16;
+			n.width = std::max(32, n.width / 16 * 16);
+			n.height = std::min(n.height, 8);
+			const int origin = roomIndex(p, n.at.room);
+			ImGui::Text("Lower landing: %s", origin >= 0 && !p.rooms[origin].exits[1].empty()
+			                                     ? p.rooms[origin].exits[1].c_str()
+												 : "Link a room below");
+		}
 		n.at.x = std::clamp(n.at.x, 0, 256 - n.width);
 		int layer = int(n.layer);
 		if (ImGui::Combo("Layer", &layer, "Back\0Playfield\0Front\0")) {
@@ -239,98 +280,120 @@ void nodeInspector(Module &m) {
 			setWorkflow(Workflow::Placement);
 			tool = Tool::Select;
 		}
-		ImGui::SeparatorText("SPRITES / ANIMATION");
-		ImGui::TextWrapped(
-		    "PNG / JPEG / BMP; horizontal frame strip. Active falls back to idle. No "
-		    "original campaign artwork is exported.");
-		for (int state = 0; state < 2; ++state) {
-			ImGui::PushID(state);
-			const bool openClip = ImGui::TreeNode(state ? "Active / completed" : "Idle / closed");
-			mark(state ? "clip-active" : "clip-idle");
-			if (openClip) {
-				auto &a = n.visuals[state];
-				if (ImGui::BeginCombo("Module asset",
-				                      a.art.file.empty() ? "Choose..." : a.art.file.c_str())) {
-					for (const auto &asset : m.assets)
-						if (ImGui::Selectable(asset.file.c_str(), a.art.file == asset.file)) {
-							a.art = asset;
-							a.frames = 1;
-							changed = true;
-						}
-					ImGui::EndCombo();
-				}
-				ImGui::TextWrapped("%s", a.art.file.empty() ? "Built-in placeholder"
-				                                            : a.art.file.c_str());
-				if (ImGui::Button("Import strip...")) {
-					const auto moduleId = m.id, nodeId = n.id;
-					choose([&, moduleId, nodeId, state](auto f) {
-						auto image = readImage(f);
-						auto file = importImage(f, images.root);
-						for (auto &module : p.modules)
-							if (module.id == moduleId) {
-								int index = nodeIndex(module, nodeId);
-								if (index < 0)
-									return;
-								edit();
-								auto &clip = module.nodes[index].visuals[state];
-								clip.art = {file, 0, 0, image.width, image.height};
-								clip.frames = 1;
-								registerAsset(module, clip.art);
-								images.clear();
-								return;
+		if (n.actorStyle == 1) {
+			n.layer = Layer::Playfield;
+			n.width = std::clamp(n.width, 16, 64);
+			n.height = std::clamp(n.height, 24, 72);
+		}
+		if (n.kind == NodeKind::Target) {
+			n.layer = Layer::Playfield;
+			n.at.y = std::max(n.at.y, n.height);
+			n.travel = std::clamp(n.travel, 0, n.at.y - n.height);
+		}
+		if (n.kind == NodeKind::Ambient) {
+			n.layer = Layer::Back;
+			n.width = std::max(8, n.width);
+			n.at.x = std::clamp(n.at.x, 0, 256 - n.width);
+			n.height = std::clamp(n.height, 8, std::max(8, n.at.y));
+			n.at.y = std::max(n.height, n.at.y);
+			ImGui::TextWrapped("This region animates the existing room background. Use PLAY to "
+			                   "preview motion; importing a replacement sprite is unnecessary.");
+		} else {
+			ImGui::SeparatorText("SPRITES / ANIMATION");
+			ImGui::TextWrapped(
+			    "PNG / JPEG / BMP; horizontal frame strip. Active falls back to idle. No "
+			    "original campaign artwork is exported.");
+			for (int state = 0; state < 2; ++state) {
+				ImGui::PushID(state);
+				const bool openClip =
+				    ImGui::TreeNode(state ? "Active / completed" : "Idle / closed");
+				mark(state ? "clip-active" : "clip-idle");
+				if (openClip) {
+					auto &a = n.visuals[state];
+					if (ImGui::BeginCombo("Module asset",
+					                      a.art.file.empty() ? "Choose..." : a.art.file.c_str())) {
+						for (const auto &asset : m.assets)
+							if (ImGui::Selectable(asset.file.c_str(), a.art.file == asset.file)) {
+								a.art = asset;
+								a.frames = 1;
+								changed = true;
 							}
-					});
+						ImGui::EndCombo();
+					}
+					ImGui::TextWrapped("%s", a.art.file.empty() ? "Built-in placeholder"
+					                                            : a.art.file.c_str());
+					if (ImGui::Button("Import strip...")) {
+						const auto moduleId = m.id, nodeId = n.id;
+						choose([&, moduleId, nodeId, state](auto f) {
+							auto image = readImage(f);
+							auto file = importImage(f, images.root);
+							for (auto &module : p.modules)
+								if (module.id == moduleId) {
+									int index = nodeIndex(module, nodeId);
+									if (index < 0)
+										return;
+									edit();
+									auto &clip = module.nodes[index].visuals[state];
+									clip.art = {file, 0, 0, image.width, image.height};
+									clip.frames = 1;
+									registerAsset(module, clip.art);
+									images.clear();
+									return;
+								}
+						});
+					}
+					ImGui::SameLine();
+					if (ImGui::Button("Clear")) {
+						a = {};
+						changed = true;
+					}
+					changed |= ImGui::InputInt("Crop X", &a.art.x);
+					changed |= ImGui::InputInt("Crop Y", &a.art.y);
+					changed |= ImGui::InputInt("Frame W", &a.art.w);
+					changed |= ImGui::InputInt("Frame H", &a.art.h);
+					changed |= ImGui::SliderInt("Frames", &a.frames, 1, 128);
+					changed |= ImGui::SliderInt("FPS", &a.fps, 1, 30);
+					changed |= ImGui::Checkbox("Loop animation", &a.loop);
+					a.art.x = std::clamp(a.art.x, 0, 16384);
+					a.art.y = std::clamp(a.art.y, 0, 16384);
+					a.art.w = std::clamp(a.art.w, 1, 16384);
+					a.art.h = std::clamp(a.art.h, 1, 16384);
+					if (!a.art.file.empty()) {
+						attempt([&] {
+							const auto &source = images.get(a.art.file);
+							Image thumb{128, 96, std::vector<uint32_t>(128 * 96)};
+							for (int y = 0; y < 96; ++y)
+								for (int x = 0; x < 128; ++x)
+									thumb.pixels[y * 128 + x] =
+									    ((x / 8 + y / 8) % 2) ? rgba(24, 35, 45) : rgba(34, 46, 56);
+							Art crop = a.art;
+							const auto frame = uint64_t(ImGui::GetTime() * a.fps) % a.frames;
+							crop.x += int(frame) * crop.w;
+							const float scale = std::min(120.f / crop.w, 88.f / crop.h);
+							const int w = std::max(1, int(crop.w * scale)),
+							          h = std::max(1, int(crop.h * scale));
+							blit(thumb, source, crop, (128 - w) / 2, (96 - h) / 2, w, h);
+							if (!clipTexture[state]) {
+								clipTexture[state] =
+								    SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888,
+									                  SDL_TEXTUREACCESS_STREAMING, 128, 96);
+								if (!clipTexture[state])
+									throw std::runtime_error(SDL_GetError());
+								SDL_SetTextureScaleMode(clipTexture[state], SDL_ScaleModeNearest);
+							}
+							SDL_UpdateTexture(clipTexture[state], nullptr, thumb.pixels.data(),
+							                  128 * 4);
+							ImGui::Image((ImTextureID)(intptr_t)clipTexture[state], {256, 192});
+							ImGui::Text("Strip preview: frame %d / %d", int(frame) + 1, a.frames);
+						});
+						ImGui::TextWrapped(
+						    "Frame dimensions crop the strip; Width/Height above set "
+						    "its in-room size.");
+					}
+					ImGui::TreePop();
 				}
-				ImGui::SameLine();
-				if (ImGui::Button("Clear")) {
-					a = {};
-					changed = true;
-				}
-				changed |= ImGui::InputInt("Crop X", &a.art.x);
-				changed |= ImGui::InputInt("Crop Y", &a.art.y);
-				changed |= ImGui::InputInt("Frame W", &a.art.w);
-				changed |= ImGui::InputInt("Frame H", &a.art.h);
-				changed |= ImGui::SliderInt("Frames", &a.frames, 1, 128);
-				changed |= ImGui::SliderInt("FPS", &a.fps, 1, 30);
-				changed |= ImGui::Checkbox("Loop animation", &a.loop);
-				a.art.x = std::clamp(a.art.x, 0, 16384);
-				a.art.y = std::clamp(a.art.y, 0, 16384);
-				a.art.w = std::clamp(a.art.w, 1, 16384);
-				a.art.h = std::clamp(a.art.h, 1, 16384);
-				if (!a.art.file.empty()) {
-					attempt([&] {
-						const auto &source = images.get(a.art.file);
-						Image thumb{128, 96, std::vector<uint32_t>(128 * 96)};
-						for (int y = 0; y < 96; ++y)
-							for (int x = 0; x < 128; ++x)
-								thumb.pixels[y * 128 + x] =
-								    ((x / 8 + y / 8) % 2) ? rgba(24, 35, 45) : rgba(34, 46, 56);
-						Art crop = a.art;
-						const auto frame = uint64_t(ImGui::GetTime() * a.fps) % a.frames;
-						crop.x += int(frame) * crop.w;
-						const float scale = std::min(120.f / crop.w, 88.f / crop.h);
-						const int w = std::max(1, int(crop.w * scale)),
-						          h = std::max(1, int(crop.h * scale));
-						blit(thumb, source, crop, (128 - w) / 2, (96 - h) / 2, w, h);
-						if (!clipTexture[state]) {
-							clipTexture[state] =
-							    SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ABGR8888,
-								                  SDL_TEXTUREACCESS_STREAMING, 128, 96);
-							if (!clipTexture[state])
-								throw std::runtime_error(SDL_GetError());
-							SDL_SetTextureScaleMode(clipTexture[state], SDL_ScaleModeNearest);
-						}
-						SDL_UpdateTexture(clipTexture[state], nullptr, thumb.pixels.data(),
-						                  128 * 4);
-						ImGui::Image((ImTextureID)(intptr_t)clipTexture[state], {256, 192});
-						ImGui::Text("Strip preview: frame %d / %d", int(frame) + 1, a.frames);
-					});
-					ImGui::TextWrapped("Frame dimensions crop the strip; Width/Height above set "
-					                   "its in-room size.");
-				}
-				ImGui::TreePop();
+				ImGui::PopID();
 			}
-			ImGui::PopID();
 		}
 	}
 	if (changed)
@@ -546,6 +609,12 @@ void graphCanvas(Module &m) {
 			       : s.active                  ? " / ACTIVE"
 			       : s.completed               ? " / DONE"
 			                                   : " / idle";
+			if (n.kind == NodeKind::Lift)
+				mode = s.active
+				           ? std::string(s.liftTarget ? " / DOWN " : " / UP ") +
+				                 std::to_string(100 * s.liftPosition / std::max(1, n.duration)) +
+				                 "%"
+				           : (s.liftTarget ? " / LOWER" : " / UPPER");
 		} else if (n.kind == NodeKind::State && n.initiallyActive)
 			mode = " / START";
 		draw->AddText({at.x + 8 * graphZoom, at.y + 36 * graphZoom}, IM_COL32(155, 185, 197, 255),
@@ -721,11 +790,50 @@ void moduleGraphUI() {
 		ImGui::BeginChild("graph_palette", {0, -35});
 		moduleMetadata(m);
 		ImGui::SeparatorText("ADD NODE");
+		ImGui::SetNextItemWidth(-1);
+		if (ImGui::InputTextWithHint("##node-search", "Find a node or action...",
+		                             nodeSearch.InputBuf, IM_ARRAYSIZE(nodeSearch.InputBuf)))
+			nodeSearch.Build();
+		mark("node-search");
+		itemTip("Search node names, categories and behavior descriptions. Try pickup, music, door "
+		        "or timer.");
+		const char *categories[] = {"All categories",      "Logic / triggers",   "Gameplay",
+		                            "Pickups / inventory", "Story / objectives", "Presentation",
+		                            "Audio / music"};
+		ImGui::SetNextItemWidth(-1);
+		const bool categoryOpen =
+		    ImGui::BeginCombo("##node-category", categories[nodeCategoryFilter]);
+		mark("node-category");
+		if (categoryOpen) {
+			for (int i = 0; i < IM_ARRAYSIZE(categories); ++i) {
+				if (ImGui::Selectable(categories[i], nodeCategoryFilter == i))
+					nodeCategoryFilter = i;
+				mark(("node-category-" + std::to_string(i)).c_str());
+			}
+			ImGui::EndCombo();
+		}
+		if (nodeSearch.IsActive() || nodeCategoryFilter != 0) {
+			if (ImGui::SmallButton("Clear node filters")) {
+				nodeSearch.Clear();
+				nodeCategoryFilter = 0;
+			}
+			mark("node-search-clear");
+		} else
+			ImGui::TextDisabled("Hover nodes for help.");
+		int matches = 0;
 		ImGui::BeginDisabled(moduleLocked(m));
 		for (int kind = 0; kind < int(NodeKind::Count); ++kind) {
 			if (p.native.enabled &&
-			    (kind == int(NodeKind::Door) || kind == int(NodeKind::Checkpoint)))
+			    (kind == int(NodeKind::Door) || kind == int(NodeKind::Checkpoint) ||
+			     kind == int(NodeKind::Lift) || kind == int(NodeKind::Ambient) || kind == int(NodeKind::Target)))
 				continue;
+			const auto k = NodeKind(kind);
+			const auto terms = std::string(nodeName(k)) + " " + nodeCategory(k) + " " + nodeHelp(k);
+			if (!nodeSearch.PassFilter(terms.c_str()) ||
+			    (nodeCategoryFilter &&
+			     std::strcmp(categories[nodeCategoryFilter], nodeCategory(k))))
+				continue;
+			++matches;
 			if (ImGui::Button(nodeName(NodeKind(kind)), {-1, 0}))
 				attempt([&] {
 					auto n = makeNode(m, NodeKind(kind), {p.rooms[room].id, 96, 216});
@@ -740,6 +848,8 @@ void moduleGraphUI() {
 			mark(("add-node-" + std::to_string(kind)).c_str());
 		}
 		ImGui::EndDisabled();
+		if (!matches)
+			ImGui::TextWrapped("No matching nodes. Clear filters or try a different action.");
 		ImGui::SeparatorText("CONNECTIONS");
 		ImGui::TextWrapped("%zu nodes / %zu event wires", m.nodes.size(), m.wires.size());
 		ImGui::TextWrapped("Enable / Disable gates interaction. Disabled doors retain collision. "

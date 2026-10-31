@@ -24,5 +24,6 @@ Image composeRoom(const Project &, int room, Images &, Layer last = Layer::Front
 void validateImages(const Project &, Images &);
 std::vector<Issue> imageIssues(const Project &, Images &);
 void drawModule(Image &, const Module &, int part, bool open, uint64_t tick, Images &);
+void drawGuard(Image &, const Node &, int frame, bool left, int x, int feet, Images &);
 void drawNode(Image &, const Node &, bool active, uint64_t age, Images &, bool editing = false);
 } // namespace editor

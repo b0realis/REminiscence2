@@ -156,7 +156,8 @@ static void actionSceneChecks(const std::filesystem::path &root, const assets::S
 	check(scene.dialogueOpen(), "Held Enter dismissed a queued conversation");
 	platform._pi = {};
 	scene.tick();
-	platform._pi.enter = true;
+	// Native story advance (Tab/Backspace) is also accepted by authored text.
+	platform._pi.backspace = true;
 	scene.tick();
 	check(!scene.dialogueOpen() && scene.states()[0].graph.nodes[4].active,
 	      "Second conversation did not start the pickup effect");

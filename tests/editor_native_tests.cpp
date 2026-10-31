@@ -38,6 +38,7 @@ static std::vector<uint8_t> state(Game &g) {
 	return b;
 }
 #include "editor_native_module_checks.h"
+#include "editor_native_live_checks.h"
 struct RecordingSystem : HeadlessSystem {
 	std::vector<uint8_t> pixels;
 	std::function<void()> events;
@@ -185,6 +186,7 @@ int main(int argc, char **argv) {
 			live->loadLevelData();
 			live->resetGameState();
 			live->loadLevelMap();
+			nativeLiveChecks(session, *live, p);
 			auto malformed = p;
 			malformed.native.actors[0].data[0] ^= 1;
 			auto unchanged = state(*live);
@@ -367,6 +369,10 @@ int main(int argc, char **argv) {
 			    {module.nodes[1].id, module.nodes[2].id, Signal::Completed, Input::Activate}};
 			module.wires.push_back(
 			    {module.nodes[2].id, module.nodes[1].id, Signal::Used, Input::Activate});
+			// A large puzzle must survive the live monitor's serialized state
+			// boundary too, not merely project/prefab import in the editor.
+			while (module.nodes.size() < MaxModuleNodes)
+				module.nodes.push_back(makeNode(module, NodeKind::Relay, p.spawn));
 			extended.modules = {module};
 			session.apply(*live, extended, true);
 			liveStub._pi = {};
@@ -393,6 +399,7 @@ int main(int argc, char **argv) {
 			const auto observed = NativeSession::readGraphs(control);
 			check(observed.count(module.id) &&
 			          observed.at(module.id).revision == moduleRevision(module) &&
+			          observed.at(module.id).nodes.size() == MaxModuleNodes &&
 			          observed.at(module.id).nodes[1].completed,
 			      "Native graph monitor lost its revision/state snapshot");
 			// Noncombat NPCs use life as a counter; zero is not necessarily death.

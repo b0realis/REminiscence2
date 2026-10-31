@@ -23,6 +23,10 @@ void helpWorkspace() {
 	ImGui::TextWrapped(
 	    "The editor uses the engine's logical pixel grid. A larger display scales that grid; "
 	    "it does not change jumps, ledges or room boundaries.");
+	ImGui::TextWrapped(
+	    "A homage to Delphine Software and the artists, designers and programmers behind "
+	    "Flashback. Explore their interconnected puzzles, observe how they work, and learn "
+	    "by making your own variations. Inferred module names are our study aids.");
 	ImGui::BeginChild("guideline_text", {0, -35});
 	if (ImGui::BeginTabBar("guide_sections")) {
 		if (ImGui::BeginTabItem("Four workflows & nodes")) {
@@ -48,7 +52,7 @@ void helpWorkspace() {
 			ImGui::SeparatorText("4. CAMPAIGN");
 			ImGui::TextWrapped("A separate .r2campaign.json links reusable levels, movies, text/photo screens, route choices and endings. Import levels into the campaign folder, connect OUT to IN, then name the routes. Level exit nodes emit names; native completion emits complete. Matching routes can offer a choice. Story screens use a 640x360 canvas with positioned text/photos, color, typewriter and fade effects. Play campaign or Play selected stage uses the actual player. Campaign progress autosaves and can resume. Revisited levels keep puzzle state unless Remember is disabled. Items can use shared campaign keys; Set/Test campaign flag nodes connect objectives across levels. Ctrl+S/Ctrl+L save/load during gameplay.");
 			ImGui::SeparatorText("PICKUPS / GAMEPLAY / NOTES");
-			ImGui::TextWrapped("The palette has 26 node kinds. Item / pickup collects a quest item, optionally shared across levels by its Campaign key; Pickup animation is visual only. Health pickup, Damage player, Counter, Has item?, Checkpoint, Teleport player, Level exit and On start provide gameplay building blocks. Native actors retain original inventory and other game mechanics. Music and Sound import WAV/Ogg clips with Listen previews and wired playback. Sprite inspectors preview animation strips. Each module/node has a Help and comments window. Copy, Duplicate, Paste, Delete and Rename manage authored modules. Native deletion hides/stops actors and keeps their IDs reserved; Restore reverses it.");
+			ImGui::TextWrapped("The palette has 29 node kinds. Item / pickup collects a quest item, optionally shared across levels by its Campaign key; Pickup animation is visual only. Health pickup, Damage player, Counter, Has item?, Checkpoint, Teleport player, Level exit and On start provide gameplay building blocks. Native actors retain original inventory and other game mechanics. Background machinery adds breathing, pulsing or coolant motion to existing artwork before actors are drawn. Lift carries Conrad between vertically linked rooms, with call buttons and saved travel progress. Music and Sound import WAV/Ogg clips with Listen previews and wired playback. Sprite inspectors preview animation strips. Each module/node has a Help and comments window. Copy, Duplicate, Paste, Delete and Rename manage authored modules. Native deletion hides/stops actors and keeps their IDs reserved; Restore reverses it.");
 			ImGui::SeparatorText("STATE MACHINES AND PLAYBACK");
 			ImGui::TextWrapped(
 			    "States with the same Machine group are mutually exclusive. Mark one Initial "
@@ -61,11 +65,12 @@ void helpWorkspace() {
 				"Monitor running native module.");
 			ImGui::SeparatorText("ACTOR NODES");
 			ImGui::TextWrapped(
-			    "Custom actors use native crawler artwork/AI. Set patrol bounds and health. "
+			    "Custom actors choose native crawler or armed guard behavior. Guards use an imported 4x2 sheet, aim before firing and respect walls. Set patrol bounds and health. "
 				"Friendly mode suspends native AI, walks on safe floor, and emits Used on Enter "
 				"nearby. Wire Used to Dialogue, or Hurt/Died/Patrol endpoint to a state. Native "
 				"bindings use existing actor IDs and artwork; Native rule fired observes a rule, "
-				"while Activate sends the configured native message. Restart applies logic edits.");
+				"while Activate sends the configured native message. Authored node-graph edits "
+				"need Restart; compatible native rule edits can Apply live.");
 			ImGui::SeparatorText("DIALOGUE AND ACTIONS");
 			ImGui::TextWrapped(
 			    "Dialogue has a speaker, paginated text and optional two choices. Up/Down selects; "
@@ -177,7 +182,7 @@ void helpWorkspace() {
 			    "height; Auto finds a supported clear position. Markers inherit player-start "
 			    "facing when placed. TEST markers are session-only and never move the authored "
 			    "START. "
-			    "Shift+F5, or right-click PLAY HERE, tests the authored beginning.");
+			    "Shift+F5 tests the authored beginning. Start... beside Play offers both origins.");
 			ImGui::SeparatorText("GRID AND ANCHORS");
 			ImGui::TextWrapped(
 			    "Collision row r is drawn from Y=r*36-8 to r*36+28, clipped to the room. Floor "
@@ -237,16 +242,28 @@ void helpWorkspace() {
 			    "Settings can create a native campaign project directly. Numbered room "
 			    "markers and the native palette select actor records. Module Editing exposes "
 			    "native conditions, actions, transitions and execution traces. Puzzle groups "
-			    "follow reviewed dependencies; rename or regroup them. Rule/module edits need "
-			    "Restart. Opaque dependencies stay protected.");
+			    "follow reviewed dependencies; rename or regroup them. Native copies stay in "
+			    "the same level and asset edition. Original actor/resource limits are retained: "
+			    "New Washington uses all 256 actor slots, so modify existing puzzles there.");
+			ImGui::TextWrapped(
+			    "Study a switch and follow its connections to the door and hidden helpers. "
+			    "Pause or Step the preview and watch rule execution. Select a rule for operand "
+			    "meanings, raw values and allowed source values. Actor data / protected operands "
+			    "explains all four data slots. Unreviewed resource operands stay restricted to "
+			    "original values; they are visible, not guessed. Make behavior private before "
+			    "changing rules shared by other actors.");
 			ImGui::TextWrapped(
 			    "PLAY HERE starts a native preview immediately in this room with fresh level "
 			    "state, original actors/scripts and the pistol; it skips the arrival sequence. "
 			    "Earlier quest items and objectives are not synthesized. Blank map slots "
 			    "cannot be tested. Shift+F5 plays the authored beginning. Apply live changes "
-			    "art and "
-			    "safe geometry while retaining script/inventory state. Resume continues. "
-			    "Actor setup changes, edited cells already changed by a puzzle, and new "
+			    "art, safe geometry, compatible native rules and typed connections while "
+			    "retaining script/inventory state. Apply + resume continues immediately. "
+			    "Rule row states must stay stable; appending branches is allowed. Messages "
+			    "already queued keep their original recipients. Initial health can change live "
+			    "only before damage/healing and without crossing death. Actor placement, added "
+			    "slots, removal, changed state layouts and authored node graphs need Restart. "
+			    "Edited cells already changed by a puzzle, and new "
 			    "collision over an active actor require Restart at edited level. Rejected "
 			    "edits leave the running game unchanged. Wait for each command's status.");
 			ImGui::TextWrapped(
