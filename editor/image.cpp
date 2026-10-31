@@ -235,10 +235,6 @@ static void backgroundMotion(Image &out, const Node &n, uint64_t age) {
 	const int height = std::clamp(n.height, 0, std::min(224, out.height - top));
 	if (width < 8 || height < 8)
 		return;
-	std::vector<uint32_t> source(size_t(width) * height);
-	for (int y = 0; y < height; ++y)
-		std::copy_n(out.pixels.begin() + size_t(top + y) * out.width + left, width,
-		            source.begin() + size_t(y) * width);
 	constexpr double tau = 6.283185307179586;
 	const int period = std::clamp(n.duration, 60, 600);
 	const double phase = double(age % period) * tau / period;
@@ -278,6 +274,54 @@ static void backgroundMotion(Image &out, const Node &n, uint64_t age) {
 		}
 		return;
 	}
+	if (n.ambientStyle == 7) {
+		// A short electrical discharge, followed by a quiet interval. Rebuild
+		// every trajectory from the saved age so restoring a pulse cannot
+		// invent new sparks or consume the game's random-number stream.
+		uint32_t seed = uint32_t(left * 65537 + top * 257 + width * 17 + height);
+		auto random = [&] {
+			seed = seed * 1664525u + 1013904223u;
+			return double(seed >> 8) / 16777216.0;
+		};
+		const int frame = int(age % period);
+		for (int i = 0; i < 3 + int(strength) * 2; ++i) {
+			const int delay = i == 0 ? 0 : int(random() * 5);
+			const double life = 16 + random() * 8;
+			const double drift = (random() - .5) * .75;
+			const double lift = .12 + random() * .12;
+			const double t = (frame - delay) / life;
+			if (t < 0 || t >= 1)
+				continue;
+			for (int tail = 0; tail < 2; ++tail) {
+				const double trail = std::max(0.0, t - tail * .10);
+				const int x = int(width * (.5 + drift * trail));
+				const int y = int(height * (.25 - lift * std::sin(trail * tau * .5) +
+				                            .5 * trail * trail));
+				if (x < 0 || y < 0 || x >= width || y >= height)
+					continue;
+				const double u = 2.0 * (x + .5) / width - 1.0;
+				const double v = 2.0 * (y + .5) / height - 1.0;
+				if (u * u + v * v >= 1.0)
+					continue;
+				auto &pixel = out.pixels[size_t(top + y) * out.width + left + x];
+				const double fade = (1 - t) * (1 - t) / (1 + tail);
+				const int glow[] = {int(235 * fade), int((210 - 110 * t) * fade),
+				                    int(110 * (1 - t) * fade)};
+				uint32_t color = pixel & 0xff000000u;
+				for (int channel = 0; channel < 3; ++channel)
+					color |= uint32_t(std::min(255, int((pixel >> (channel * 8)) & 255) +
+					                                  glow[channel])) << (channel * 8);
+				pixel = color;
+			}
+		}
+		return;
+	}
+	// Keep an immutable copy for the artwork-based effects below. Particles
+	// above never resample the background and need no image buffer.
+	std::vector<uint32_t> source(size_t(width) * height);
+	for (int y = 0; y < height; ++y)
+		std::copy_n(out.pixels.begin() + size_t(top + y) * out.width + left, width,
+		            source.begin() + size_t(y) * width);
 	const double rotorCos = std::cos(phase), rotorSin = std::sin(phase);
 	for (int y = 0; y < height; ++y) {
 		const double v = 2.0 * (y + .5) / height - 1.0;

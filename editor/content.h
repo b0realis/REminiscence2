@@ -116,7 +116,7 @@ struct Node {
 	int goal = 1;
 	std::string speaker;
 	std::array<std::string, 2> choices; // both empty = continue; otherwise two branches
-	int ambientStyle = 0, ambientAmount = 2; // breathe, pulse, flow, rotor, light, dust, mist
+	int ambientStyle = 0, ambientAmount = 2; // breathe, pulse, flow, rotor, light, dust, mist, sparks
 	int travel = 64; // target travel upward from its lower anchor, native pixels
 	int duration = 30;                  // timer ticks at 30 Hz
 	bool friendly = false, patrol = false;

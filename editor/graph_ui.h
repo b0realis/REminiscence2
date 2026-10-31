@@ -176,7 +176,7 @@ void nodeInspector(Module &m) {
 	if (n.kind == NodeKind::Ambient) {
 		ImGui::SeparatorText("LIVING BACKGROUND");
 		changed |= ImGui::Combo("Effect", &n.ambientStyle,
-		                       "Breathe\0Pulse\0Coolant flow\0Fan rotor\0Light pool\0Dust motes\0Vent mist\0");
+		                       "Breathe\0Pulse\0Coolant flow\0Fan rotor\0Light pool\0Dust motes\0Vent mist\0Electrical sparks\0");
 		if (n.ambientStyle != 3)
 			changed |= ImGui::SliderInt(n.ambientStyle >= 5 ? "Particle density (1-3)" : "Strength (1-3)", &n.ambientAmount, 1, 3);
 		changed |= ImGui::SliderInt("Loop (ticks)", &n.duration, 60, 600);

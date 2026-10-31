@@ -2,7 +2,7 @@
   "schema": 11,
   "id": "private-conrad-systems-lab",
   "name": "Conrad Systems Lab",
-  "serial": 110,
+  "serial": 112,
   "rooms": [
     {
       "id": "room-1",
@@ -946,13 +946,13 @@
               "loop": true
             }
           ],
-          "comments": "Back aboard",
+          "comments": "Opening: the jungle survives in his senses; familiar mechanical faults make this ship feel like home. Original fan-written dialogue; complete thoughts are padded to native pages.",
           "enabled": true,
           "initiallyActive": false,
           "once": true,
           "consumeItem": true,
           "requiredItem": "",
-          "text": "Back on board.\nThe workshop is quiet.\nI should check the equipment\nbefore the next jump.",
+          "text": "I still wake expecting leaves\nabove me. Then the ventilation\nstarts, and I remember where I\nam.\nThis ship is mine. I know the\nwelds, the wiring, the sound\nof a tired bearing. Tonight I\nneed that certainty.",
           "doneText": "",
           "goal": 1,
           "speaker": "CONRAD"
@@ -1194,13 +1194,13 @@
               "loop": true
             }
           ],
-          "comments": "Range clear",
+          "comments": "Combat feedback must describe the actual two-hit training result; no claim that the android has been killed. Original fan-written dialogue; complete thoughts are padded to native pages.",
           "enabled": true,
           "initiallyActive": false,
           "once": true,
           "consumeItem": true,
           "requiredItem": "",
-          "text": "RANGE CLEAR.\nTraining droid neutralized. All rounds accounted for.\n\nConrad: I would still prefer the paperwork to the shooting.\n\nHolster with Space. Enter the cyan doorway in the right-hand lane for moving-target practice, or continue right to my workshop.",
+          "text": "Two impacts confirmed.\nTraining chassis disabled. Its\nmemory unit remains on\nindependent power.\nThe gallery beyond the sliding\ndoor is available for\nmoving-target practice. The\nworkshop passage remains\nclear.",
           "doneText": "",
           "goal": 1,
           "speaker": "RANGE CONTROL"
@@ -1348,13 +1348,13 @@
               "loop": true
             }
           ],
-          "comments": "Talk to training droid / display",
+          "comments": "Conversation opening: connect Completed to Conrad's reply. T-01 is a passive training android, not a Morph. Original fan-written dialogue; complete thoughts are padded to native pages.",
           "enabled": true,
           "initiallyActive": false,
           "once": false,
           "consumeItem": true,
           "requiredItem": "",
-          "text": "T-01: Welcome back, owner. Please aim away from the expensive components.\n\nConrad: Which components are inexpensive?\n\nT-01: Yours.\n\nTraining mode is passive. Two pistol hits disable me.",
+          "text": "Your old training profile\nidentifies a familiar face as\nfriendly. You asked me to\nremove that assumption.",
           "doneText": "",
           "goal": 1,
           "speaker": "T-01"
@@ -1449,16 +1449,169 @@
               "loop": true
             }
           ],
-          "comments": "Inspect disabled droid / display",
+          "comments": "Disabled chassis speaks from backup power; the follow-up is Conrad's response, not a resurrection. Original fan-written dialogue; complete thoughts are padded to native pages.",
           "enabled": true,
           "initiallyActive": false,
           "once": false,
           "consumeItem": true,
           "requiredItem": "",
-          "text": "T-01: Performance review saved. I would like a transfer to the kitchen.\n\nConrad: Two clean hits. Your armor did its job.\n\nThe training body stays disabled for this session; a new campaign restores it.",
+          "text": "Motor relays disconnected. I\ncan still hear you. Please do\nnot mistake an immobile body\nfor an empty one.",
           "doneText": "",
           "goal": 1,
-          "speaker": "T-01 / BACKUP POWER"
+          "speaker": "T-01"
+        },
+        {
+          "id": "droid-conrad-reply",
+          "name": "CONRAD / droid conrad reply",
+          "kind": 8,
+          "at": {
+            "room": "room-2",
+            "x": 32,
+            "y": 216
+          },
+          "graphX": 544,
+          "graphY": 444,
+          "width": 16,
+          "height": 24,
+          "layer": 1,
+          "visuals": [
+            {
+              "art": {
+                "file": "",
+                "x": 0,
+                "y": 0,
+                "w": 16,
+                "h": 24
+              },
+              "frames": 1,
+              "fps": 8,
+              "loop": true
+            },
+            {
+              "art": {
+                "file": "",
+                "x": 0,
+                "y": 0,
+                "w": 16,
+                "h": 24
+              },
+              "frames": 1,
+              "fps": 8,
+              "loop": true
+            }
+          ],
+          "comments": "Conversation turn. Completed activates the next speaker; no gameplay state is changed. Original fan-written dialogue.",
+          "enabled": true,
+          "initiallyActive": false,
+          "once": false,
+          "consumeItem": true,
+          "requiredItem": "",
+          "text": "A face can be copied. So can a\nvoice. I need practice making\na decision before either one\nmakes it for me.",
+          "doneText": "",
+          "goal": 1,
+          "speaker": "CONRAD"
+        },
+        {
+          "id": "droid-training-reply",
+          "name": "T-01 / droid training reply",
+          "kind": 8,
+          "at": {
+            "room": "room-2",
+            "x": 32,
+            "y": 216
+          },
+          "graphX": 804,
+          "graphY": 444,
+          "width": 16,
+          "height": 24,
+          "layer": 1,
+          "visuals": [
+            {
+              "art": {
+                "file": "",
+                "x": 0,
+                "y": 0,
+                "w": 16,
+                "h": 24
+              },
+              "frames": 1,
+              "fps": 8,
+              "loop": true
+            },
+            {
+              "art": {
+                "file": "",
+                "x": 0,
+                "y": 0,
+                "w": 16,
+                "h": 24
+              },
+              "frames": 1,
+              "fps": 8,
+              "loop": true
+            }
+          ],
+          "comments": "Conversation turn. Completed activates the next speaker; no gameplay state is changed. Original fan-written dialogue.",
+          "enabled": true,
+          "initiallyActive": false,
+          "once": false,
+          "consumeItem": true,
+          "requiredItem": "",
+          "text": "Then watch what I do. I will\nnot return fire. Two hits will\ncut motor power, and you may\nspeak to me afterwards.",
+          "doneText": "",
+          "goal": 1,
+          "speaker": "T-01"
+        },
+        {
+          "id": "droid-wreck-conrad",
+          "name": "CONRAD / droid wreck conrad",
+          "kind": 8,
+          "at": {
+            "room": "room-2",
+            "x": 32,
+            "y": 216
+          },
+          "graphX": 24,
+          "graphY": 654,
+          "width": 16,
+          "height": 24,
+          "layer": 1,
+          "visuals": [
+            {
+              "art": {
+                "file": "",
+                "x": 0,
+                "y": 0,
+                "w": 16,
+                "h": 24
+              },
+              "frames": 1,
+              "fps": 8,
+              "loop": true
+            },
+            {
+              "art": {
+                "file": "",
+                "x": 0,
+                "y": 0,
+                "w": 16,
+                "h": 24
+              },
+              "frames": 1,
+              "fps": 8,
+              "loop": true
+            }
+          ],
+          "comments": "Conversation turn. Completed activates the next speaker; no gameplay state is changed. Original fan-written dialogue.",
+          "enabled": true,
+          "initiallyActive": false,
+          "once": false,
+          "consumeItem": true,
+          "requiredItem": "",
+          "text": "I hear you. Stay on backup\npower. The chassis can wait; I\nam not losing another record\nto a hurried repair.",
+          "doneText": "",
+          "goal": 1,
+          "speaker": "CONRAD"
         }
       ],
       "wires": [
@@ -1527,6 +1680,24 @@
           "to": "droid-wreck",
           "signal": 11,
           "input": 6
+        },
+        {
+          "from": "droid-talk-log",
+          "to": "droid-conrad-reply",
+          "signal": 1,
+          "input": 0
+        },
+        {
+          "from": "droid-conrad-reply",
+          "to": "droid-training-reply",
+          "signal": 1,
+          "input": 0
+        },
+        {
+          "from": "droid-wreck-log",
+          "to": "droid-wreck-conrad",
+          "signal": 1,
+          "input": 0
         }
       ],
       "comments": "Targets use the real native pistol hit query. On start, Hold prevents retaliation. The single droid death completes the introductory drill. The right-hand lane is now a doorway to the moving-target gallery. Restart the campaign for fresh targets.",
@@ -1710,7 +1881,7 @@
           "consumeItem": true,
           "requiredItem": "",
           "text": "",
-          "doneText": "AIRLOCK STATUS\nInner hatch sealed. Pressure stable. Outer hatch released.\n\nProceed through the right-hand exit when ready.\n\nAURORA: All optional lab checks remain available before departure.",
+          "doneText": "Inner hatch sealed. Outer\nhatch released. The pressure\nreading is stable. The\nright-hand exit remains\navailable.\nThe workshop is still\naccessible if you have\nunfinished checks. I will not\nmark them complete merely\nbecause you can leave.",
           "goal": 1
         },
         {
@@ -1753,19 +1924,19 @@
               "loop": true
             }
           ],
-          "comments": "Choice 1 seals the inner hatch. Choice 2 logs out and resets the terminal for another visit.",
+          "comments": "Identity versus physical evidence. Choice 1 runs the real interlock sequence; choice 2 cancels. Original fan-written dialogue; complete thoughts are padded to native pages.",
           "enabled": true,
           "initiallyActive": false,
           "once": false,
           "consumeItem": true,
           "requiredItem": "",
-          "text": "IDENTITY: CONRAD B. HART\nSTATUS: UNREASONABLY ALIVE\n\nOuter pressure is balanced. Inner hatch must seal before departure.\n\nLast maintenance note: If the ship starts breathing, contact engineering. If it answers, contact nobody.\n\nReady to cycle the airlock?",
+          "text": "Access confirmed. Pressure\ncheck still required.\nA name opens the control\npanel. It cannot tell me\nwhether a seal will hold.\nI will seal the inner hatch,\nbalance pressure, then release\nthe outer door.",
           "doneText": "",
           "goal": 1,
-          "speaker": "AURORA / AIRLOCK 04",
+          "speaker": "AURORA",
           "choices": [
             "Cycle airlock",
-            "Log out"
+            "Leave the controls"
           ]
         },
         {
@@ -2165,13 +2336,13 @@
               "loop": true
             }
           ],
-          "comments": "Pressure equalized",
+          "comments": "Completion feedback. Optional workshop and range work is not assumed to have been completed. Original fan-written dialogue; complete thoughts are padded to native pages.",
           "enabled": true,
           "initiallyActive": false,
           "once": true,
           "consumeItem": true,
           "requiredItem": "",
-          "text": "INNER HATCH: SEALED\nPRESSURE: STABLE\nEXIT: RELEASED\n\nYou may proceed.\n\nConrad: An airlock that works. I should have asked for this years ago.",
+          "text": "Inner hatch sealed. Pressure\nequalized. The outer hatch is\nreleased; the right-hand exit\nis ready.\nThe door opened on a pressure\nreading you can verify. I wish\nthe rest of your journey\noffered the same assurance.",
           "doneText": "",
           "goal": 1,
           "speaker": "AURORA"
@@ -2326,7 +2497,7 @@
           "doneText": "",
           "goal": 1,
           "ambientStyle": 6,
-          "ambientAmount": 1,
+          "ambientAmount": 2,
           "duration": 90
         }
       ],
@@ -2515,7 +2686,7 @@
           "consumeItem": true,
           "requiredItem": "",
           "text": "",
-          "doneText": "R-03 DIAGNOSTICS COMPLETE\nMemory intact. Motor control stable. Left servo needs alignment.\n\nR-03 is awake; talk to him beside the bench.\n\nConrad: One repair at a time.",
+          "doneText": "The diagnostic is stored. R-03\nretains his event log. His\nleft joint still needs\nmechanical alignment before\nheavy work.\nHe can answer from beside the\nbench. A working voice is a\nreason to listen, not proof\nthat every fault is repaired.",
           "goal": 1
         },
         {
@@ -2558,19 +2729,19 @@
               "loop": true
             }
           ],
-          "comments": "R-03 maintenance log",
+          "comments": "Choice 2 leaves the entire diagnostic untouched. Neither branch erases memory or repairs the joint mechanically. Original fan-written dialogue; complete thoughts are padded to native pages.",
           "enabled": true,
           "initiallyActive": false,
           "once": false,
           "consumeItem": true,
           "requiredItem": "",
-          "text": "Owner: Conrad B. Hart.\nUnit R-03: left servo jammed; memory intact; warranty very unlikely.\n\nConrad: You pulled me out of an engine duct. I owe you a working elbow.\n\nRun a low-power diagnostic?",
+          "text": "R-03 kept recording after his\nleft actuator seized.\nHis event log is intact. The\ninterruption is in the joint,\nnot his memory.\nA low-power scan can isolate\nthe fault without writing to\nhis memory bank.",
           "doneText": "",
           "goal": 1,
-          "speaker": "WORKSHOP / R-03",
+          "speaker": "AURORA",
           "choices": [
-            "Run diagnostics",
-            "Log out"
+            "Scan the actuator",
+            "Leave the scan for later"
           ]
         },
         {
@@ -2764,16 +2935,16 @@
               "loop": true
             }
           ],
-          "comments": "R-03 diagnostic result",
+          "comments": "A scan restores control feedback, not a magically repaired servo. The emotional observation belongs to this fan-written droid. Original fan-written dialogue; complete thoughts are padded to native pages.",
           "enabled": true,
           "initiallyActive": false,
           "once": true,
           "consumeItem": true,
           "requiredItem": "",
-          "text": "MEMORY: INTACT\nMOTOR CONTROL: STABLE\nLEFT SERVO: NEEDS ALIGNMENT\n\nR-03: Shall I resume cleaning?\n\nConrad: Start by not touching the laser. Or the coffee. Definitely not both.",
+          "text": "I can feel the command reach\nmy left arm again. The joint\nstill binds. Do not ask it to\ncarry your weight yet.\nMy event log is intact. You\nasked about that before asking\nwhether I could work. I have\nkept that entry, too.",
           "doneText": "",
           "goal": 1,
-          "speaker": "R-03 / SELF TEST"
+          "speaker": "R-03"
         },
         {
           "id": "tone",
@@ -2971,16 +3142,222 @@
               "loop": true
             }
           ],
-          "comments": "Talk to R-03 / display",
+          "comments": "First turn of a three-node exchange about Conrad's missing context. Completed advances to Conrad. Original fan-written dialogue; complete thoughts are padded to native pages.",
           "enabled": true,
           "initiallyActive": false,
           "once": false,
           "consumeItem": true,
           "requiredItem": "",
-          "text": "R-03: I organized your tools alphabetically.\nConrad: By tool name?\nR-03: By the words you shouted when you dropped them.\n\nUse the nearby repair console to run my diagnostic sweep.",
+          "text": "You once asked me to record\nevery repair, including the\nones you later undid. I asked\nhow long to retain them.\nYou said: until I can explain\nwhy I made them. Some entries\nare still waiting.",
           "doneText": "",
           "goal": 1,
           "speaker": "R-03"
+        },
+        {
+          "id": "r03-conrad-reply",
+          "name": "CONRAD / r03 conrad reply",
+          "kind": 8,
+          "at": {
+            "room": "room-3",
+            "x": 32,
+            "y": 216
+          },
+          "graphX": 284,
+          "graphY": 654,
+          "width": 16,
+          "height": 24,
+          "layer": 1,
+          "visuals": [
+            {
+              "art": {
+                "file": "",
+                "x": 0,
+                "y": 0,
+                "w": 16,
+                "h": 24
+              },
+              "frames": 1,
+              "fps": 8,
+              "loop": true
+            },
+            {
+              "art": {
+                "file": "",
+                "x": 0,
+                "y": 0,
+                "w": 16,
+                "h": 24
+              },
+              "frames": 1,
+              "fps": 8,
+              "loop": true
+            }
+          ],
+          "comments": "Conversation turn. Completed activates the next speaker; no gameplay state is changed. Original fan-written dialogue.",
+          "enabled": true,
+          "initiallyActive": false,
+          "once": false,
+          "consumeItem": true,
+          "requiredItem": "",
+          "text": "Did I ever ask you to erase an\nentry?",
+          "doneText": "",
+          "goal": 1,
+          "speaker": "CONRAD"
+        },
+        {
+          "id": "r03-memory-reply",
+          "name": "R-03 / r03 memory reply",
+          "kind": 8,
+          "at": {
+            "room": "room-3",
+            "x": 32,
+            "y": 216
+          },
+          "graphX": 544,
+          "graphY": 654,
+          "width": 16,
+          "height": 24,
+          "layer": 1,
+          "visuals": [
+            {
+              "art": {
+                "file": "",
+                "x": 0,
+                "y": 0,
+                "w": 16,
+                "h": 24
+              },
+              "frames": 1,
+              "fps": 8,
+              "loop": true
+            },
+            {
+              "art": {
+                "file": "",
+                "x": 0,
+                "y": 0,
+                "w": 16,
+                "h": 24
+              },
+              "frames": 1,
+              "fps": 8,
+              "loop": true
+            }
+          ],
+          "comments": "Conversation turn. Completed activates the next speaker; no gameplay state is changed. Original fan-written dialogue.",
+          "enabled": true,
+          "initiallyActive": false,
+          "once": false,
+          "consumeItem": true,
+          "requiredItem": "",
+          "text": "Once. The next morning you\nasked what had been removed. I\ncould tell you the time and\nsize, but nothing else.\nThat was when you changed the\nrule. I retain the mistakes\nnow. They are often the part\nyou ask about first.",
+          "doneText": "",
+          "goal": 1,
+          "speaker": "R-03"
+        },
+        {
+          "id": "r03-conrad-close",
+          "name": "CONRAD / r03 conrad close",
+          "kind": 8,
+          "at": {
+            "room": "room-3",
+            "x": 32,
+            "y": 216
+          },
+          "graphX": 804,
+          "graphY": 654,
+          "width": 16,
+          "height": 24,
+          "layer": 1,
+          "visuals": [
+            {
+              "art": {
+                "file": "",
+                "x": 0,
+                "y": 0,
+                "w": 16,
+                "h": 24
+              },
+              "frames": 1,
+              "fps": 8,
+              "loop": true
+            },
+            {
+              "art": {
+                "file": "",
+                "x": 0,
+                "y": 0,
+                "w": 16,
+                "h": 24
+              },
+              "frames": 1,
+              "fps": 8,
+              "loop": true
+            }
+          ],
+          "comments": "Conversation turn. Completed activates the next speaker; no gameplay state is changed. Original fan-written dialogue.",
+          "enabled": true,
+          "initiallyActive": false,
+          "once": false,
+          "consumeItem": true,
+          "requiredItem": "",
+          "text": "Good. We can fix a joint and\nleave a memory alone. Show me\nthe fault at the console.",
+          "doneText": "",
+          "goal": 1,
+          "speaker": "CONRAD"
+        },
+        {
+          "id": "scan-motes",
+          "name": "Particles in the diagnostic light",
+          "kind": 27,
+          "at": {
+            "room": "room-3",
+            "x": 90,
+            "y": 209
+          },
+          "graphX": 544,
+          "graphY": 444,
+          "width": 18,
+          "height": 34,
+          "layer": 0,
+          "visuals": [
+            {
+              "art": {
+                "file": "",
+                "x": 0,
+                "y": 0,
+                "w": 16,
+                "h": 24
+              },
+              "frames": 1,
+              "fps": 8,
+              "loop": true
+            },
+            {
+              "art": {
+                "file": "",
+                "x": 0,
+                "y": 0,
+                "w": 16,
+                "h": 24
+              },
+              "frames": 1,
+              "fps": 8,
+              "loop": true
+            }
+          ],
+          "comments": "Purely visual Back-layer effect. It follows scan through the same Activate, Stop and Reset wires. No collision, damage or gameplay random state. Density and loop are editable; saved progress retains the phase.",
+          "enabled": true,
+          "initiallyActive": false,
+          "once": false,
+          "consumeItem": true,
+          "requiredItem": "",
+          "text": "",
+          "doneText": "",
+          "goal": 1,
+          "ambientStyle": 5,
+          "ambientAmount": 2,
+          "duration": 90
         }
       ],
       "wires": [
@@ -3055,6 +3432,36 @@
           "to": "r03-talk-log",
           "signal": 0,
           "input": 0
+        },
+        {
+          "from": "r03-talk-log",
+          "to": "r03-conrad-reply",
+          "signal": 1,
+          "input": 0
+        },
+        {
+          "from": "r03-conrad-reply",
+          "to": "r03-memory-reply",
+          "signal": 1,
+          "input": 0
+        },
+        {
+          "from": "r03-memory-reply",
+          "to": "r03-conrad-close",
+          "signal": 1,
+          "input": 0
+        },
+        {
+          "from": "log",
+          "to": "scan-motes",
+          "signal": 7,
+          "input": 0
+        },
+        {
+          "from": "delay",
+          "to": "scan-motes",
+          "signal": 1,
+          "input": 5
         }
       ],
       "comments": "Use -> dialogue -> Run diagnostics -> timer + scan + sound. Completion stops the scan, wakes the eyes and displays the report. Log out resets the console without changing the android. A self-contained, optional repair bench.",
@@ -3181,19 +3588,19 @@
               "loop": true
             }
           ],
-          "comments": "Laser safety log",
+          "comments": "Scientific method and distrust of tampered data; this choice fires only the existing harmless bench effect. Original fan-written dialogue; complete thoughts are padded to native pages.",
           "enabled": true,
           "initiallyActive": false,
           "once": false,
           "consumeItem": true,
           "requiredItem": "",
-          "text": "Containment shield: locked.\nReceiver alignment: stable.\n\nConrad: A laser small enough to fit on my desk. What could possibly go wrong?\n\nAURORA: That sentence appears in twelve incident reports.",
+          "text": "A scanner gives me numbers. It\ndoes not explain them.\nI keep this optical bench\nisolated. No network can\nimprove the evidence for me.\nReceiver aligned. Shield\nclosed. One short pulse should\nbe enough.",
           "doneText": "",
           "goal": 1,
-          "speaker": "OPTICS / BENCH 02",
+          "speaker": "CONRAD",
           "choices": [
             "Fire test pulse",
-            "Log out"
+            "Leave the bench idle"
           ]
         },
         {
@@ -3390,16 +3797,69 @@
               "loop": true
             }
           ],
-          "comments": "Laser measurements",
+          "comments": "Result of the contained pulse. No new weapon, damage upgrade or enemy-detection mechanic is implied. Original fan-written dialogue; complete thoughts are padded to native pages.",
           "enabled": true,
           "initiallyActive": false,
           "once": true,
           "consumeItem": true,
           "requiredItem": "",
-          "text": "OUTPUT: STABLE\nHULL DAMAGE: NONE\nCOFFEE TEMPERATURE: UNCHANGED\n\nConrad: Finally. A successful experiment. I can repeat the pulse at this console.",
+          "text": "The receiver trace is clean.\nThe pulse stayed inside the\nshield. I can repeat the\nmeasurement when I need it.\nI have seen what happens when\na convincing explanation\nsurvives longer than the\nevidence behind it. Keep the\nraw trace.",
           "doneText": "",
           "goal": 1,
-          "speaker": "OPTICS / RESULT"
+          "speaker": "CONRAD"
+        },
+        {
+          "id": "receiver-sparks",
+          "name": "Contained receiver discharge",
+          "kind": 27,
+          "at": {
+            "room": "room-3",
+            "x": 210,
+            "y": 215
+          },
+          "graphX": 544,
+          "graphY": 234,
+          "width": 20,
+          "height": 20,
+          "layer": 0,
+          "visuals": [
+            {
+              "art": {
+                "file": "",
+                "x": 0,
+                "y": 0,
+                "w": 16,
+                "h": 24
+              },
+              "frames": 1,
+              "fps": 8,
+              "loop": true
+            },
+            {
+              "art": {
+                "file": "",
+                "x": 0,
+                "y": 0,
+                "w": 16,
+                "h": 24
+              },
+              "frames": 1,
+              "fps": 8,
+              "loop": true
+            }
+          ],
+          "comments": "Purely visual Back-layer effect. It follows beam through the same Activate, Stop and Reset wires. No collision, damage or gameplay random state. Density and loop are editable; saved progress retains the phase.",
+          "enabled": true,
+          "initiallyActive": false,
+          "once": false,
+          "consumeItem": true,
+          "requiredItem": "",
+          "text": "",
+          "doneText": "",
+          "goal": 1,
+          "ambientStyle": 7,
+          "ambientAmount": 1,
+          "duration": 120
         }
       ],
       "wires": [
@@ -3450,6 +3910,18 @@
           "to": "report",
           "signal": 1,
           "input": 0
+        },
+        {
+          "from": "log",
+          "to": "receiver-sparks",
+          "signal": 7,
+          "input": 0
+        },
+        {
+          "from": "delay",
+          "to": "receiver-sparks",
+          "signal": 1,
+          "input": 5
         }
       ],
       "comments": "Use -> read safety log -> Fire test pulse. Timer bounds the beam and tone; completion clears the beam and unlatches the terminal. No damage nodes: the optical test is contained on the human-height workbench behind the walking lane. Repeated tests and cancel are supported.",
@@ -3726,13 +4198,13 @@
               "loop": true
             }
           ],
-          "comments": "Conrad surveys the workshop",
+          "comments": "Optional workshop entry expands the opening without explaining how to press buttons. Original fan-written dialogue; complete thoughts are padded to native pages.",
           "enabled": true,
           "initiallyActive": false,
           "once": true,
           "consumeItem": true,
           "requiredItem": "",
-          "text": "Home, sweet collection of unfinished repairs.\n\nThe left console runs R-03 diagnostics. The right tests the laser. The floating sample is supposed to do that.\n\nProbably.",
+          "text": "There is the mark where I\nbraced the bench with my knee.\nI remember the pain before I\nremember the repair.\nR-03 has his records. I have\nfragments. Perhaps, between\nus, we can account for what\nhappened aboard this ship.",
           "doneText": "",
           "goal": 1,
           "speaker": "CONRAD"
@@ -3933,19 +4405,19 @@
               "loop": true
             }
           ],
-          "comments": "Oscilloscope / display",
+          "comments": "An unresolved observation, not a new mission trigger. The existing choice changes the scope and its glow only. Original fan-written dialogue; complete thoughts are padded to native pages.",
           "enabled": true,
           "initiallyActive": false,
           "once": false,
           "consumeItem": true,
           "requiredItem": "",
-          "text": "SIGNAL ANALYSIS\nThe carrier is steady. That extra spike is the coffee heater.\n\nConrad: At last, a signal worth decoding.",
+          "text": "There is a narrow carrier\nbeneath the receiver noise.\nIt repeats too regularly to\ndismiss. I have no confirmed\nsource for it.\nLive monitoring will keep the\ntrace visible. Standby dims\nthe display.",
           "doneText": "",
           "goal": 1,
           "speaker": "AURORA",
           "choices": [
-            "Run / illuminate",
-            "Standby / dim"
+            "Monitor the carrier",
+            "Dim the display"
           ]
         },
         {
@@ -4091,19 +4563,19 @@
               "loop": true
             }
           ],
-          "comments": "Containment console / display",
+          "comments": "AURORA refuses an unsupported identification; the sample remains an experiment, not certified Morph material. Original fan-written dialogue; complete thoughts are padded to native pages.",
           "enabled": true,
           "initiallyActive": false,
           "once": false,
           "consumeItem": true,
           "requiredItem": "",
-          "text": "SAMPLE: UNKNOWN CRYSTAL\nMass stable. No biological activity.\n\nStandby pauses the display field only; the safety containment stays powered.\n\nConrad: Let us keep it that way.",
+          "text": "The crystal repeats the same\nfracture in each layer.\nThat pattern suggests growth.\nIt is not proof of life, nor\nof a connection to the Morphs.\nYou may pause the display\nfield. Safety containment\nremains powered.",
           "doneText": "",
           "goal": 1,
           "speaker": "AURORA",
           "choices": [
-            "Run / illuminate",
-            "Standby / dim"
+            "Observe the sample",
+            "Pause the display"
           ]
         },
         {
@@ -4249,19 +4721,19 @@
               "loop": true
             }
           ],
-          "comments": "Exoskeleton cradle / display",
+          "comments": "Bench-only exoskeleton test; no wearable upgrade is awarded. Original fan-written dialogue; complete thoughts are padded to native pages.",
           "enabled": true,
           "initiallyActive": false,
           "once": false,
           "consumeItem": true,
           "requiredItem": "",
-          "text": "EXOSKELETON / EMPTY\nServo harness disconnected. This is a bench test, not a wearable upgrade.\n\nConrad: Last time it tried to salute while I was holding a mug.",
+          "text": "The harness takes the weight\nbefore a wearer feels it.\nUseful in a damaged corridor.\nDangerous if its controller\nstarts anticipating too much.\nThe suit stays empty. I can\ntest the servos from here.",
           "doneText": "",
           "goal": 1,
-          "speaker": "AURORA",
+          "speaker": "CONRAD",
           "choices": [
-            "Run short test",
-            "Leave it alone"
+            "Test empty harness",
+            "Keep servos isolated"
           ]
         },
         {
@@ -4314,6 +4786,59 @@
           "doneText": "",
           "goal": 1,
           "duration": 90
+        },
+        {
+          "id": "sample-motes",
+          "name": "Motes in the sample display field",
+          "kind": 27,
+          "at": {
+            "room": "room-3",
+            "x": 203,
+            "y": 127
+          },
+          "graphX": 24,
+          "graphY": 864,
+          "width": 16,
+          "height": 26,
+          "layer": 0,
+          "visuals": [
+            {
+              "art": {
+                "file": "",
+                "x": 0,
+                "y": 0,
+                "w": 16,
+                "h": 24
+              },
+              "frames": 1,
+              "fps": 8,
+              "loop": true
+            },
+            {
+              "art": {
+                "file": "",
+                "x": 0,
+                "y": 0,
+                "w": 16,
+                "h": 24
+              },
+              "frames": 1,
+              "fps": 8,
+              "loop": true
+            }
+          ],
+          "comments": "Purely visual Back-layer effect. It follows sample through the same Activate, Stop and Reset wires. No collision, damage or gameplay random state. Density and loop are editable; saved progress retains the phase.",
+          "enabled": true,
+          "initiallyActive": false,
+          "once": false,
+          "consumeItem": true,
+          "requiredItem": "",
+          "text": "",
+          "doneText": "",
+          "goal": 1,
+          "ambientStyle": 5,
+          "ambientAmount": 2,
+          "duration": 120
         }
       ],
       "wires": [
@@ -4477,6 +5002,24 @@
           "from": "exo-timer",
           "to": "suit-test",
           "signal": 1,
+          "input": 8
+        },
+        {
+          "from": "start",
+          "to": "sample-motes",
+          "signal": 1,
+          "input": 0
+        },
+        {
+          "from": "sample-control-log",
+          "to": "sample-motes",
+          "signal": 7,
+          "input": 0
+        },
+        {
+          "from": "sample-control-log",
+          "to": "sample-motes",
+          "signal": 8,
           "input": 8
         }
       ],
@@ -5401,16 +5944,16 @@
               "loop": true
             }
           ],
-          "comments": "Moving target instructions",
+          "comments": "A recollection of the original campaign, with practical hit feedback; control bindings remain in the manual/QoL help. Original fan-written dialogue; complete thoughts are padded to native pages.",
           "enabled": true,
           "initiallyActive": false,
           "once": true,
           "consumeItem": true,
           "requiredItem": "",
-          "text": "SIDE GALLERY\n\nThe plate travels up and down. Draw with Space and fire with Shift when it crosses the muzzle. Every hit flashes the green light. Misses stay dark.\n\nOriginal, Heavy and Laser pistols all work. Enter at the left doorway to return.",
+          "text": "The Death Tower taught me to\nwatch the gap before the\ntarget. I would have preferred\na quieter lesson.\nHere, each hit flashes green.\nNo audience, no score to sell.\nI can practise from either\ndeck and leave by the same\ndoor.",
           "doneText": "",
           "goal": 1,
-          "speaker": "RANGE CONTROL"
+          "speaker": "CONRAD"
         },
         {
           "id": "plate-console",
@@ -5555,19 +6098,19 @@
               "loop": true
             }
           ],
-          "comments": "Target computer / display",
+          "comments": "Choice 1 pauses the existing target; choice 2 resumes it at the same phase. Original fan-written dialogue; complete thoughts are padded to native pages.",
           "enabled": true,
           "initiallyActive": false,
           "once": false,
           "consumeItem": true,
           "requiredItem": "",
-          "text": "TARGET CARRIAGE\nPause for careful aim, or resume the moving challenge. Every actual hit still flashes green.\n\nConrad: Finally, something that stops when I ask.",
+          "text": "The plate has a pattern. A\npursuer would change it.\nStopping it helps me check\nalignment. Letting it move\nmakes me choose my moment.\nEither way, the green lamp\nanswers only to a hit.",
           "doneText": "",
           "goal": 1,
-          "speaker": "AURORA",
+          "speaker": "CONRAD",
           "choices": [
-            "Pause target",
-            "Resume target"
+            "Hold the carriage",
+            "Resume its travel"
           ]
         }
       ],
@@ -6316,19 +6859,19 @@
               "loop": true
             }
           ],
-          "comments": "Flight service panel / display",
+          "comments": "Private-route uncertainty; the visible beacon is a local lamp, not a communication feature. Original fan-written dialogue; complete thoughts are padded to native pages.",
           "enabled": true,
           "initiallyActive": false,
           "once": false,
           "consumeItem": true,
           "requiredItem": "",
-          "text": "FLIGHT SERVICES\nCourse steady. No pursuit contacts.\n\nConrad: I like this screen. Nothing on it is trying to kill me.\n\nTest the cabin service beacon?",
+          "text": "Navigation is running without\na station uplink.\nThe route is stored locally. I\ncannot verify who last\ntransmitted the docking data.\nThis test lights the cabin\nbeacon. It will not send our\nposition.",
           "doneText": "",
           "goal": 1,
           "speaker": "AURORA",
           "choices": [
-            "Run short test",
-            "Leave it alone"
+            "Test cabin beacon",
+            "Remain dark"
           ]
         },
         {
@@ -6381,6 +6924,59 @@
           "doneText": "",
           "goal": 1,
           "duration": 60
+        },
+        {
+          "id": "vent-drift",
+          "name": "Dust in ventilator airflow",
+          "kind": 27,
+          "at": {
+            "room": "room-1",
+            "x": 138,
+            "y": 140
+          },
+          "graphX": 544,
+          "graphY": 654,
+          "width": 48,
+          "height": 48,
+          "layer": 0,
+          "visuals": [
+            {
+              "art": {
+                "file": "",
+                "x": 0,
+                "y": 0,
+                "w": 16,
+                "h": 24
+              },
+              "frames": 1,
+              "fps": 8,
+              "loop": true
+            },
+            {
+              "art": {
+                "file": "",
+                "x": 0,
+                "y": 0,
+                "w": 16,
+                "h": 24
+              },
+              "frames": 1,
+              "fps": 8,
+              "loop": true
+            }
+          ],
+          "comments": "Purely visual Back-layer effect. It follows fan through the same Activate, Stop and Reset wires. No collision, damage or gameplay random state. Density and loop are editable; saved progress retains the phase.",
+          "enabled": true,
+          "initiallyActive": false,
+          "once": false,
+          "consumeItem": true,
+          "requiredItem": "",
+          "text": "",
+          "doneText": "",
+          "goal": 1,
+          "ambientStyle": 5,
+          "ambientAmount": 2,
+          "duration": 135
         }
       ],
       "wires": [
@@ -6587,6 +7183,24 @@
           "to": "beacon",
           "signal": 1,
           "input": 8
+        },
+        {
+          "from": "start",
+          "to": "vent-drift",
+          "signal": 1,
+          "input": 0
+        },
+        {
+          "from": "fan-control-off",
+          "to": "vent-drift",
+          "signal": 0,
+          "input": 8
+        },
+        {
+          "from": "fan-control-on",
+          "to": "vent-drift",
+          "signal": 0,
+          "input": 0
         }
       ],
       "comments": "Quiet room ambience: one task light, sparse drifting pixels and localized machinery. Inspect or stop individual nodes in Module Editing; no gameplay effects. Includes nearby controls and screen glow. Enter selects the nearest enabled device; all switches and experiments are connected here with editable wires.",
@@ -7122,19 +7736,19 @@
               "loop": true
             }
           ],
-          "comments": "Charging cradle / display",
+          "comments": "A trace of an earlier owner; the existing test lights the empty cradle and does not create or revive an actor. Original fan-written dialogue; complete thoughts are padded to native pages.",
           "enabled": true,
           "initiallyActive": false,
           "once": false,
           "consumeItem": true,
           "requiredItem": "",
-          "text": "CRADLE EMPTY\nContacts clean. Charging coil isolated from the firing lane.\n\nConrad: The last occupant asked for a seat cushion.\n\nRun a low-power charge test?",
+          "text": "Years of docking have polished\nthese contacts smooth.\nSomeone maintained this droid\nbefore I did. Nothing in its\nservice record names them.\nThe cradle is empty. A\nlow-power test will check the\ncharging circuit.",
           "doneText": "",
           "goal": 1,
-          "speaker": "AURORA",
+          "speaker": "CONRAD",
           "choices": [
-            "Run short test",
-            "Leave it alone"
+            "Test charging coil",
+            "Leave coil isolated"
           ]
         },
         {
@@ -7331,19 +7945,19 @@
               "loop": true
             }
           ],
-          "comments": "Droid diagnostics / display",
+          "comments": "Distinguish a training profile from the human/Morph identification problem. Passive enemy configuration stays unchanged. Original fan-written dialogue; complete thoughts are padded to native pages.",
           "enabled": true,
           "initiallyActive": false,
           "once": false,
           "consumeItem": true,
           "requiredItem": "",
-          "text": "T-01 DIAGNOSTICS\nArmor uses replaceable plates. Target recognition is deliberately disconnected in training mode.\n\nSwitch the diagnostic display between live monitoring and standby.",
+          "text": "T-01 tracks movement. You\nremoved its face recognition.\nThe firing circuit is\nisolated. The training droid\ncannot shoot back.\nLive monitoring illuminates\nthe diagnostic panel. Standby\ndims it.",
           "doneText": "",
           "goal": 1,
           "speaker": "AURORA",
           "choices": [
-            "Run / illuminate",
-            "Standby / dim"
+            "Monitor T-01",
+            "Dim the panel"
           ]
         },
         {
@@ -7489,19 +8103,19 @@
               "loop": true
             }
           ],
-          "comments": "Range telemetry / display",
+          "comments": "Diegetic explanation of the unchanged Original/Heavy/Laser hit test; no promise of stronger alternative weapons. Original fan-written dialogue; complete thoughts are padded to native pages.",
           "enabled": true,
           "initiallyActive": false,
           "once": false,
           "consumeItem": true,
           "requiredItem": "",
-          "text": "CALIBRATION TELEMETRY\nThe moving plate reacts only to a real hit. An orange laser trail does not expand its hit box.\n\nLive mode refreshes the monitor and lights the desk.",
+          "text": "Your notes reject muzzle light\nas evidence of an impact.\nThe sensor registers contact\nwith the plate. Muzzle light\ncannot make a miss count.\nThe live display shows the\nrange trace. Standby dims the\nworkstation.",
           "doneText": "",
           "goal": 1,
           "speaker": "AURORA",
           "choices": [
-            "Run / illuminate",
-            "Standby / dim"
+            "Show live telemetry",
+            "Dim the workstation"
           ]
         },
         {
@@ -7594,16 +8208,16 @@
               "loop": true
             }
           ],
-          "comments": "Shot recorder / display",
+          "comments": "Personal log grounded in a campaign location, rather than another control tutorial. Original fan-written dialogue; complete thoughts are padded to native pages.",
           "enabled": true,
           "initiallyActive": false,
           "once": false,
           "consumeItem": true,
           "requiredItem": "",
-          "text": "RECORDER ONLINE\nOriginal, Heavy and Laser use the same gameplay trajectory. Cosmetic recoil and light never change the hit test.\n\nConrad: Accuracy first. Dramatic lighting second.",
+          "text": "I kept a range trace from\nafter New Washington. A quiet\nroom, an empty doorway. Space\nto lower the pistol.\nIt looks unremarkable. That\nwas the point. I needed to\nknow which part of my aim was\ntraining and which part was\nfear.",
           "doneText": "",
           "goal": 1,
-          "speaker": "AURORA"
+          "speaker": "CONRAD"
         },
         {
           "id": "power-rack",
@@ -7695,16 +8309,69 @@
               "loop": true
             }
           ],
-          "comments": "Range power rack / display",
+          "comments": "A visible safety isolation explains the passive range without inventing a universal Morph detector. Original fan-written dialogue; complete thoughts are padded to native pages.",
           "enabled": true,
           "initiallyActive": false,
           "once": false,
           "consumeItem": true,
           "requiredItem": "",
-          "text": "POWER BUS: STABLE\nSafety relay physically disconnects live return fire.\n\nAURORA: I checked it twice.\nConrad: Make it three times.",
+          "text": "A gap in the firing circuit. I\ncan see daylight between the\ncontacts. No remote command\ncan bridge it.\nThe Morphs made a familiar\nface unreliable. I will not\nlet that turn every machine\ninto another act of faith.",
           "doneText": "",
           "goal": 1,
-          "speaker": "AURORA"
+          "speaker": "CONRAD"
+        },
+        {
+          "id": "charging-sparks",
+          "name": "Charging coil discharge",
+          "kind": 27,
+          "at": {
+            "room": "room-2",
+            "x": 27,
+            "y": 70
+          },
+          "graphX": 284,
+          "graphY": 1074,
+          "width": 20,
+          "height": 20,
+          "layer": 0,
+          "visuals": [
+            {
+              "art": {
+                "file": "",
+                "x": 0,
+                "y": 0,
+                "w": 16,
+                "h": 24
+              },
+              "frames": 1,
+              "fps": 8,
+              "loop": true
+            },
+            {
+              "art": {
+                "file": "",
+                "x": 0,
+                "y": 0,
+                "w": 16,
+                "h": 24
+              },
+              "frames": 1,
+              "fps": 8,
+              "loop": true
+            }
+          ],
+          "comments": "Purely visual Back-layer effect. It follows charging through the same Activate, Stop and Reset wires. No collision, damage or gameplay random state. Density and loop are editable; saved progress retains the phase.",
+          "enabled": true,
+          "initiallyActive": false,
+          "once": false,
+          "consumeItem": true,
+          "requiredItem": "",
+          "text": "",
+          "doneText": "",
+          "goal": 1,
+          "ambientStyle": 7,
+          "ambientAmount": 1,
+          "duration": 120
         }
       ],
       "wires": [
@@ -7965,6 +8632,24 @@
           "to": "power-rack-log",
           "signal": 0,
           "input": 0
+        },
+        {
+          "from": "cradle-log",
+          "to": "charging-sparks",
+          "signal": 7,
+          "input": 5
+        },
+        {
+          "from": "cradle-log",
+          "to": "charging-sparks",
+          "signal": 7,
+          "input": 0
+        },
+        {
+          "from": "cradle-timer",
+          "to": "charging-sparks",
+          "signal": 1,
+          "input": 8
         }
       ],
       "comments": "Quiet room ambience: one task light, sparse drifting pixels and localized machinery. Inspect or stop individual nodes in Module Editing; no gameplay effects. Includes nearby controls and screen glow. Enter selects the nearest enabled device; all switches and experiments are connected here with editable wires.",
@@ -8556,19 +9241,19 @@
               "loop": true
             }
           ],
-          "comments": "Research terminal / display",
+          "comments": "The display toggle does not solve the research. His scientific work offers a second way into the lost-memory theme. Original fan-written dialogue; complete thoughts are padded to native pages.",
           "enabled": true,
           "initiallyActive": false,
           "once": false,
           "consumeItem": true,
           "requiredItem": "",
-          "text": "PERSONAL RESEARCH\nProject 01: repair elbow.\nProject 02: stop the coffee maker leaking.\nProject 03: decide whether the coffee maker needs an elbow.\n\nConrad: Delete project three.",
+          "text": "Some of these notes are mine.\nI recognise the corrections.\nBut how did I reach these\nconclusions? A missing day can\ntake the reasoning with it.\nI will leave the questions\nvisible until I can repeat the\nwork.",
           "doneText": "",
           "goal": 1,
-          "speaker": "AURORA",
+          "speaker": "CONRAD",
           "choices": [
-            "Run / illuminate",
-            "Standby / dim"
+            "Light the research desk",
+            "Put the display to sleep"
           ]
         },
         {
@@ -8714,19 +9399,19 @@
               "loop": true
             }
           ],
-          "comments": "Repair arm / display",
+          "comments": "A bounded, unloaded bench test. Nothing is repaired or erased by this switch. Original fan-written dialogue; complete thoughts are padded to native pages.",
           "enabled": true,
           "initiallyActive": false,
           "once": false,
           "consumeItem": true,
           "requiredItem": "",
-          "text": "BENCH MANIPULATOR\nNo payload attached. Run a gentle articulation test?\n\nConrad: Slowly. Those are my only spare fingers.",
+          "text": "The arm holds steady when my\nhands cannot.\nI still make it show each\nmovement before I let it near\na damaged memory connector.\nNo tool is fitted. A slow\nsweep will check its reach.",
           "doneText": "",
           "goal": 1,
-          "speaker": "AURORA",
+          "speaker": "CONRAD",
           "choices": [
-            "Run short test",
-            "Leave it alone"
+            "Run unloaded sweep",
+            "Keep the arm parked"
           ]
         },
         {
@@ -8870,13 +9555,13 @@
               "loop": true
             }
           ],
-          "comments": "Ship systems server / display",
+          "comments": "AURORA's restraint is a character trait. This is story context, not a new network-security or access-control subsystem. Original fan-written dialogue; complete thoughts are padded to native pages.",
           "enabled": true,
           "initiallyActive": false,
           "once": false,
           "consumeItem": true,
           "requiredItem": "",
-          "text": "SHIP SYSTEMS\nNavigation: steady.\nLife support: nominal.\nLaundry: unresolved.\n\nAURORA: That last item is outside my operating specification.",
+          "text": "Ship records are local. A\nremote request cannot open a\nhatch or change course without\na command from aboard.\nThat limits what I can do for\nyou. It also leaves a record\nof what you chose. You asked\nme to preserve that\ndistinction.",
           "doneText": "",
           "goal": 1,
           "speaker": "AURORA"
@@ -8971,16 +9656,16 @@
               "loop": true
             }
           ],
-          "comments": "Personal archive / display",
+          "comments": "The emotional centre of the lab: recorded evidence does not remove uncertainty. No quotation from the original script. Original fan-written dialogue; complete thoughts are padded to native pages.",
           "enabled": true,
           "initiallyActive": false,
           "once": false,
           "consumeItem": true,
           "requiredItem": "",
-          "text": "PERSONAL ARCHIVE\nCurrent backup verified.\n\nConrad: Finally, somewhere safe to keep my memories.\n\nAURORA: I also made a backup of the backup.\nConrad: I am starting to like you.",
+          "text": "My recorded voice once knew\nmore about my life than I did.\nI still listen for the\nhesitation.\nA record can tell me what I\nsaid. It cannot tell me\nwhether I was frightened,\nmistaken, or speaking for\nsomeone else.\nKeep the original. Date every\ncopy. If a memory changes, I\nwant to know when it changed.",
           "doneText": "",
           "goal": 1,
-          "speaker": "AURORA"
+          "speaker": "CONRAD"
         },
         {
           "id": "battery-off",
@@ -9897,19 +10582,19 @@
               "loop": true
             }
           ],
-          "comments": "Flight status workstation / display",
+          "comments": "Echo the uncertain navigation data without pretending this switch flies the ship or opens the airlock. Original fan-written dialogue; complete thoughts are padded to native pages.",
           "enabled": true,
           "initiallyActive": false,
           "once": false,
           "consumeItem": true,
           "requiredItem": "",
-          "text": "FLIGHT STATUS\nCourse locked. Hull intact. Docking permission pending.\n\nThis workstation controls the displays; the central AURORA terminal operates the pressure lock.",
+          "text": "A clearance code is on file.\nNo one has signed it.\nAn automated berth, perhaps.\nOr an incomplete record. I\ncannot tell which.\nThis console controls\ndisplays. The central terminal\ncontrols the pressure lock.",
           "doneText": "",
           "goal": 1,
           "speaker": "AURORA",
           "choices": [
-            "Run / illuminate",
-            "Standby / dim"
+            "Keep flight data visible",
+            "Dim the workstation"
           ]
         },
         {
@@ -10102,16 +10787,16 @@
               "loop": true
             }
           ],
-          "comments": "Atmosphere controls / display",
+          "comments": "Sensory memory connects the mundane machinery to Titan; the fan toggle remains safe during the airlock sequence. Original fan-written dialogue; complete thoughts are padded to native pages.",
           "enabled": true,
           "initiallyActive": false,
           "once": false,
           "consumeItem": true,
           "requiredItem": "",
-          "text": "ATMOSPHERE RESERVE\nOxygen reserve full. Filters clean.\n\nThe blower switch tests the auxiliary cabin fan; the airlock pressure controller has its own pump.\n\nConrad: Redundancy. A word I can breathe easier around.",
+          "text": "On Titan, the air smelled of\nwet leaves and hot machinery.\nHere it passes through filters\nI can reach and replace.\nThe cabin blower and airlock\npump have separate supplies. I\ncan silence the fan without\ntrusting my next breath to a\ntest.",
           "doneText": "",
           "goal": 1,
-          "speaker": "AURORA"
+          "speaker": "CONRAD"
         },
         {
           "id": "locker",
@@ -10203,16 +10888,16 @@
               "loop": true
             }
           ],
-          "comments": "Emergency locker / display",
+          "comments": "Survival habits rather than jokes about an instruction manual; inspecting the locker does not grant inventory items. Original fan-written dialogue; complete thoughts are padded to native pages.",
           "enabled": true,
           "initiallyActive": false,
           "once": false,
           "consumeItem": true,
           "requiredItem": "",
-          "text": "EMERGENCY LOCKER\nSeal tape. Spare gloves. One very optimistic repair manual.\n\nConrad: Chapter one: stay inside the ship.\n\nGood advice.",
+          "text": "Seal tape, gloves, a tether. I\nrepack them in the same order.\nWhen the lights go, my hands\nneed to find them without me.\nThe jungle left me with that\nhabit. Think while there is\ntime. When there is not, give\nyour body something it already\nknows.",
           "doneText": "",
           "goal": 1,
-          "speaker": "AURORA"
+          "speaker": "CONRAD"
         },
         {
           "id": "eva-test",
@@ -10357,19 +11042,19 @@
               "loop": true
             }
           ],
-          "comments": "EVA suit self-test / display",
+          "comments": "Honest limitation: this short effect is not an equipment pickup or a complete EVA certification. Original fan-written dialogue; complete thoughts are padded to native pages.",
           "enabled": true,
           "initiallyActive": false,
           "once": false,
           "consumeItem": true,
           "requiredItem": "",
-          "text": "EVA SUIT / STORED\nPressure seal unoccupied. Helmet lamp and seal indicators ready.\n\nConrad: Let us keep this a test.",
+          "text": "The suit is empty. We can test\nits seal indicators.\nA green lamp confirms this\ncircuit. It does not certify\nevery seam against vacuum.\nI can pulse the indicators\nnow. A real departure requires\na full suit inspection.",
           "doneText": "",
           "goal": 1,
           "speaker": "AURORA",
           "choices": [
-            "Run short test",
-            "Leave it alone"
+            "Test seal indicators",
+            "Keep the suit stored"
           ]
         },
         {
@@ -11229,16 +11914,16 @@
               "loop": true
             }
           ],
-          "comments": "Spare target discs / display",
+          "comments": "Evidence and fallibility conveyed by physical range objects, without imaginary score tracking. Original fan-written dialogue; complete thoughts are padded to native pages.",
           "enabled": true,
           "initiallyActive": false,
           "once": false,
           "consumeItem": true,
           "requiredItem": "",
-          "text": "REPLACEABLE TARGET DISCS\nScoring face: green impact sensor.\nBacking: sacrificial armor.\n\nConrad: Better these than the wall. The wall sends invoices.",
+          "text": "The old plates keep every\nimpact. Some are grouped\nneatly; others climb towards\nthe edge as my arm tires.\nA summary would call both\nsessions complete. The metal\ntells me when to stop. I keep\nthe bad plates beside the good\nones.",
           "doneText": "",
           "goal": 1,
-          "speaker": "AURORA"
+          "speaker": "CONRAD"
         },
         {
           "id": "range-locker",
@@ -11330,16 +12015,16 @@
               "loop": true
             }
           ],
-          "comments": "Range supply cabinet / display",
+          "comments": "A darker contrast with survival as spectacle, not another joke about improving aim. Original fan-written dialogue; complete thoughts are padded to native pages.",
           "enabled": true,
           "initiallyActive": false,
           "once": false,
           "consumeItem": true,
           "requiredItem": "",
-          "text": "RANGE SUPPLIES\nLens cloths, hearing protection and replacement indicator lamps.\n\nAURORA: No, the green lamps do not improve your aim.\nConrad: They improve my mood.",
+          "text": "Ear protection, lens cloths,\nspare lamps. Small things that\nnever appeared in the Death\nTower broadcasts.\nI remember how the crowd\nfilled the silences between\nshots. In here I can hear a\nbearing wearing out. I prefer\nthat warning.",
           "doneText": "",
           "goal": 1,
-          "speaker": "AURORA"
+          "speaker": "CONRAD"
         },
         {
           "id": "gallery-screen-glow",
@@ -11537,19 +12222,19 @@
               "loop": true
             }
           ],
-          "comments": "Ballistics analysis screen / display",
+          "comments": "Do not imply this display pauses the target; the separate carriage computer owns that behavior. Original fan-written dialogue; complete thoughts are padded to native pages.",
           "enabled": true,
           "initiallyActive": false,
           "once": false,
           "consumeItem": true,
           "requiredItem": "",
-          "text": "BALLISTICS ANALYSIS\nTwo firing elevations. One traveling plate.\n\nThe lamp above the rail flashes for each hit, then goes dark. A miss never counts.\n\nLive telemetry adds a soft screen glow.",
+          "text": "The firing height changes. The\nplate follows the same rail.\nOnly a hit flashes the lamp.\nLight around a shot cannot\nmake a miss count.\nLive mode illuminates the\nanalysis screen; standby\nleaves the target running.",
           "doneText": "",
           "goal": 1,
           "speaker": "AURORA",
           "choices": [
-            "Run / illuminate",
-            "Standby / dim"
+            "View the analysis",
+            "Dim the analysis screen"
           ]
         },
         {
@@ -11642,16 +12327,69 @@
               "loop": true
             }
           ],
-          "comments": "Carriage service rack / display",
+          "comments": "A small hopeful close to the gallery; pause/resume remains with its existing computer. Original fan-written dialogue; complete thoughts are padded to native pages.",
           "enabled": true,
           "initiallyActive": false,
           "once": false,
           "consumeItem": true,
           "requiredItem": "",
-          "text": "CARRIAGE SERVICE\nRail bearings lubricated. Travel limit checked.\n\nUse the computer on the middle deck to stop or resume the plate.\n\nConrad: No ladder. No exposed wiring. I approve.",
+          "text": "I changed this bearing before\nit failed. An uneventful entry\nin the log. I would like more\nof those.\nThe middle-deck computer holds\nthe carriage. Before anyone\nworks on the rail, it stays\nthere. Practice can wait.",
           "doneText": "",
           "goal": 1,
-          "speaker": "AURORA"
+          "speaker": "CONRAD"
+        },
+        {
+          "id": "lit-dust",
+          "name": "Dust in the gallery task light",
+          "kind": 27,
+          "at": {
+            "room": "room-5",
+            "x": 116,
+            "y": 192
+          },
+          "graphX": 544,
+          "graphY": 864,
+          "width": 38,
+          "height": 42,
+          "layer": 0,
+          "visuals": [
+            {
+              "art": {
+                "file": "",
+                "x": 0,
+                "y": 0,
+                "w": 16,
+                "h": 24
+              },
+              "frames": 1,
+              "fps": 8,
+              "loop": true
+            },
+            {
+              "art": {
+                "file": "",
+                "x": 0,
+                "y": 0,
+                "w": 16,
+                "h": 24
+              },
+              "frames": 1,
+              "fps": 8,
+              "loop": true
+            }
+          ],
+          "comments": "Purely visual Back-layer effect. It follows light through the same Activate, Stop and Reset wires. No collision, damage or gameplay random state. Density and loop are editable; saved progress retains the phase.",
+          "enabled": true,
+          "initiallyActive": false,
+          "once": false,
+          "consumeItem": true,
+          "requiredItem": "",
+          "text": "",
+          "doneText": "",
+          "goal": 1,
+          "ambientStyle": 5,
+          "ambientAmount": 2,
+          "duration": 170
         }
       ],
       "wires": [
@@ -11844,6 +12582,24 @@
         {
           "from": "range-service",
           "to": "range-service-log",
+          "signal": 0,
+          "input": 0
+        },
+        {
+          "from": "start",
+          "to": "lit-dust",
+          "signal": 1,
+          "input": 0
+        },
+        {
+          "from": "room-light-off",
+          "to": "lit-dust",
+          "signal": 0,
+          "input": 8
+        },
+        {
+          "from": "room-light-on",
+          "to": "lit-dust",
           "signal": 0,
           "input": 0
         }

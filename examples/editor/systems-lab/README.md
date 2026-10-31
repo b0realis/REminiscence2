@@ -78,6 +78,10 @@ at y144 and top cabins at y72. Desks, switches and doors are sized around his
 reach. Each room uses at most 26 authored background colours. Lights, fans,
 monitor refresh, dust and pressure mist are editable background nodes; they
 freeze with the simulation and retain their phase through saved progress.
+The [particle-effects guide](EFFECTS.md) maps the fan airflow, charging discharge,
+diagnostic motes, laser receiver sparks and sample-field particles to their
+controls. These effects require player/editor 1.78 or later; experiments stop
+their particles when they finish or are switched off.
 
 ## Included content and provenance
 
@@ -95,8 +99,10 @@ own Amiga, DOS/GOG or Sega CD asset set. Those original files keep their own
 rights and are not relicensed by this example.
 
 This fan-made lab is a learning example and a homage to Delphine Software, not
-part of the original campaign. Its current dialogue pagination is functional
-but remains a candidate for presentation improvements.
+part of the original campaign. Its [dialogue and writing guide](DIALOGUE.md)
+explains the lore-inspired conversations, character voices and connected speaker
+turns. Passages use complete thoughts at native page breaks; the renderer's
+speaker-colour and text-backing improvements remain future presentation work.
 
 ## Validation
 

@@ -21,19 +21,19 @@
     },
     {
       "id": "complete",
-      "name": "Systems check complete",
+      "name": "Beyond the lock",
       "kind": 4,
       "x": 340,
       "y": 24,
       "elements": [
         {
           "kind": 0,
-          "text": "SYSTEMS CHECK COMPLETE\n\nSystems stable. Repairs logged. One properly sealed airlock.\n\nConrad: Next time, a ship with less maintenance. And a coffee machine.",
+          "text": "BEYOND THE LOCK\n\nThe hatch opens. For once, I can choose when to walk through it.\n\nThere are still gaps in my memory. I will keep the records, including the ones I cannot yet explain.\n\nNext time someone tells me who I am, I will have more than their word.",
           "x": 48,
-          "y": 65,
+          "y": 28,
           "width": 544,
-          "height": 240,
-          "size": 24,
+          "height": 292,
+          "size": 20,
           "color": [
             82,
             184,
@@ -41,7 +41,7 @@
             255
           ],
           "effect": 1,
-          "rate": 32
+          "rate": 34
         }
       ],
       "routes": []

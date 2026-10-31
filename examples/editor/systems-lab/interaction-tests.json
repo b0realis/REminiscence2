@@ -5,7 +5,8 @@
     "mode": "toggle",
     "alternate": "fan-control-on",
     "effects": [
-      "fan"
+      "fan",
+      "vent-drift"
     ],
     "name": "Turn off Ventilator",
     "at": {
@@ -99,7 +100,8 @@
     "mode": "pulse",
     "dialogue": "cradle-log",
     "effects": [
-      "charging"
+      "charging",
+      "charging-sparks"
     ],
     "timer": "cradle-timer",
     "name": "Charging cradle",
@@ -206,7 +208,8 @@
     "dialogue": "sample-control-log",
     "effects": [
       "sample",
-      "sample-glow"
+      "sample-glow",
+      "sample-motes"
     ],
     "name": "Containment console",
     "at": {
@@ -440,7 +443,8 @@
     "alternate": "room-light-on",
     "effects": [
       "lamp",
-      "light"
+      "light",
+      "lit-dust"
     ],
     "name": "Turn off Gallery light",
     "at": {

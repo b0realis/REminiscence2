@@ -24,7 +24,7 @@ static editor::Project ambientChecks(const std::filesystem::path &root) {
 		if (kind == 0)
 			node.layer = Layer::Front;
 		if (kind == 1)
-			node.ambientStyle = 7;
+			node.ambientStyle = 8;
 		if (kind == 2)
 			node.ambientAmount = 4;
 		if (kind == 3)
@@ -39,21 +39,22 @@ static editor::Project ambientChecks(const std::filesystem::path &root) {
 	writePNG(original, root / "ambient-background.png");
 	p.rooms[0].art[0] = {"ambient-background.png", 0, 0, 256, 224};
 	Images images;
-	for (int style = 0; style < 7; ++style) {
+	for (int style = 0; style < 8; ++style) {
 		n.ambientStyle = style;
+		const int sampleAge = style == 7 ? 8 : n.duration / 4;
 		p.modules[0].nodes[1] = n;
 		check(serialize(deserialize(serialize(p))) == serialize(p),
 		      "Background effect selection did not survive saving");
 		auto first = original, changed = original, looped = original, stopped = original;
 		drawNode(first, n, true, 0, images);
-		drawNode(changed, n, true, n.duration / 4, images);
+		drawNode(changed, n, true, sampleAge, images);
 		drawNode(looped, n, true, n.duration, images);
-		drawNode(stopped, n, false, n.duration / 4, images);
+		drawNode(stopped, n, false, sampleAge, images);
 		check(first.pixels != changed.pixels, "Background machine does not move");
 		check(first.pixels == looped.pixels, "Background machine has a loop seam");
 		check(stopped.pixels == original.pixels, "Stopped background altered the artwork");
 		auto repeated = original;
-		drawNode(repeated, n, true, n.duration / 4, images);
+		drawNode(repeated, n, true, sampleAge, images);
 		check(repeated.pixels == changed.pixels, "Effect depends on render order or random state");
 		for (int y = 0; y < 224; ++y)
 			for (int x = 0; x < 256; ++x) {
@@ -69,8 +70,30 @@ static editor::Project ambientChecks(const std::filesystem::path &root) {
 		if (style >= 4) {
 			Image black{256,224,std::vector<uint32_t>(256*224,rgba(0,0,0))};
 			const auto still = black;
-			drawNode(black,n,true,30,images);
+			drawNode(black,n,true,style == 7 ? 8 : 30,images);
 			check(black.pixels != still.pixels, "Light or particles invisible over a black background");
+			if (style == 7) {
+				auto quiet = still;
+				drawNode(quiet, n, true, n.duration - 1, images);
+				check(quiet.pixels == still.pixels, "Electrical discharge has no quiet interval");
+				// A tiny emitter at the room edge must remain confined even
+				// late in a trajectory, and long sessions must retain the phase.
+				auto edge = n;
+				edge.at.x = 248;
+				edge.at.y = 224;
+				edge.width = edge.height = 8;
+				for (const uint64_t age : {uint64_t(8), uint64_t(20), ~uint64_t(0)}) {
+					auto frame = still, equivalent = still;
+					drawNode(frame, edge, true, age, images);
+					drawNode(equivalent, edge, true, age % edge.duration, images);
+					check(frame.pixels == equivalent.pixels, "Long-running sparks lost their phase");
+					for (int y = 0; y < 224; ++y)
+						for (int x = 0; x < 256; ++x)
+							if (x < 248 || y < 216)
+								check(frame.pixels[y * 256 + x] == still.pixels[y * 256 + x],
+								      "Edge sparks escaped their authored region");
+				}
+			}
 		}
 	}
 	auto state = initialGraphState(m);
@@ -99,7 +122,7 @@ static void ambientSceneChecks(const std::filesystem::path &root, const assets::
 		}
 	} stub;
 	auto p = ambientChecks(root);
-	for (int style = 0; style < 7; ++style) {
+	for (int style = 0; style < 8; ++style) {
 		p.modules[0].nodes[1].ambientStyle = style;
 		stub._pi = {};
 		Scene scene(p, root, source, &stub);

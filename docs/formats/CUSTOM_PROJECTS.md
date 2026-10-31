@@ -537,9 +537,10 @@ safe call controls at both ends. Original campaign lifts still use native script
 `NodeKind` **27 = Ambient / Background machinery** appends to the enum. Project
 schema stays at 9; older readers reject this unknown kind rather than silently
 misreading its behaviour. Only Ambient node records emit `ambientStyle` (0=Breathe,
-1=Pulse, 2=Flow, 3=Fan rotor, 4=Light pool, 5=Dust motes, 6=Vent mist) and
-`ambientAmount` (1..3). Styles 3..6 were added in 1.71; previous readers reject
-these unsupported values. Absent values default to 0 and 2.
+1=Pulse, 2=Flow, 3=Fan rotor, 4=Light pool, 5=Dust motes, 6=Vent mist,
+7=Electrical sparks) and `ambientAmount` (1..3). Styles 3..6 were added in 1.71;
+style 7 requires 1.78. Previous readers reject unsupported values. Absent values
+default to 0 and 2.
 Other node serialization and existing module revision hashes remain unchanged.
 
 `duration` is its loop period, 60..600 ticks at 30 Hz. `at`, `width` and `height`
@@ -549,8 +550,8 @@ files must be empty. Inputs: Activate, Stop, Reset, Enable, Disable. Outputs:
 Started and Stopped. The shared action runtime owns phase (`tick - changedAt`),
 restarts and cancellation; Ambient never times out or emits Completed.
 
-The renderer copies the selected region before sampling, preventing directional
-smearing or accumulated distortion. A squared elliptical falloff leaves boundary
+Artwork-sampling effects copy the selected region before sampling, preventing
+directional smearing or accumulated distortion. A squared elliptical falloff leaves boundary
 pixels unchanged. Nearest-pixel displacement and bounded RGB gain animate the
 existing background; alpha is retained. No physics, native scripts or original
 asset files are changed. Edit mode shows selection bounds; PLAY renders motion.
@@ -562,6 +563,12 @@ Dust/Mist use 4, 6 or 8 deterministic particles according to `ambientAmount`;
 they fade at loop endpoints and do not consume random gameplay state. The
 region's existing alpha is retained. All effects use the same saved phase and
 stop/reset semantics; no particle buffers or additional save fields are needed.
+Electrical sparks use 5, 7 or 9 deterministic short trajectories from the region's
+upper centre. They brighten local RGB with warm fading trails, preserve alpha,
+and clip to the ellipse. The discharge finishes within 28 ticks; the remainder
+of the 60..600-tick period is quiet. Particle styles allocate no regional image
+copy and use neither render count nor the engine RNG. An ordinary Timer can
+Stop an emitter before its next loop for a single burst.
 
 
 ## Authored armed guards

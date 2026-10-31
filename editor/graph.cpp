@@ -417,11 +417,11 @@ void validateGraph(const Project &p, const Module &m, std::vector<Issue> &issues
 			      "ticks, repeatable hits, and starts through Activate");
 		if (n.kind == NodeKind::Ambient &&
 		    (p.native.enabled || n.layer != Layer::Back || n.initiallyActive || n.once ||
-		     n.ambientStyle < 0 || n.ambientStyle > 6 || n.ambientAmount < 1 ||
+		     n.ambientStyle < 0 || n.ambientStyle > 7 || n.ambientAmount < 1 ||
 		     n.ambientAmount > 3 || n.duration < 60 || n.duration > 600 || n.width < 8 ||
 		     n.height < 8 || n.at.y < n.height || !n.visuals[0].art.file.empty() ||
 		     !n.visuals[1].art.file.empty()))
-			error("Background machinery needs a custom Back layer region >=8px, style 0..6, "
+			error("Background machinery needs a custom Back layer region >=8px, style 0..7, "
 			      "strength 1..3, period 60..600 ticks, no sprites, and starts through Activate");
 		if (n.kind == NodeKind::Lift) {
 			const int upper = roomIndex(p, n.at.room);
@@ -556,6 +556,8 @@ const char *nodeHelp(NodeKind k) {
 		       "gently expands tissue, Pulse sends light through it, Flow ripples liquid. "
 		       "Fan rotor turns existing blades: fit its region inside the casing. Light pool "
 		       "adds a quiet cyan glow; Dust motes and Vent mist add sparse drifting pixels. "
+		       "Electrical sparks briefly scatter warm pixels from the region's upper centre, "
+		       "then rest until the next loop. Use a Timer and Stop for one discharge. "
 		       "Strength controls motion, light or particle count (1-3); the rotor always makes "
 		       "one turn per loop. Period is 2-20 seconds. Connect On "
 		       "start to Activate; Stop/Disable restores the still artwork, Reset rearms. "

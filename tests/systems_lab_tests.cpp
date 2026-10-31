@@ -30,6 +30,11 @@ int main(int argc, char **argv) {
         check(validateCampaign(campaign, root, true).empty(), "Invalid campaign");
         HeadlessSystem stub;
         auto scene = std::make_unique<Scene>(p, root, library.games.front(), &stub);
+        auto effectActive = [&](size_t module, const char *id) {
+            const int index = nodeIndex(p.modules[module], id);
+            check(index >= 0, std::string("Missing lab effect: ") + id);
+            return scene->states()[module].graph.nodes[index].active;
+        };
         std::filesystem::path captureRoute;
         int routeTicks=0,routeFrames=0;
         auto tick = [&] {
@@ -96,7 +101,9 @@ int main(int argc, char **argv) {
                 if(p.modules[m].nodes[n].id=="lamp" || p.modules[m].nodes[n].id=="light" ||
                    p.modules[m].nodes[n].id=="dust" || p.modules[m].nodes[n].id=="fan" ||
                    p.modules[m].nodes[n].id=="monitor" || p.modules[m].nodes[n].id=="scrubber-fan" ||
-                   p.modules[m].nodes[n].id=="battery-status")
+                   p.modules[m].nodes[n].id=="battery-status" ||
+                   p.modules[m].nodes[n].id=="vent-drift" ||
+                   p.modules[m].nodes[n].id=="lit-dust")
                     check(scene->states()[m].graph.nodes[n].active, "A room service did not start");
         const auto ambientFrame=scene->render();
         const auto ambientSave=scene->saveSession();
@@ -164,14 +171,17 @@ int main(int argc, char **argv) {
         walk(2,p.modules[3].nodes[0].at.x+8); idle(20);
         check(scene->states()[5].graph.nodes[1].active && scene->states()[5].graph.nodes[2].active,
               "Background experiments never started");
+        check(effectActive(5,"sample-motes"), "Sample display started without its motes");
         writePNG(scene->render(),out/"03-workshop.png");
         stub._pi.enter=true; tick(); idle(1);
         check(scene->dialogueOpen(), "Repair console did not open");
         cancel();
         check(!scene->states()[3].graph.nodes[0].active && !scene->states()[3].graph.nodes[3].active,
               "Cancelled diagnostics changed the android");
+        check(!effectActive(3,"scan-motes"), "Cancelled diagnostics emitted particles");
         stub._pi.enter=true; tick(); idle(1); talk();
         check(scene->states()[3].graph.nodes[3].active, "Diagnostic scan did not start");
+        check(effectActive(3,"scan-motes"), "Diagnostic scan did not start its particles");
         writePNG(scene->render(),out/"04-diagnostics.png");
         idle(15);
         const auto repairSave=scene->saveSession();
@@ -197,8 +207,10 @@ int main(int argc, char **argv) {
         idle(70); talk();
         check(!scene->states()[4].graph.nodes[3].active && !scene->states()[4].graph.nodes[0].active,
               "Laser pulse or console failed to reset");
+        check(!effectActive(4,"receiver-sparks"), "Receiver discharge outlived the laser test");
         stub._pi.enter=true; tick(); idle(1); talk();
         check(scene->states()[4].graph.nodes[3].active, "Laser pulse could not be repeated");
+        check(effectActive(4,"receiver-sparks"), "Repeated laser pulse lost its discharge");
         check(scene->game()._pgeLive[0].life==life, "Lab experiment hurt Conrad");
         walk(3,128); idle(20);
         check(!scene->states()[4].graph.nodes[3].active, "Laser did not shut down after leaving the room");

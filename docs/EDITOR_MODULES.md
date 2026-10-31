@@ -465,7 +465,7 @@ original campaign inventory, lifts, terminals and other mechanics.
 | Pickup animation | Visual effect only; does not grant an item |
 | Timer | Delayed completion at 30 simulation ticks/second |
 | Lift | Visible two-stop platform carrying Conrad between vertically linked rooms |
-| Background machinery | Local breathing, flow, fan rotation, light pools, dust or vent mist |
+| Background machinery | Local breathing, flow, fan rotation, light pools, dust, vent mist or electrical sparks |
 | State | Exclusive state group with Entered/Exited/Completed |
 | Actor | Native crawler, authored armed guard or bound native actor; patrol/friendly/message controls |
 | Health pickup | Restores configured health up to five; Reset restores the pickup |
@@ -599,8 +599,11 @@ liquid tank. The **Living background** inspector offers:
 - **Light pool:** a restrained, gently pulsing cyan light over nearby surfaces.
 - **Dust motes:** a few single-pixel particles drifting upward.
 - **Vent mist:** short pale wisps, useful when connected to an airlock cycle.
+- **Electrical sparks:** a brief warm discharge from the upper centre of the
+  region. Tiny trails scatter and fade in under a second, followed by a quiet
+  interval until the next loop. Useful for a charging coil or contained receiver.
 
-Strength is 1–3 (particle density for Dust/Mist; not used by the rotor). Motion
+Strength is 1–3 (particle density for Dust/Mist/Sparks; not used by the rotor). Motion
 uses nearest-pixel sampling; effects stay inside the ellipse. Loop length is
 60–600 simulation ticks (2–20 seconds). Use
 slightly different periods for adjacent organs. The effect samples existing
@@ -621,6 +624,14 @@ its phase. Rendering changes no collision or gameplay state.
 
 For pressure effects, connect the Cycling state's **Entered → Activate** to Vent
 mist, then Ready's **Entered → Stop**. This keeps the puff linked to the mechanism.
+
+Electrical sparks require player/editor 1.78 or later. To show one discharge,
+connect the experiment's trigger to **Reset → Activate** on the effect and its
+timer's **Completed → Stop**; keep the timer shorter than the loop period.
+Repeated Activate on a running node does not restart it. Existing experiment
+timers can stop their light, sound and particles together. The
+[Systems Lab particle guide](../examples/editor/systems-lab/EFFECTS.md) shows
+working examples, including fan-controlled airflow and sample-field motes.
 
 
 ### Moving target plate

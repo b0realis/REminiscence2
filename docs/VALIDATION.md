@@ -12,6 +12,60 @@ its screenshot was present in the exported tree. The public Ogg regression uses
 an independent synthetic tone; optional private walkthroughs remain available
 locally. Documentation boundaries and staged whitespace checks passed.
 
+## Patch 1.78 — controlled laboratory particles
+
+Six Back-layer emitters follow the lab's existing fan, charging, diagnostic,
+laser, sample-field and task-light controls; pressure mist has modestly higher
+density. Matching incoming control wires preserve start, cancellation, restart
+and stop behavior without duplicating timers. The public and local working lab
+copies match. The lore dialogue from 1.77 is retained.
+
+Electrical sparks is a reusable Background machinery style, available in the
+editor inspector with density and period controls. Short deterministic trails
+fade into a quiet interval. Rendering consumes no gameplay RNG, adds no particle
+save fields, retains background alpha and clips to the authored ellipse. The
+particle branches no longer allocate an unused background-region image copy.
+Other styles retain their existing rendering behavior.
+
+The rebuilt local Apple Silicon player/editor passed **71/71 CTest checks in
+44.66 seconds**. Ambient regressions cover effect serialization, unsupported
+styles, motion, deterministic replay, bounds, quiet intervals, small emitters at
+the room edge, long-running phases, pause/save restoration and foreground
+occlusion. Amiga, DOS/GOG and Sega CD lab walkthroughs cover the wired controls,
+charging/sample choices, cancelled diagnostics and repeated laser tests. No
+original game assets or room artwork changed.
+
+Six control-driven Sega CD capture sequences produced **720 native engine
+frames**, including accepted experiments and off/on transitions. Capture checks
+confirm that the selected control actually changed its intended emitter.
+Logs: `build/lab-particles-1.78-build.log`, `build/lab-particles-1.78-tests.log`.
+Private motion preview: `build/lab-particles-1.78-preview.html`.
+
+## Patch 1.77 — Systems Lab narrative revision
+
+The five-room lab replaces 35 dialogue entries and two completed-terminal
+reports with original fan-written conversations about memory, identity and
+physical evidence. Six additional Dialogue nodes separate the droid/Conrad
+turns; their Completed outputs form ordinary editable conversation chains.
+The debrief avoids claiming completion of optional experiments. Choices retain
+the same branch order and effects. Room geometry, artwork, combat and existing
+experiment wires/timing are unchanged; the public and local working copies match.
+
+The local Apple Silicon build and **10/10 focused checks passed in 2.51 seconds**:
+project/campaign validation, the three asset-backed Systems Lab walkthroughs,
+editor content and Amiga/DOS/Sega CD scene regressions, and CLI version checks.
+The walkthroughs cover repeat visits, dialogue advancement, cancellation,
+experiment completion and saved state with the added speaker chains. All
+new node positions are distinct in their module graphs.
+
+Native captures of the opening, R-03 exchange, airlock choice and diagnostics
+produced **42 real engine frames** across Amiga, GOG/DOS and Sega CD. Their text
+fits 30 columns, contains no empty page, and ends each page on a complete
+thought. The ending frame was visually checked for clipping. This revision
+retains the existing text renderer; colour/contrast improvements are separate.
+Logs: `build/lab-dialogue-1.77-build.log`,
+`build/lab-dialogue-1.77-tests.log`; frames: `build/dialogue-review-1.77/`.
+
 ## Patch 1.76 — public editor updates and Systems Lab
 
 The public five-room Systems Lab includes its current project/campaign graphs,
