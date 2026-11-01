@@ -26,6 +26,11 @@ record your own observations in module/node comments.
 
 ## Start
 
+See the [standalone build guide](../docs/BUILDING.md) for complete, player-only
+and editor-only builds on Windows, Linux and both Mac architectures. Native
+campaign and whole-campaign playtests require the player beside the editor;
+custom-room playtests run inside the editor.
+
 From the development checkout, after building locally:
 
 ```sh

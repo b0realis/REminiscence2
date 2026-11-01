@@ -64,6 +64,20 @@ def check(root: Path) -> list[str]:
                 problems.append(f"Invalid public documentation manifest entry: {name}")
     except (OSError, ValueError) as error:
         problems.append(f"Cannot read public documentation manifest: {error}")
+    public_editor = []
+    try:
+        public_editor = json.loads((root / 'packaging/public-editor.json').read_text(encoding='utf-8'))
+        if not isinstance(public_editor, list) or not all(isinstance(name, str) for name in public_editor):
+            raise ValueError('Expected a list of public editor paths')
+        for name in public_editor:
+            path = Path(name)
+            if (path.is_absolute() or '..' in path.parts or
+                    not (name == 'editor/README.md' or name.startswith('examples/editor/')) or
+                    any(name.startswith(private) for private in PRIVATE_CAMPAIGNS) or
+                    not (root / path).is_file()):
+                problems.append(f'Invalid public editor manifest entry: {name}')
+    except (OSError, ValueError) as error:
+        problems.append(f'Cannot read public editor manifest: {error}')
     if (root / ".git").exists():
         result = subprocess.run(["git", "ls-files", "-z"], cwd=root, capture_output=True, check=False)
         if result.returncode:
@@ -72,6 +86,8 @@ def check(root: Path) -> list[str]:
             tracked = result.stdout.decode("utf-8", errors="replace").split("\0")
             if sorted(name for name in tracked if name.startswith("docs/")) != public_docs:
                 problems.append("packaging/public-docs.json must match tracked docs paths")
+            if sorted(name for name in tracked if name == 'editor/README.md' or name.startswith('examples/editor/')) != public_editor:
+                problems.append('packaging/public-editor.json must match tracked editor guide/example paths')
             for name in tracked:
                 if any(name.startswith(path) if path.endswith("/") else name == path
                        for path in PRIVATE_CAMPAIGNS):

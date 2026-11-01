@@ -92,17 +92,19 @@ def common_files(package, build):
     for name in ('README.md', 'manual.md', 'LICENSE', 'CREDITS.md', 'CHANGELOG.md', 'version.h', 'fb.cfg'):
         if (ROOT / name).exists(): shutil.copy2(ROOT / name, package / name)
     # Include tracked documentation only; ignored scans/reference art stay private.
-    tracked_docs = json.loads((ROOT / 'packaging/public-docs.json').read_text())
-    for name in tracked_docs:
-        path = Path(name)
-        if path.is_absolute() or '..' in path.parts or not path.parts or path.parts[0] != 'docs':
-            raise RuntimeError('Unsafe public documentation manifest path')
-        target = package / name; target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(ROOT / name, target)
+    for manifest, roots in (('public-docs.json', ('docs',)),
+                            ('public-editor.json', ('editor', 'examples'))):
+        for name in json.loads((ROOT / 'packaging' / manifest).read_text()):
+            path = Path(name)
+            if path.is_absolute() or '..' in path.parts or not path.parts or path.parts[0] not in roots:
+                raise RuntimeError('Unsafe public content manifest path')
+            target = package / name; target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(ROOT / name, target)
     shutil.copy2(ROOT / 'docs/RELEASES.md', package / 'RELEASES.md')
-    shutil.copytree(ROOT / 'tools', package / 'tools', ignore=shutil.ignore_patterns('__pycache__'))
+    shutil.copytree(ROOT / 'tools', package / 'tools', ignore=shutil.ignore_patterns(
+        '__pycache__', 'create_alien_starship.py', 'create_relay_station.py'))
     (package / 'packaging').mkdir()
-    for manifest in ('dependencies.json', 'public-docs.json'):
+    for manifest in ('dependencies.json', 'public-docs.json', 'public-editor.json'):
         shutil.copy2(ROOT / 'packaging' / manifest, package / 'packaging' / manifest)
     copy_licenses(package / 'licenses')
     (package / 'dependency-manifest.json').write_text(json.dumps({'version': VERSION, 'dependencies': PINS, 'music': 'internal MOD, AdLib/OPL3; no ROMs or soundfonts'}, indent=2) + '\n')
@@ -180,13 +182,19 @@ def main():
     common_files(staging, build)
     binary = staging / ('reminiscence2.exe' if args.target == 'win64' else 'reminiscence2')
     shutil.copy2(build / binary.name, binary)
+    editor = staging / ('reminiscence2-editor.exe' if args.target == 'win64' else 'reminiscence2-editor')
+    shutil.copy2(build / editor.name, editor)
+    binaries = (binary, editor)
     if args.target.startswith('macos-'):
-        dependencies = subprocess.check_output(['otool', '-L', str(binary)], text=True)
-        if any(line.strip().startswith(('/opt/', '/usr/local/', '@rpath/')) for line in dependencies.splitlines()[1:]):
-            raise RuntimeError('Non-system macOS dependency remains in package')
+        dependency_reports = [subprocess.check_output(['otool', '-L', str(item)], text=True) for item in binaries]
+        for report in dependency_reports:
+            if any(not line.strip().startswith(('/usr/lib/', '/System/Library/')) for line in report.splitlines()[1:]):
+                raise RuntimeError('Non-system macOS dependency remains in package')
+        dependencies = '\n'.join(dependency_reports)
         from package_macos import create_app, create_dmg
         app = create_app(binary, staging / 'REminiscence2.app', args.target.removeprefix('macos-'))
-        run('codesign', '--force', '--sign', '-', binary)
+        for item in binaries:
+            run('codesign', '--force', '--sign', '-', item)
         dmg = args.output / (name + '.dmg')
         receipt = create_dmg(app, dmg)
         (staging / 'dmg-verification.json').write_text(json.dumps(receipt, indent=2) + '\n')
@@ -195,7 +203,7 @@ def main():
     elif args.target == 'win64':
         (staging / 'play.cmd').write_text('@echo off\r\ncd /d "%~dp0"\r\n"%~dp0reminiscence2.exe" %*\r\nif errorlevel 1 pause\r\n')
         # Only toolchain runtime DLLs may accompany this statically built engine.
-        imports = subprocess.check_output(['objdump', '-p', str(binary)], text=True)
+        imports = '\n'.join(subprocess.check_output(['objdump', '-p', str(item)], text=True) for item in binaries)
         runtime_names = {'libwinpthread-1.dll', 'libgcc_s_seh-1.dll', 'libstdc++-6.dll'}
         for dll in re.findall(r'DLL Name: (\S+)', imports):
             if dll.lower() in runtime_names:
@@ -208,7 +216,7 @@ def main():
         (staging / 'native-dependencies.txt').write_text(imports)
     else:
         shutil.copy2(ROOT / 'packaging/desktop/play.sh', staging / 'play.sh')
-        dependencies = subprocess.check_output(['ldd', str(binary)], text=True)
+        dependencies = '\n'.join(item.name + ':\n' + subprocess.check_output(['ldd', str(item)], text=True) for item in binaries)
         forbidden = ('libSDL', 'libz.so', 'libmodplug', 'libstdc++', 'libgcc_s')
         if any(value in dependencies for value in forbidden): raise RuntimeError('Non-system Linux dependency remains: ' + dependencies)
         (staging / 'native-dependencies.txt').write_text(dependencies)
@@ -216,6 +224,11 @@ def main():
             (staging / 'STEAM-DECK.txt').write_text('Add play.sh as a Non-Steam Game in Desktop Mode, then launch from Gaming Mode.\nUse the Gamepad layout. Start opens QoL; D-pad/stick and A navigate.\nHardware sleep/resume and Touch-controller mappings need device testing.\n')
     # Smoke-test the relocated engine, independent of the source/build CWD.
     subprocess.run([str(binary), '--version'], cwd=staging / 'assets', check=True, stdout=subprocess.DEVNULL)
+    subprocess.run([str(editor), '--help'], cwd=staging / 'assets', check=True, stdout=subprocess.DEVNULL)
+    # Check the actual packaged content after relocation, including image/audio
+    # dependencies. Original game assets are not needed for authoring validation.
+    for project in sorted((staging / 'examples/editor').rglob('project.r2project.json')):
+        subprocess.run([str(editor), str(project), '--validate'], cwd=staging / 'assets', check=True)
     archive = args.output / (name + ('.zip' if args.target == 'win64' or args.target.startswith('macos-') else '.tar.gz'))
     archive_directory(staging, archive)
     print(archive)

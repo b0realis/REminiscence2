@@ -1,8 +1,14 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 # Release packages and reproducible recipes
 
-See the [1.35 preview notes](RELEASE_NOTES_1.35.md) for the combined feature
+See the [1.80 preview notes](RELEASE_NOTES_1.80.md) for the combined feature
 summary, validation and screenshots.
+
+For a development checkout or separate player/editor builds, start with the
+[standalone build guide](BUILDING.md). Desktop ZIP/tar downloads now also include
+`reminiscence2-editor` (`.exe` on Windows), its guide and public starter projects.
+Keep it beside the player for native-campaign playtests. The Mac DMGs remain
+player-only; download the corresponding Mac ZIP to use the editor.
 
 Every desktop download includes a precreated **assets** folder. Put prepared
 original game files there, with each edition in its own subfolder. A picker
@@ -46,7 +52,7 @@ Optional FluidSynth/MT-32 support remains available in source builds.
 
 ## Build requirements
 
-Desktop: Python 3.9+, CMake 3.20+, a C/C++17 compiler, and native SDKs. Linux also
+Desktop: Python 3.10+, CMake 3.20+, a C/C++17 compiler, and native SDKs. Linux also
 needs SDL's X11/Wayland/audio development headers (`libsdl2-dev` on Ubuntu is a
 convenient way to install them); Windows uses MSYS2 UCRT64 GCC, CMake and Ninja.
 Mac needs Command Line Tools. `packaging/dependencies.json` pins SDL 2.32.10 and

@@ -65,6 +65,12 @@ def verify_files(directory):
         if path.suffix != '.apk' and 'source' not in path.name:
             if any('/assets/' in n and not n.endswith(('/assets/', '/assets/README.txt')) for n in names):
                 raise RuntimeError('Original game data must not be bundled in assets')
+        if path.suffix != '.dmg' and 'quest-' not in path.name and 'source' not in path.name:
+            editor_name = 'reminiscence2-editor.exe' if '-win64.' in path.name else 'reminiscence2-editor'
+            required = (editor_name, 'docs/BUILDING.md', 'editor/README.md',
+                        'examples/editor/systems-lab/project.r2project.json')
+            if any(not any(n.endswith('/' + required_path) for n in names) for required_path in required):
+                raise RuntimeError('Desktop package lacks editor, build guide or public Systems Lab')
         if any('/.local/' in n.lower() or n.lower().endswith(('.lha', '.state', '.r2s', '.r2m', '.p12', '.jks', '.pem')) for n in names):
             raise RuntimeError('Private game data or signing material in archive')
     return sorted(directory.iterdir())

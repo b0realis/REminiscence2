@@ -158,6 +158,10 @@ engine's GPL does not relicense it. See the [image credits](docs/screenshots/REA
 
 ## Build
 
+Start with the [standalone build guide](docs/BUILDING.md) for Windows, Linux
+and macOS: build the whole project, only the game player, or only the visual
+editor, with dependencies, tests, output paths and troubleshooting explained.
+
 Requirements: C and C++17 compilers, CMake 3.20 or later, SDL2 2.0.18+ development files,
 zlib, and libmodplug. SDL's CMake package is preferred; pkg-config is the
 fallback for finding SDL2.

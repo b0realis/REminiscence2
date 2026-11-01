@@ -101,12 +101,17 @@ class ReleaseTools(unittest.TestCase):
             (source/'packaging/desktop').mkdir(parents=True); (source/'docs').mkdir(); (source/'tools').mkdir(); package.mkdir()
             (source/'packaging/desktop/ASSETS.txt').write_text('placeholder')
             (source/'packaging/public-docs.json').write_text(json.dumps(['docs/RELEASES.md']))
+            (source/'packaging/public-editor.json').write_text(json.dumps(['editor/README.md']))
+            (source/'editor').mkdir(); (source/'editor/README.md').write_text('editor guide')
             (source/'packaging/dependencies.json').write_text('{}')
             (source/'docs/RELEASES.md').write_text('public fixture'); (source/'docs/private.pdf').write_bytes(b'private fixture')
+            (source/'tools/create_alien_starship.py').write_text('private authoring fixture')
             with patch.object(build_release,'ROOT',source), patch.object(build_release,'copy_licenses',side_effect=lambda path:path.mkdir()), patch('subprocess.check_output',side_effect=AssertionError('Git was executed')):
                 build_release.common_files(package,Path(temp))
             self.assertTrue((package/'docs/RELEASES.md').is_file())
             self.assertFalse((package/'docs/private.pdf').exists())
+            self.assertTrue((package/'editor/README.md').is_file())
+            self.assertFalse((package/'tools/create_alien_starship.py').exists())
     def test_offline_dependency_source_needs_no_download(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp); source = root/'third_party_src/SDL2'; source.mkdir(parents=True)
@@ -167,16 +172,25 @@ class ReleaseTools(unittest.TestCase):
     def test_publication_checks_full_artifact_set_and_private_files(self):
         import io, tarfile, zipfile
         version = build_release.VERSION; prefix = 'REminiscence2-' + version
+        def desktop_files(target):
+            return {('reminiscence2-editor.exe' if target == 'win64' else 'reminiscence2-editor'): b'fixture',
+                    'docs/BUILDING.md': b'build guide', 'editor/README.md': b'editor guide',
+                    'examples/editor/systems-lab/project.r2project.json': b'{}'}
+        def write_zip(path, target):
+            with zipfile.ZipFile(path, 'w') as z:
+                contents = {'assets/README.txt': b'placeholder'}
+                if target != 'quest-arm64-bundle': contents.update(desktop_files(target))
+                for name, content in contents.items(): z.writestr(prefix+'-'+target+'/'+name, content)
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             for target in ('win64', 'macos-arm64', 'macos-x86_64', 'quest-arm64-bundle'):
-                with zipfile.ZipFile(root / (prefix+'-'+target+'.zip'), 'w') as z:
-                    z.writestr(prefix+'-'+target+'/assets/README.txt','placeholder')
+                write_zip(root / (prefix+'-'+target+'.zip'), target)
             with zipfile.ZipFile(root/(prefix+'-quest-arm64.apk'),'w') as z:
                 z.writestr('lib/arm64-v8a/libmain.so',b'fixture'); z.writestr('lib/arm64-v8a/libSDL2.so',b'fixture')
             for target in ('linux64','steamdeck','source'):
                 with tarfile.open(root/(prefix+'-'+target+'.tar.gz'),'w:gz') as archive:
                     data = {'assets/README.txt': b'placeholder'}
+                    if target != 'source': data.update(desktop_files(target))
                     if target == 'source': data = {'version.h': ('#define REMINISCENCE2_VERSION "'+version+'"').encode(), 'third_party_src/SDL2/file': b'fixture', 'third_party_src/zlib/file': b'fixture'}
                     for name,content in data.items():
                         info = tarfile.TarInfo(prefix+'-'+target+'/'+name); info.size = len(content); archive.addfile(info,io.BytesIO(content))
@@ -191,10 +205,14 @@ class ReleaseTools(unittest.TestCase):
             with self.assertRaises(RuntimeError): publish_release.verify_files(root)
             dmg.write_bytes(b'DMG fixture')
             windows = root/(prefix+'-win64.zip')
+            with zipfile.ZipFile(windows, 'w') as z: z.writestr(prefix+'-win64/assets/README.txt', b'placeholder')
+            with self.assertRaisesRegex(RuntimeError, 'lacks editor'):
+                publish_release.verify_files(root)
+            write_zip(windows, 'win64')
             for suffix in ('R2S', 'R2M'):
                 with zipfile.ZipFile(windows,'a') as z: z.writestr(prefix+'-win64/SAVE/private.'+suffix,b'private preview fixture')
                 with self.assertRaises(RuntimeError): publish_release.verify_files(root)
-                with zipfile.ZipFile(windows,'w') as z: z.writestr(prefix+'-win64/assets/README.txt',b'placeholder')
+                write_zip(windows, 'win64')
             with zipfile.ZipFile(root/(prefix+'-win64.zip'),'a') as z: z.writestr(prefix+'-win64/signing.p12',b'private fixture')
             with self.assertRaises(RuntimeError): publish_release.verify_files(root)
     def test_zip_preserves_launcher_mode_and_empty_assets_folder(self):

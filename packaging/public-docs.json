@@ -1,5 +1,6 @@
 [
   "docs/ASSETS.md",
+  "docs/BUILDING.md",
   "docs/CAMPAIGN_1.09.md",
   "docs/CAMPAIGN_EDITOR.md",
   "docs/CUTSCENE_PLAYER.md",
@@ -12,6 +13,7 @@
   "docs/RELEASES.md",
   "docs/RELEASE_NOTES_1.30.md",
   "docs/RELEASE_NOTES_1.35.md",
+  "docs/RELEASE_NOTES_1.80.md",
   "docs/RELEASE_READINESS.md",
   "docs/ROADMAP.md",
   "docs/SEGA_CD.md",

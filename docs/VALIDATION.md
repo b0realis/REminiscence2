@@ -12,6 +12,23 @@ its screenshot was present in the exported tree. The public Ogg regression uses
 an independent synthetic tone; optional private walkthroughs remain available
 locally. Documentation boundaries and staged whitespace checks passed.
 
+## Patch 1.80 — standalone build guide and editor packages
+
+Fresh Apple Silicon configurations verified both isolated targets with testing
+disabled: `reminiscence2` built without producing the editor executable, and
+`reminiscence2-editor` built without producing the player executable. The editor
+validated the public Workshop project. Enabling testing and building the full
+project then passed **28/28 asset-free CTest checks in 28.57 seconds**.
+
+All **17 packaging-tool tests** passed, including the editor/document manifest,
+private authoring-tool exclusion, and rejection of desktop archives missing the
+editor or its guide/example. Release recipes check runtime dependencies for both
+desktop executables and validate the packaged projects after relocation. The
+current local player/editor/movie exporter were rebuilt at 1.80. The new build
+guide is linked from both READMEs and included in the public documentation
+manifest. GitHub publication requires successful build/test and package workflows
+for the exact tagged commit.
+
 ## Patch 1.79 — editor CI portability and sanitizer fixes
 
 The Windows editor build no longer uses the Windows SDK's `near` macro name
