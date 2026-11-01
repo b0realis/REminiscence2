@@ -12,6 +12,21 @@ its screenshot was present in the exported tree. The public Ogg regression uses
 an independent synthetic tone; optional private walkthroughs remain available
 locally. Documentation boundaries and staged whitespace checks passed.
 
+## Patch 1.79 — editor CI portability and sanitizer fixes
+
+The Windows editor build no longer uses the Windows SDK's `near` macro name
+for its preferred playtest anchor. The shared declaration and implementation
+use the same descriptive name, and the child-process header guards `NOMINMAX`.
+Graph-node dragging reads ImGui's input state by reference, avoiding a copy of
+its internal vectors that triggered UBSan on Linux.
+
+The local Apple Silicon build passed **5/5 focused CTest checks**: editor UI,
+editor content, Systems Lab project/campaign validation, and CLI checks. The
+existing UI test covers node dragging and passed separately with UBSan enabled
+and `halt_on_error=1`. Both affected translation units also pass syntax checks
+with the Windows-style empty `near` macro defined. These local checks supplement
+the Windows and Linux sanitizer jobs in GitHub Actions.
+
 ## Patch 1.78 — controlled laboratory particles
 
 Six Back-layer emitters follow the lab's existing fan, charging, diagnostic,

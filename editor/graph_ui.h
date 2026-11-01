@@ -647,7 +647,7 @@ void graphCanvas(Module &m) {
 				graphDrag = true;
 				graphStartX = n.graphX;
 				graphStartY = n.graphY;
-				const auto io = ImGui::GetIO();
+				const auto &io = ImGui::GetIO();
 				graphDragOrigin = {io.MousePos.x - io.MouseDelta.x,
 				                   io.MousePos.y - io.MouseDelta.y};
 			}

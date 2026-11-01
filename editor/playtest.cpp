@@ -44,11 +44,13 @@ void validatePlaytestStart(const Project &p, const PlaytestStart &start) {
 		throw std::runtime_error(
 		    "Test position is outside the room or blocked; move the TEST marker");
 }
-PlaytestStart roomPlaytestStart(const Project &p, const std::string &room, const Anchor *near) {
+PlaytestStart roomPlaytestStart(const Project &p, const std::string &room,
+                                const Anchor *preferredAnchor) {
 	if (roomIndex(p, room) < 0)
 		throw std::runtime_error("Choose a room to playtest");
 	const auto ct = startingCollision(p);
-	const Anchor preferred = near ? *near : p.spawn.room == room ? p.spawn : Anchor{room, 32, 214};
+	const Anchor preferred = preferredAnchor ? *preferredAnchor
+	                                        : p.spawn.room == room ? p.spawn : Anchor{room, 32, 214};
 	if (preferred.room == room && clear(p, ct, preferred, true))
 		return {preferred, p.spawnLeft};
 	int best = std::numeric_limits<int>::max();

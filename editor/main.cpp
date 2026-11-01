@@ -375,18 +375,18 @@ struct Workspace {
 	}
 	PlaytestStart testStart() {
 		int slot = room;
-		const Anchor *near = nullptr;
+		const Anchor *preferredAnchor = nullptr;
 		if (graphView && selected >= 0 && selected < int(p.modules.size()) && graphNode >= 0 &&
 		    graphNode < int(p.modules[selected].nodes.size())) {
-			near = &p.modules[selected].nodes[graphNode].at;
-			slot = roomIndex(p, near->room);
+			preferredAnchor = &p.modules[selected].nodes[graphNode].at;
+			slot = roomIndex(p, preferredAnchor->room);
 		}
 		if (slot < 0 || slot >= int(p.rooms.size()))
 			throw std::runtime_error("Choose a valid room to test");
 		const auto &id = p.rooms[slot].id;
 		if (testStarts.count(id))
 			return testStarts.at(id);
-		return roomPlaytestStart(p, id, near);
+		return roomPlaytestStart(p, id, preferredAnchor);
 	}
 	void play(bool here) {
 		audition.stop();

@@ -9,6 +9,6 @@ struct PlaytestStart {
 };
 bool clearPlaytestStart(const Project &, const Anchor &, bool requireFloor = false);
 PlaytestStart roomPlaytestStart(const Project &, const std::string &room,
-                                const Anchor *near = nullptr);
+                                const Anchor *preferredAnchor = nullptr);
 void validatePlaytestStart(const Project &, const PlaytestStart &);
 } // namespace editor
